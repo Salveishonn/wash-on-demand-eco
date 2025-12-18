@@ -14,91 +14,93 @@ import {
   ChevronRight,
   CheckCircle,
 } from "lucide-react";
-import heroImage from "@/assets/hero-car-wash.jpg";
+import heroImage from "@/assets/hero-washero-branded.jpg";
+import detailImage from "@/assets/washero-detail-1.jpg";
+import interiorImage from "@/assets/washero-interior.jpg";
 
 const benefits = [
   {
     icon: MapPin,
-    title: "We Come to You",
-    description: "Home, office, or parking spot – wherever your car is.",
+    title: "Vamos a Vos",
+    description: "A tu casa, oficina o cochera – donde esté tu auto.",
   },
   {
     icon: Droplets,
-    title: "Water-Saving System",
-    description: "Eco-friendly closed-loop greywater recovery technology.",
+    title: "Sistema Ahorra Agua",
+    description: "Tecnología de recuperación de agua cerrada y eco-friendly.",
   },
   {
     icon: Sparkles,
-    title: "Professional Equipment",
-    description: "Dealership-level results with premium products.",
+    title: "Equipamiento Profesional",
+    description: "Resultados de concesionaria con productos premium.",
   },
   {
     icon: Clock,
-    title: "No Waiting",
-    description: "Save time – we handle everything while you relax.",
+    title: "Sin Esperas",
+    description: "Ahorrá tiempo – nosotros nos encargamos de todo.",
   },
 ];
 
 const howItWorks = [
   {
     step: "01",
-    title: "Book Online",
-    description: "Choose your service, date, and location in just a few clicks.",
+    title: "Reservá Online",
+    description: "Elegí tu servicio, fecha y ubicación en pocos clicks.",
   },
   {
     step: "02",
-    title: "We Arrive Fully Equipped",
-    description: "Our professional team comes with everything needed – no water or electricity required.",
+    title: "Llegamos Equipados",
+    description: "Nuestro equipo llega con todo lo necesario – sin agua ni electricidad de tu parte.",
   },
   {
     step: "03",
-    title: "Drive Away Clean",
-    description: "Enjoy your spotless car with zero hassle or environmental guilt.",
+    title: "Disfrutá tu Auto Impecable",
+    description: "Tu auto queda perfecto sin esfuerzo ni culpa ambiental.",
   },
 ];
 
 const services = [
   {
-    name: "Exterior Wash",
-    description: "Complete exterior cleaning with eco-friendly products",
-    price: "From $49",
+    name: "Lavado Exterior",
+    description: "Limpieza exterior completa con productos eco-friendly",
+    price: "Desde $25.000",
     time: "45 min",
-    features: ["Hand wash", "Tire cleaning", "Window cleaning", "Rinse & dry"],
+    features: ["Lavado a mano", "Llantas y cubiertas", "Vidrios", "Secado premium"],
   },
   {
-    name: "Interior Cleaning",
-    description: "Deep interior detailing for a fresh cabin",
-    price: "From $69",
+    name: "Limpieza Interior",
+    description: "Detailing interior profundo para un habitáculo impecable",
+    price: "Desde $35.000",
     time: "60 min",
-    features: ["Vacuum", "Dashboard clean", "Seat cleaning", "Air freshener"],
+    features: ["Aspirado completo", "Tablero y consola", "Asientos", "Aromatización"],
   },
   {
-    name: "Full Detail",
-    description: "Premium complete car transformation",
-    price: "From $149",
-    time: "2-3 hours",
-    features: ["Full exterior", "Full interior", "Wax coating", "Engine bay"],
+    name: "Detailing Completo",
+    description: "Transformación premium de tu vehículo",
+    price: "Desde $75.000",
+    time: "2-3 horas",
+    features: ["Exterior completo", "Interior completo", "Encerado", "Motor"],
     popular: true,
   },
 ];
 
 const testimonials = [
   {
-    name: "Sarah M.",
-    role: "Busy Professional",
-    content: "Washero saved me hours every month. They come to my office parking and my car looks brand new every time!",
+    name: "Martín G.",
+    role: "Palermo, Buenos Aires",
+    content: "Washero me ahorró horas cada mes. Vienen a mi oficina y mi auto queda impecable. ¡Excelente servicio!",
     rating: 5,
   },
   {
-    name: "David R.",
-    role: "Eco-Conscious Driver",
-    content: "Finally a car wash that cares about the environment. The water-saving system is brilliant and the results are incredible.",
+    name: "Carolina S.",
+    role: "Belgrano, Buenos Aires",
+    content: "Por fin un lavadero que cuida el medio ambiente. El sistema de ahorro de agua es brillante y los resultados increíbles.",
     rating: 5,
   },
   {
-    name: "Maria L.",
-    role: "Mom of Three",
-    content: "With three kids, my car is always a mess. Washero's interior detailing is a lifesaver – they handle everything!",
+    name: "Diego M.",
+    role: "Recoleta, Buenos Aires",
+    content: "Con tres chicos, mi auto siempre está sucio. El detailing interior de Washero es una salvación – se ocupan de todo.",
     rating: 5,
   },
 ];
@@ -137,26 +139,26 @@ const Index = () => {
             className="max-w-2xl"
           >
             <span className="inline-block px-4 py-2 bg-primary/20 text-primary rounded-full text-sm font-semibold mb-6">
-              Premium Mobile Car Wash
+              Lavado Premium a Domicilio en Buenos Aires
             </span>
             <h1 className="font-display text-5xl md:text-7xl font-black text-background leading-tight mb-6">
-              We Come
+              Vamos
               <br />
-              <span className="text-primary">to You.</span>
+              <span className="text-primary">a Vos.</span>
             </h1>
             <p className="text-xl text-background/80 mb-8 leading-relaxed">
-              Eco-friendly • Time-saving • Professional results
+              Eco-friendly • Ahorrá tiempo • Resultados profesionales
               <br />
-              Premium car care at your doorstep.
+              Cuidado premium de tu auto en tu puerta.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <Button variant="hero" size="xl" asChild>
-                <Link to="/booking">
-                  Book Now <ChevronRight className="w-5 h-5" />
+                <Link to="/reservar">
+                  Reservar Ahora <ChevronRight className="w-5 h-5" />
                 </Link>
               </Button>
               <Button variant="heroDark" size="xl" asChild>
-                <Link to="/services">View Services</Link>
+                <Link to="/servicios">Ver Servicios</Link>
               </Button>
             </div>
           </motion.div>
@@ -204,10 +206,10 @@ const Index = () => {
             className="text-center mb-16"
           >
             <h2 className="font-display text-4xl md:text-5xl font-black text-background mb-4">
-              How It <span className="text-primary">Works</span>
+              Cómo <span className="text-primary">Funciona</span>
             </h2>
             <p className="text-xl text-background/70 max-w-2xl mx-auto">
-              Getting your car cleaned has never been easier
+              Lavar tu auto nunca fue tan fácil
             </p>
           </motion.div>
 
@@ -251,7 +253,7 @@ const Index = () => {
             className="text-center mt-12"
           >
             <Button variant="hero" size="lg" asChild>
-              <Link to="/how-it-works">Learn More</Link>
+              <Link to="/como-funciona">Conocé Más</Link>
             </Button>
           </motion.div>
         </div>
@@ -267,10 +269,10 @@ const Index = () => {
             className="text-center mb-16"
           >
             <h2 className="font-display text-4xl md:text-5xl font-black text-foreground mb-4">
-              Our <span className="text-primary">Services</span>
+              Nuestros <span className="text-primary">Servicios</span>
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Choose the perfect package for your vehicle
+              Elegí el paquete perfecto para tu vehículo
             </p>
           </motion.div>
 
@@ -293,7 +295,7 @@ const Index = () => {
               >
                 {service.popular && (
                   <span className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full">
-                    Most Popular
+                    Más Elegido
                   </span>
                 )}
                 <h3 className="font-display text-2xl font-bold text-foreground mb-2">
@@ -319,7 +321,7 @@ const Index = () => {
                   className="w-full"
                   asChild
                 >
-                  <Link to="/booking">Book This Service</Link>
+                  <Link to="/reservar">Reservar</Link>
                 </Button>
               </motion.div>
             ))}
@@ -332,9 +334,76 @@ const Index = () => {
             className="text-center mt-12"
           >
             <Button variant="outline" size="lg" asChild>
-              <Link to="/services">View All Services</Link>
+              <Link to="/servicios">Ver Todos los Servicios</Link>
             </Button>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Service Images Section */}
+      <section className="py-24 bg-secondary">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="font-display text-4xl md:text-5xl font-black text-foreground mb-4">
+              Calidad <span className="text-primary">Premium</span>
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Cada detalle cuenta para nosotros
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="relative rounded-2xl overflow-hidden aspect-square"
+            >
+              <img
+                src={detailImage}
+                alt="Detailing exterior Washero"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-washero-charcoal/80 to-transparent flex items-end p-8">
+                <div>
+                  <h3 className="font-display text-2xl font-bold text-background mb-2">
+                    Lavado Exterior Premium
+                  </h3>
+                  <p className="text-background/80">
+                    Técnicas profesionales para un brillo impecable
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="relative rounded-2xl overflow-hidden aspect-square"
+            >
+              <img
+                src={interiorImage}
+                alt="Limpieza interior Washero"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-washero-charcoal/80 to-transparent flex items-end p-8">
+                <div>
+                  <h3 className="font-display text-2xl font-bold text-background mb-2">
+                    Limpieza Interior Profunda
+                  </h3>
+                  <p className="text-background/80">
+                    Cada rincón de tu habitáculo, impecable
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         </div>
       </section>
 
@@ -348,38 +417,38 @@ const Index = () => {
               viewport={{ once: true }}
             >
               <span className="inline-flex items-center gap-2 px-4 py-2 bg-washero-eco/20 text-washero-eco rounded-full text-sm font-semibold mb-6">
-                <Leaf className="w-4 h-4" /> Eco-Responsible
+                <Leaf className="w-4 h-4" /> Eco-Responsable
               </span>
               <h2 className="font-display text-4xl md:text-5xl font-black text-foreground mb-6">
-                Cleaner Cars,
+                Autos Limpios,
                 <br />
-                <span className="text-washero-eco">Cleaner Planet</span>
+                <span className="text-washero-eco">Planeta Limpio</span>
               </h2>
               <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-                Our closed-loop greywater recovery system captures, filters, and manages wastewater, drastically reducing water consumption and preventing contamination of streets and drains.
+                Nuestro sistema de recuperación de agua captura, filtra y gestiona las aguas residuales, reduciendo drásticamente el consumo y evitando la contaminación de calles y desagües.
               </p>
               <ul className="space-y-4 mb-8">
                 <li className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-washero-eco/20 flex items-center justify-center">
                     <Droplets className="w-5 h-5 text-washero-eco" />
                   </div>
-                  <span className="font-medium">Up to 80% less water than traditional car washes</span>
+                  <span className="font-medium">Hasta 80% menos agua que lavaderos tradicionales</span>
                 </li>
                 <li className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-washero-eco/20 flex items-center justify-center">
                     <Shield className="w-5 h-5 text-washero-eco" />
                   </div>
-                  <span className="font-medium">No street or drain contamination</span>
+                  <span className="font-medium">Cero contaminación a calles y desagües</span>
                 </li>
                 <li className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-washero-eco/20 flex items-center justify-center">
                     <Leaf className="w-5 h-5 text-washero-eco" />
                   </div>
-                  <span className="font-medium">100% biodegradable cleaning products</span>
+                  <span className="font-medium">Productos 100% biodegradables</span>
                 </li>
               </ul>
               <Button variant="default" size="lg" asChild className="bg-washero-eco hover:bg-washero-eco/90">
-                <Link to="/sustainability">Learn About Our System</Link>
+                <Link to="/sustentabilidad">Conocé Nuestro Sistema</Link>
               </Button>
             </motion.div>
             <motion.div
@@ -408,10 +477,10 @@ const Index = () => {
             className="text-center mb-16"
           >
             <h2 className="font-display text-4xl md:text-5xl font-black text-foreground mb-4">
-              What Our <span className="text-primary">Customers</span> Say
+              Lo que Dicen <span className="text-primary">Nuestros Clientes</span>
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Join hundreds of happy car owners
+              Sumate a cientos de autos impecables en Buenos Aires
             </p>
           </motion.div>
 
@@ -460,14 +529,14 @@ const Index = () => {
             className="text-center max-w-3xl mx-auto"
           >
             <h2 className="font-display text-4xl md:text-5xl font-black text-background mb-6">
-              Ready for a <span className="text-primary">Spotless</span> Car?
+              ¿Listo para un Auto <span className="text-primary">Impecable</span>?
             </h2>
             <p className="text-xl text-background/70 mb-10">
-              Book your first wash today and experience the Washero difference.
+              Reservá tu primer lavado hoy y descubrí la diferencia Washero.
             </p>
             <Button variant="hero" size="xl" asChild>
-              <Link to="/booking">
-                Book Your Wash <ChevronRight className="w-5 h-5" />
+              <Link to="/reservar">
+                Reservar Ahora <ChevronRight className="w-5 h-5" />
               </Link>
             </Button>
           </motion.div>
