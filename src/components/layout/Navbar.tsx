@@ -6,13 +6,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import washeroLogo from "@/assets/washero-logo.jpeg";
 
 const navLinks = [
-  { href: "/", label: "Home" },
-  { href: "/services", label: "Services" },
-  { href: "/how-it-works", label: "How It Works" },
-  { href: "/sustainability", label: "Sustainability" },
-  { href: "/about", label: "About" },
-  { href: "/faq", label: "FAQ" },
-  { href: "/contact", label: "Contact" },
+  { href: "/", label: "Inicio" },
+  { href: "/servicios", label: "Servicios" },
+  { href: "/como-funciona", label: "Cómo Funciona" },
+  { href: "/sustentabilidad", label: "Sustentabilidad" },
+  { href: "/nosotros", label: "Nosotros" },
+  { href: "/preguntas-frecuentes", label: "FAQ" },
+  { href: "/contacto", label: "Contacto" },
 ];
 
 export const Navbar = () => {
@@ -52,7 +52,7 @@ export const Navbar = () => {
           {/* CTA Button */}
           <div className="hidden lg:block">
             <Button variant="hero" size="lg" asChild>
-              <Link to="/booking">Book Now</Link>
+              <Link to="/reservar">Reservar</Link>
             </Button>
           </div>
 
@@ -96,8 +96,8 @@ export const Navbar = () => {
                 </Link>
               ))}
               <Button variant="hero" size="lg" className="mt-4" asChild>
-                <Link to="/booking" onClick={() => setIsOpen(false)}>
-                  Book Now
+                <Link to="/reservar" onClick={() => setIsOpen(false)}>
+                  Reservar
                 </Link>
               </Button>
             </div>

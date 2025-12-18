@@ -3,29 +3,29 @@ import { Instagram, Facebook, MessageCircle, Mail, MapPin } from "lucide-react";
 import washeroLogo from "@/assets/washero-logo.jpeg";
 
 const footerLinks = {
-  services: [
-    { label: "Exterior Wash", href: "/services" },
-    { label: "Interior Cleaning", href: "/services" },
-    { label: "Full Detail", href: "/services" },
-    { label: "Book Now", href: "/booking" },
+  servicios: [
+    { label: "Lavado Exterior", href: "/servicios" },
+    { label: "Limpieza Interior", href: "/servicios" },
+    { label: "Detailing Completo", href: "/servicios" },
+    { label: "Reservar", href: "/reservar" },
   ],
-  company: [
-    { label: "About Us", href: "/about" },
-    { label: "How It Works", href: "/how-it-works" },
-    { label: "Sustainability", href: "/sustainability" },
-    { label: "FAQ", href: "/faq" },
+  empresa: [
+    { label: "Nosotros", href: "/nosotros" },
+    { label: "Cómo Funciona", href: "/como-funciona" },
+    { label: "Sustentabilidad", href: "/sustentabilidad" },
+    { label: "FAQ", href: "/preguntas-frecuentes" },
   ],
   legal: [
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms of Service", href: "/terms" },
-    { label: "Contact", href: "/contact" },
+    { label: "Política de Privacidad", href: "/privacidad" },
+    { label: "Términos y Condiciones", href: "/terminos" },
+    { label: "Contacto", href: "/contacto" },
   ],
 };
 
 const socialLinks = [
-  { icon: Instagram, href: "https://instagram.com/washero", label: "Instagram" },
-  { icon: Facebook, href: "https://facebook.com/washero", label: "Facebook" },
-  { icon: MessageCircle, href: "https://wa.me/1234567890", label: "WhatsApp" },
+  { icon: Instagram, href: "https://instagram.com/washero.ar", label: "Instagram" },
+  { icon: Facebook, href: "https://facebook.com/washero.ar", label: "Facebook" },
+  { icon: MessageCircle, href: "https://wa.me/5491112345678", label: "WhatsApp" },
 ];
 
 export const Footer = () => {
@@ -43,7 +43,7 @@ export const Footer = () => {
               />
             </Link>
             <p className="text-sm leading-relaxed opacity-80">
-              Premium mobile car wash service. Eco-friendly, convenient, and professional results at your doorstep.
+              Servicio premium de lavado a domicilio. Eco-friendly, conveniente y resultados profesionales en tu puerta.
             </p>
             <div className="flex gap-4">
               {socialLinks.map((social) => (
@@ -61,11 +61,11 @@ export const Footer = () => {
             </div>
           </div>
 
-          {/* Services */}
+          {/* Servicios */}
           <div>
-            <h4 className="font-display font-bold text-background mb-6">Services</h4>
+            <h4 className="font-display font-bold text-background mb-6">Servicios</h4>
             <ul className="space-y-3">
-              {footerLinks.services.map((link) => (
+              {footerLinks.servicios.map((link) => (
                 <li key={link.label}>
                   <Link
                     to={link.href}
@@ -78,11 +78,11 @@ export const Footer = () => {
             </ul>
           </div>
 
-          {/* Company */}
+          {/* Empresa */}
           <div>
-            <h4 className="font-display font-bold text-background mb-6">Company</h4>
+            <h4 className="font-display font-bold text-background mb-6">Empresa</h4>
             <ul className="space-y-3">
-              {footerLinks.company.map((link) => (
+              {footerLinks.empresa.map((link) => (
                 <li key={link.label}>
                   <Link
                     to={link.href}
@@ -95,25 +95,25 @@ export const Footer = () => {
             </ul>
           </div>
 
-          {/* Contact */}
+          {/* Contacto */}
           <div>
-            <h4 className="font-display font-bold text-background mb-6">Contact Us</h4>
+            <h4 className="font-display font-bold text-background mb-6">Contactanos</h4>
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
                 <Mail className="w-5 h-5 text-primary mt-0.5" />
-                <a href="mailto:hello@washero.com" className="text-sm hover:text-primary transition-colors">
-                  hello@washero.com
+                <a href="mailto:hola@washero.com.ar" className="text-sm hover:text-primary transition-colors">
+                  hola@washero.com.ar
                 </a>
               </li>
               <li className="flex items-start gap-3">
                 <MessageCircle className="w-5 h-5 text-primary mt-0.5" />
-                <a href="https://wa.me/1234567890" className="text-sm hover:text-primary transition-colors">
-                  WhatsApp Support
+                <a href="https://wa.me/5491112345678" className="text-sm hover:text-primary transition-colors">
+                  WhatsApp
                 </a>
               </li>
               <li className="flex items-start gap-3">
                 <MapPin className="w-5 h-5 text-primary mt-0.5" />
-                <span className="text-sm">Service areas available</span>
+                <span className="text-sm">Buenos Aires, Argentina</span>
               </li>
             </ul>
           </div>
@@ -123,10 +123,10 @@ export const Footer = () => {
         <div className="mt-16 pt-8 border-t border-washero-charcoal-light">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm opacity-70">
-              © {new Date().getFullYear()} Washero. All rights reserved.
+              © {new Date().getFullYear()} Washero. Todos los derechos reservados.
             </p>
             <p className="text-sm opacity-70 flex items-center gap-2">
-              🌱 Committed to eco-responsible car care
+              🌱 Comprometidos con el cuidado del medio ambiente
             </p>
           </div>
         </div>
