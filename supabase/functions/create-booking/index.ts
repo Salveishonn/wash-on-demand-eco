@@ -22,6 +22,7 @@ interface CreateBookingRequest {
   subscriptionId?: string;
   isSubscriptionBooking?: boolean;
   requiresPayment?: boolean;
+  paymentsEnabled?: boolean; // Feature flag from client
 }
 
 serve(async (req) => {
@@ -37,6 +38,7 @@ serve(async (req) => {
     const data: CreateBookingRequest = await req.json();
     
     console.log("[create-booking] Creating booking for:", data.customerName);
+    console.log("[create-booking] Payments enabled:", data.paymentsEnabled);
 
     // Validate required fields
     if (!data.customerName || !data.customerEmail || !data.customerPhone) {
@@ -75,6 +77,13 @@ serve(async (req) => {
       console.log("[create-booking] Subscription booking - washes remaining updated");
     }
 
+    // Determine booking status based on payment mode
+    const isPayLater = data.paymentsEnabled === false && !data.isSubscriptionBooking;
+    const bookingStatus = data.isSubscriptionBooking ? "confirmed" : (isPayLater ? "pending" : "pending");
+    const paymentStatus = data.isSubscriptionBooking ? "approved" : (isPayLater ? "pending" : "pending");
+
+    console.log("[create-booking] Pay later mode:", isPayLater);
+
     // Create the booking
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
@@ -93,9 +102,9 @@ serve(async (req) => {
         address: data.address,
         notes: data.notes,
         is_subscription_booking: data.isSubscriptionBooking || false,
-        requires_payment: data.requiresPayment !== false,
-        status: data.isSubscriptionBooking ? "confirmed" : "pending",
-        payment_status: data.isSubscriptionBooking ? "approved" : "pending",
+        requires_payment: data.paymentsEnabled !== false,
+        status: bookingStatus,
+        payment_status: paymentStatus,
         confirmed_at: data.isSubscriptionBooking ? new Date().toISOString() : null,
       })
       .select()
@@ -108,9 +117,13 @@ serve(async (req) => {
 
     console.log("[create-booking] Booking created:", booking.id);
 
-    // If subscription booking, queue notifications immediately
-    if (data.isSubscriptionBooking) {
-      console.log("[create-booking] Queueing notifications for subscription booking");
+    // Queue notifications immediately if:
+    // 1. Subscription booking (already paid)
+    // 2. Pay-later mode (no MercadoPago)
+    const shouldNotifyImmediately = data.isSubscriptionBooking || isPayLater;
+    
+    if (shouldNotifyImmediately) {
+      console.log("[create-booking] Queueing notifications immediately");
       
       const queueUrl = `${supabaseUrl}/functions/v1/queue-notifications`;
       
@@ -120,17 +133,27 @@ serve(async (req) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${supabaseServiceKey}`,
         },
-        body: JSON.stringify({ bookingId: booking.id }),
+        body: JSON.stringify({ 
+          bookingId: booking.id,
+          isPayLater: isPayLater 
+        }),
       }).catch(err => console.error("[create-booking] Queue error:", err));
+    }
+
+    // Determine response message
+    let message = "Reserva creada, procedé al pago";
+    if (data.isSubscriptionBooking) {
+      message = "¡Reserva confirmada con tu suscripción!";
+    } else if (isPayLater) {
+      message = "¡Reserva recibida! Te contactamos para coordinar el pago.";
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         booking,
-        message: data.isSubscriptionBooking 
-          ? "¡Reserva confirmada con tu suscripción!" 
-          : "Reserva creada, procedé al pago"
+        message,
+        isPayLater
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

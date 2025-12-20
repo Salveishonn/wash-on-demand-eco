@@ -8,7 +8,12 @@ const corsHeaders = {
 
 interface QueueNotificationsRequest {
   bookingId: string;
+  isPayLater?: boolean;
 }
+
+// Admin recipients
+const ADMIN_EMAIL = "washerocarwash@gmail.com";
+const ADMIN_WHATSAPP = "+5491130951804";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -20,9 +25,9 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { bookingId }: QueueNotificationsRequest = await req.json();
+    const { bookingId, isPayLater }: QueueNotificationsRequest = await req.json();
     
-    console.log(`[queue-notifications] Processing booking: ${bookingId}`);
+    console.log(`[queue-notifications] Processing booking: ${bookingId}, isPayLater: ${isPayLater}`);
 
     // Check if notifications already queued (idempotency at booking level)
     const { data: booking, error: bookingError } = await supabase
@@ -44,49 +49,62 @@ serve(async (req) => {
       );
     }
 
-    const adminEmail = "washerocarwash@gmail.com";
-    const adminWhatsApp = "+5491130951804";
+    const notifications = [];
 
-    // Create idempotency keys
-    const emailIdempotencyKey = `${bookingId}:email:admin`;
-    const whatsappIdempotencyKey = `${bookingId}:whatsapp:admin`;
+    // Customer email notification
+    notifications.push({
+      booking_id: bookingId,
+      notification_type: "email",
+      recipient: booking.customer_email,
+      idempotency_key: `${bookingId}:email:customer`,
+      status: "pending",
+      next_retry_at: new Date().toISOString(),
+    });
 
-    // Queue email notification
-    const { error: emailQueueError } = await supabase
-      .from("notification_queue")
-      .upsert({
-        booking_id: bookingId,
-        notification_type: "email",
-        recipient: adminEmail,
-        idempotency_key: emailIdempotencyKey,
-        status: "pending",
-        next_retry_at: new Date().toISOString(),
-      }, {
-        onConflict: "idempotency_key",
-        ignoreDuplicates: true,
-      });
+    // Customer WhatsApp notification
+    notifications.push({
+      booking_id: bookingId,
+      notification_type: "whatsapp",
+      recipient: booking.customer_phone,
+      idempotency_key: `${bookingId}:whatsapp:customer`,
+      status: "pending",
+      next_retry_at: new Date().toISOString(),
+    });
 
-    if (emailQueueError) {
-      console.error("[queue-notifications] Error queuing email:", emailQueueError);
-    }
+    // Admin email notification
+    notifications.push({
+      booking_id: bookingId,
+      notification_type: "email",
+      recipient: ADMIN_EMAIL,
+      idempotency_key: `${bookingId}:email:admin`,
+      status: "pending",
+      next_retry_at: new Date().toISOString(),
+    });
 
-    // Queue WhatsApp notification
-    const { error: whatsappQueueError } = await supabase
-      .from("notification_queue")
-      .upsert({
-        booking_id: bookingId,
-        notification_type: "whatsapp",
-        recipient: adminWhatsApp,
-        idempotency_key: whatsappIdempotencyKey,
-        status: "pending",
-        next_retry_at: new Date().toISOString(),
-      }, {
-        onConflict: "idempotency_key",
-        ignoreDuplicates: true,
-      });
+    // Admin WhatsApp notification
+    notifications.push({
+      booking_id: bookingId,
+      notification_type: "whatsapp",
+      recipient: ADMIN_WHATSAPP,
+      idempotency_key: `${bookingId}:whatsapp:admin`,
+      status: "pending",
+      next_retry_at: new Date().toISOString(),
+    });
 
-    if (whatsappQueueError) {
-      console.error("[queue-notifications] Error queuing whatsapp:", whatsappQueueError);
+    console.log(`[queue-notifications] Queuing ${notifications.length} notifications`);
+
+    // Insert all notifications
+    for (const notification of notifications) {
+      const { error } = await supabase
+        .from("notification_queue")
+        .upsert(notification, {
+          onConflict: "idempotency_key",
+          ignoreDuplicates: true,
+        });
+
+      if (error) {
+        console.error(`[queue-notifications] Error queuing ${notification.notification_type} to ${notification.recipient}:`, error);
+      }
     }
 
     // Mark booking as notifications queued
@@ -105,11 +123,11 @@ serve(async (req) => {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${supabaseServiceKey}`,
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ bookingId, isPayLater }),
     }).catch(err => console.error("[queue-notifications] Process trigger error:", err));
 
     return new Response(
-      JSON.stringify({ success: true, message: "Notifications queued" }),
+      JSON.stringify({ success: true, message: "Notifications queued", count: notifications.length }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
