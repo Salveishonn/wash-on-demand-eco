@@ -108,20 +108,20 @@ serve(async (req) => {
 
     console.log("[create-booking] Booking created:", booking.id);
 
-    // If subscription booking, send notifications immediately
+    // If subscription booking, queue notifications immediately
     if (data.isSubscriptionBooking) {
-      console.log("[create-booking] Triggering notifications for subscription booking");
+      console.log("[create-booking] Queueing notifications for subscription booking");
       
-      const notifyUrl = `${supabaseUrl}/functions/v1/send-notifications`;
+      const queueUrl = `${supabaseUrl}/functions/v1/queue-notifications`;
       
-      fetch(notifyUrl, {
+      fetch(queueUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${supabaseServiceKey}`,
         },
         body: JSON.stringify({ bookingId: booking.id }),
-      }).catch(err => console.error("[create-booking] Notification error:", err));
+      }).catch(err => console.error("[create-booking] Queue error:", err));
     }
 
     return new Response(
