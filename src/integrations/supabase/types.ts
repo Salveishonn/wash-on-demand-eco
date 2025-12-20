@@ -31,6 +31,7 @@ export type Database = {
           mercadopago_payment_id: string | null
           mercadopago_preference_id: string | null
           notes: string | null
+          notifications_queued: boolean | null
           payment_status: Database["public"]["Enums"]["payment_status"]
           requires_payment: boolean | null
           service_name: string
@@ -39,6 +40,7 @@ export type Database = {
           subscription_id: string | null
           updated_at: string
           user_id: string | null
+          webhook_processed_at: string | null
         }
         Insert: {
           address?: string | null
@@ -56,6 +58,7 @@ export type Database = {
           mercadopago_payment_id?: string | null
           mercadopago_preference_id?: string | null
           notes?: string | null
+          notifications_queued?: boolean | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           requires_payment?: boolean | null
           service_name: string
@@ -64,6 +67,7 @@ export type Database = {
           subscription_id?: string | null
           updated_at?: string
           user_id?: string | null
+          webhook_processed_at?: string | null
         }
         Update: {
           address?: string | null
@@ -81,6 +85,7 @@ export type Database = {
           mercadopago_payment_id?: string | null
           mercadopago_preference_id?: string | null
           notes?: string | null
+          notifications_queued?: boolean | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           requires_payment?: boolean | null
           service_name?: string
@@ -89,6 +94,7 @@ export type Database = {
           subscription_id?: string | null
           updated_at?: string
           user_id?: string | null
+          webhook_processed_at?: string | null
         }
         Relationships: [
           {
@@ -137,6 +143,65 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "notification_logs_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_queue: {
+        Row: {
+          attempts: number
+          booking_id: string
+          created_at: string
+          external_id: string | null
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          max_attempts: number
+          next_retry_at: string | null
+          notification_type: string
+          recipient: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          booking_id: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          max_attempts?: number
+          next_retry_at?: string | null
+          notification_type: string
+          recipient: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          booking_id?: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          max_attempts?: number
+          next_retry_at?: string | null
+          notification_type?: string
+          recipient?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_queue_booking_id_fkey"
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
@@ -272,6 +337,39 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      webhook_logs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          event_type: string | null
+          id: string
+          payload: Json | null
+          processed: boolean | null
+          signature_valid: boolean | null
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          event_type?: string | null
+          id?: string
+          payload?: Json | null
+          processed?: boolean | null
+          signature_valid?: boolean | null
+          source: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          event_type?: string | null
+          id?: string
+          payload?: Json | null
+          processed?: boolean | null
+          signature_valid?: boolean | null
+          source?: string
         }
         Relationships: []
       }
