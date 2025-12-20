@@ -1,24 +1,41 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight } from "lucide-react";
+import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
-const services = [
-  { id: "exterior", name: "Lavado Exterior", price: "$25.000", time: "45 min" },
-  { id: "interior", name: "Limpieza Interior", price: "$35.000", time: "60 min" },
-  { id: "full-detail", name: "Detailing Completo", price: "$75.000", time: "2-3 horas", popular: true },
+interface Service {
+  id: string;
+  name: string;
+  price: string;
+  priceCents: number;
+  time: string;
+  popular?: boolean;
+}
+
+interface CarType {
+  id: string;
+  name: string;
+  extra: string;
+  extraCents: number;
+}
+
+const services: Service[] = [
+  { id: "exterior", name: "Lavado Exterior", price: "$25.000", priceCents: 2500000, time: "45 min" },
+  { id: "interior", name: "Limpieza Interior", price: "$35.000", priceCents: 3500000, time: "60 min" },
+  { id: "full-detail", name: "Detailing Completo", price: "$75.000", priceCents: 7500000, time: "2-3 horas", popular: true },
 ];
 
-const carTypes = [
-  { id: "sedan", name: "Sedán", extra: "$0" },
-  { id: "suv", name: "SUV / Crossover", extra: "+$7.000" },
-  { id: "camioneta", name: "Camioneta / Van", extra: "+$12.000" },
-  { id: "premium", name: "Premium / Deportivo", extra: "+$10.000" },
+const carTypes: CarType[] = [
+  { id: "sedan", name: "Sedán", extra: "$0", extraCents: 0 },
+  { id: "suv", name: "SUV / Crossover", extra: "+$7.000", extraCents: 700000 },
+  { id: "camioneta", name: "Camioneta / Van", extra: "+$12.000", extraCents: 1200000 },
+  { id: "premium", name: "Premium / Deportivo", extra: "+$10.000", extraCents: 1000000 },
 ];
 
 const timeSlots = [
@@ -26,12 +43,23 @@ const timeSlots = [
   "13:00", "14:00", "15:00", "16:00", "17:00"
 ];
 
+const formatPrice = (cents: number) => {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 0,
+  }).format(cents / 100);
+};
+
 const Reservar = () => {
   const [searchParams] = useSearchParams();
   const initialService = searchParams.get("servicio") || "";
   const { toast } = useToast();
   
   const [step, setStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [bookingId, setBookingId] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState({
     service: initialService,
     carType: "",
@@ -44,16 +72,131 @@ const Reservar = () => {
     notes: "",
   });
 
+  // Check for payment return
+  useEffect(() => {
+    const paymentStatus = searchParams.get("collection_status");
+    const externalRef = searchParams.get("external_reference");
+    
+    if (paymentStatus === "approved" && externalRef) {
+      setStep(4);
+      toast({
+        title: "¡Pago Confirmado!",
+        description: "Tu reserva ha sido confirmada exitosamente.",
+      });
+    } else if (paymentStatus === "rejected" || paymentStatus === "failure") {
+      toast({
+        variant: "destructive",
+        title: "Pago Rechazado",
+        description: "Hubo un problema con tu pago. Por favor, intentá nuevamente.",
+      });
+    }
+  }, [searchParams, toast]);
+
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = () => {
-    toast({
-      title: "¡Reserva Confirmada!",
-      description: "Te enviaremos un email de confirmación en breve.",
-    });
-    setStep(4);
+  const getSelectedService = () => services.find(s => s.id === formData.service);
+  const getSelectedCarType = () => carTypes.find(c => c.id === formData.carType);
+  
+  const getTotalPrice = () => {
+    const service = getSelectedService();
+    const carType = getSelectedCarType();
+    if (!service) return 0;
+    return service.priceCents + (carType?.extraCents || 0);
+  };
+
+  const handleSubmit = async () => {
+    setIsLoading(true);
+    
+    try {
+      const service = getSelectedService();
+      const carType = getSelectedCarType();
+      
+      if (!service) {
+        throw new Error("Seleccioná un servicio");
+      }
+
+      console.log("[Reservar] Creating booking...");
+
+      // Create booking via edge function
+      const { data: bookingResponse, error: bookingError } = await supabase.functions.invoke(
+        "create-booking",
+        {
+          body: {
+            customerName: formData.name,
+            customerEmail: formData.email,
+            customerPhone: formData.phone,
+            serviceName: service.name,
+            servicePriceCents: service.priceCents,
+            carType: carType?.name || "",
+            carTypeExtraCents: carType?.extraCents || 0,
+            bookingDate: formData.date,
+            bookingTime: formData.time,
+            address: formData.address,
+            notes: formData.notes,
+            requiresPayment: true,
+          },
+        }
+      );
+
+      if (bookingError) {
+        console.error("[Reservar] Booking error:", bookingError);
+        throw new Error("Error al crear la reserva");
+      }
+
+      console.log("[Reservar] Booking created:", bookingResponse);
+      setBookingId(bookingResponse.booking.id);
+
+      // Create MercadoPago preference
+      console.log("[Reservar] Creating MercadoPago preference...");
+      
+      const { data: mpResponse, error: mpError } = await supabase.functions.invoke(
+        "create-mercadopago-preference",
+        {
+          body: {
+            bookingId: bookingResponse.booking.id,
+            title: `Washero - ${service.name}`,
+            description: `Lavado de auto ${carType?.name || ''} - ${formData.date} ${formData.time}hs`,
+            priceInCents: getTotalPrice(),
+            customerEmail: formData.email,
+            customerName: formData.name,
+          },
+        }
+      );
+
+      if (mpError) {
+        console.error("[Reservar] MercadoPago error:", mpError);
+        throw new Error("Error al procesar el pago");
+      }
+
+      console.log("[Reservar] MercadoPago preference created:", mpResponse);
+
+      // Redirect to MercadoPago
+      if (mpResponse.initPoint) {
+        toast({
+          title: "Redirigiendo a MercadoPago...",
+          description: "Serás redirigido para completar el pago.",
+        });
+        
+        // Small delay before redirect
+        setTimeout(() => {
+          window.location.href = mpResponse.initPoint;
+        }, 1000);
+      } else {
+        throw new Error("No se pudo obtener el link de pago");
+      }
+
+    } catch (error: any) {
+      console.error("[Reservar] Error:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Hubo un problema al procesar tu reserva",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const canProceed = () => {
@@ -107,7 +250,7 @@ const Reservar = () => {
                 <span className={`hidden md:block text-sm font-medium ${
                   step >= s ? "text-foreground" : "text-muted-foreground"
                 }`}>
-                  {s === 1 ? "Servicio" : s === 2 ? "Agenda" : "Datos"}
+                  {s === 1 ? "Servicio" : s === 2 ? "Agenda" : "Datos y Pago"}
                 </span>
                 {s < 3 && (
                   <div className={`w-12 md:w-24 h-1 rounded ${
@@ -268,7 +411,7 @@ const Reservar = () => {
               </motion.div>
             )}
 
-            {/* Step 3: Contact Details */}
+            {/* Step 3: Contact Details & Payment */}
             {step === 3 && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
@@ -338,13 +481,19 @@ const Reservar = () => {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Servicio</span>
                       <span className="font-medium">
-                        {services.find((s) => s.id === formData.service)?.name}
+                        {getSelectedService()?.name}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Precio servicio</span>
+                      <span className="font-medium">
+                        {getSelectedService()?.price}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Vehículo</span>
                       <span className="font-medium">
-                        {carTypes.find((c) => c.id === formData.carType)?.name}
+                        {getSelectedCarType()?.name} ({getSelectedCarType()?.extra})
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -355,11 +504,22 @@ const Reservar = () => {
                       <span className="text-muted-foreground">Ubicación</span>
                       <span className="font-medium truncate max-w-[200px]">{formData.address}</span>
                     </div>
-                    <div className="border-t border-border pt-2 mt-2 flex justify-between">
-                      <span className="font-semibold">Total</span>
-                      <span className="font-display font-bold text-primary text-lg">
-                        {services.find((s) => s.id === formData.service)?.price}
+                    <div className="border-t border-border pt-3 mt-3 flex justify-between items-center">
+                      <span className="font-semibold text-lg">Total a Pagar</span>
+                      <span className="font-display font-black text-primary text-2xl">
+                        {formatPrice(getTotalPrice())}
                       </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Info */}
+                <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
+                  <div className="flex items-center gap-3">
+                    <CreditCard className="w-6 h-6 text-primary" />
+                    <div>
+                      <p className="font-medium text-foreground">Pago Seguro con MercadoPago</p>
+                      <p className="text-sm text-muted-foreground">Aceptamos todas las tarjetas y métodos de pago</p>
                     </div>
                   </div>
                 </div>
@@ -380,8 +540,9 @@ const Reservar = () => {
                   ¡Reserva Confirmada!
                 </h2>
                 <p className="text-lg text-muted-foreground mb-8">
-                  ¡Gracias! Enviamos una confirmación a {formData.email}.<br />
-                  Nuestro equipo llegará a las {formData.time} hs el {formData.date}.
+                  ¡Gracias! Tu pago fue procesado correctamente.<br />
+                  Te enviamos una confirmación por email y WhatsApp.<br />
+                  Nuestro equipo llegará a tu ubicación en el horario acordado.
                 </p>
                 <Button variant="hero" size="lg" asChild>
                   <Link to="/">Volver al Inicio</Link>
@@ -397,6 +558,7 @@ const Reservar = () => {
                     variant="outline"
                     size="lg"
                     onClick={() => setStep(step - 1)}
+                    disabled={isLoading}
                   >
                     Atrás
                   </Button>
@@ -418,9 +580,19 @@ const Reservar = () => {
                     variant="hero"
                     size="lg"
                     onClick={handleSubmit}
-                    disabled={!canProceed()}
+                    disabled={!canProceed() || isLoading}
                   >
-                    Confirmar Reserva <CheckCircle className="w-4 h-4" />
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        Procesando...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-4 h-4 mr-2" />
+                        Pagar {formatPrice(getTotalPrice())}
+                      </>
+                    )}
                   </Button>
                 )}
               </div>
