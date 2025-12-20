@@ -14,7 +14,246 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bookings: {
+        Row: {
+          address: string | null
+          booking_date: string
+          booking_time: string
+          car_type: string | null
+          car_type_extra_cents: number | null
+          confirmed_at: string | null
+          created_at: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          id: string
+          is_subscription_booking: boolean | null
+          mercadopago_payment_id: string | null
+          mercadopago_preference_id: string | null
+          notes: string | null
+          payment_status: Database["public"]["Enums"]["payment_status"]
+          requires_payment: boolean | null
+          service_name: string
+          service_price_cents: number
+          status: Database["public"]["Enums"]["booking_status"]
+          subscription_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          booking_date: string
+          booking_time: string
+          car_type?: string | null
+          car_type_extra_cents?: number | null
+          confirmed_at?: string | null
+          created_at?: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          id?: string
+          is_subscription_booking?: boolean | null
+          mercadopago_payment_id?: string | null
+          mercadopago_preference_id?: string | null
+          notes?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"]
+          requires_payment?: boolean | null
+          service_name: string
+          service_price_cents: number
+          status?: Database["public"]["Enums"]["booking_status"]
+          subscription_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          booking_date?: string
+          booking_time?: string
+          car_type?: string | null
+          car_type_extra_cents?: number | null
+          confirmed_at?: string | null
+          created_at?: string
+          customer_email?: string
+          customer_name?: string
+          customer_phone?: string
+          id?: string
+          is_subscription_booking?: boolean | null
+          mercadopago_payment_id?: string | null
+          mercadopago_preference_id?: string | null
+          notes?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"]
+          requires_payment?: boolean | null
+          service_name?: string
+          service_price_cents?: number
+          status?: Database["public"]["Enums"]["booking_status"]
+          subscription_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_logs: {
+        Row: {
+          booking_id: string | null
+          created_at: string
+          error_message: string | null
+          external_id: string | null
+          id: string
+          message_content: string | null
+          notification_type: Database["public"]["Enums"]["notification_type"]
+          recipient: string
+          status: Database["public"]["Enums"]["notification_status"]
+        }
+        Insert: {
+          booking_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          external_id?: string | null
+          id?: string
+          message_content?: string | null
+          notification_type: Database["public"]["Enums"]["notification_type"]
+          recipient: string
+          status?: Database["public"]["Enums"]["notification_status"]
+        }
+        Update: {
+          booking_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          external_id?: string | null
+          id?: string
+          message_content?: string | null
+          notification_type?: Database["public"]["Enums"]["notification_type"]
+          recipient?: string
+          status?: Database["public"]["Enums"]["notification_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_logs_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscription_plans: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          mercadopago_plan_id: string | null
+          name: string
+          price_cents: number
+          washes_per_month: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          mercadopago_plan_id?: string | null
+          name: string
+          price_cents: number
+          washes_per_month: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          mercadopago_plan_id?: string | null
+          name?: string
+          price_cents?: number
+          washes_per_month?: number
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          mercadopago_subscription_id: string | null
+          plan_id: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          updated_at: string
+          user_id: string
+          washes_remaining: number
+        }
+        Insert: {
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          mercadopago_subscription_id?: string | null
+          plan_id: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id: string
+          washes_remaining?: number
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          mercadopago_subscription_id?: string | null
+          plan_id?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id?: string
+          washes_remaining?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +262,16 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      booking_status: "pending" | "confirmed" | "cancelled" | "completed"
+      notification_status: "sent" | "failed" | "pending"
+      notification_type: "email" | "whatsapp"
+      payment_status:
+        | "pending"
+        | "approved"
+        | "rejected"
+        | "refunded"
+        | "in_process"
+      subscription_status: "active" | "paused" | "cancelled" | "payment_failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +398,18 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      booking_status: ["pending", "confirmed", "cancelled", "completed"],
+      notification_status: ["sent", "failed", "pending"],
+      notification_type: ["email", "whatsapp"],
+      payment_status: [
+        "pending",
+        "approved",
+        "rejected",
+        "refunded",
+        "in_process",
+      ],
+      subscription_status: ["active", "paused", "cancelled", "payment_failed"],
+    },
   },
 } as const
