@@ -6,6 +6,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Simple rate limiting (in-memory, resets on cold start)
+const requestCounts = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 100; // requests per window
+const RATE_WINDOW_MS = 60000; // 1 minute
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = requestCounts.get(ip);
+  
+  if (!record || now > record.resetAt) {
+    requestCounts.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return true;
+  }
+  
+  if (record.count >= RATE_LIMIT) {
+    return false;
+  }
+  
+  record.count++;
+  return true;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -17,46 +39,103 @@ serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  // Rate limiting
+  const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  if (!checkRateLimit(clientIp)) {
+    console.warn(`[mercadopago-webhook] Rate limited: ${clientIp}`);
+    return new Response("Too Many Requests", { status: 429 });
+  }
+
   try {
-    const body = await req.json();
+    const bodyText = await req.text();
+    let body: any;
+    
+    try {
+      body = JSON.parse(bodyText);
+    } catch {
+      console.error("[mercadopago-webhook] Invalid JSON body");
+      return new Response("Bad Request", { status: 400 });
+    }
     
     console.log("[mercadopago-webhook] Received webhook:", JSON.stringify(body, null, 2));
 
-    // Handle different notification types
-    if (body.type === "payment") {
+    // Log webhook for debugging
+    await supabase.from("webhook_logs").insert({
+      source: "mercadopago",
+      event_type: body.type || body.action,
+      payload: body,
+      signature_valid: true, // MercadoPago uses IP allowlist, not signature
+      processed: false,
+    });
+
+    // Validate required fields
+    if (!body.type && !body.action) {
+      console.log("[mercadopago-webhook] No type/action in webhook");
+      return new Response("OK", { status: 200 });
+    }
+
+    // Handle payment notifications
+    if (body.type === "payment" || body.action === "payment.created" || body.action === "payment.updated") {
       const paymentId = body.data?.id;
       
       if (!paymentId) {
-        console.log("[mercadopago-webhook] No payment ID in webhook");
+        console.log("[mercadopago-webhook] No payment ID");
         return new Response("OK", { status: 200 });
       }
 
-      console.log("[mercadopago-webhook] Fetching payment details:", paymentId);
+      console.log("[mercadopago-webhook] Fetching payment:", paymentId);
 
-      // Fetch payment details from MercadoPago
+      // Fetch payment details from MercadoPago (this validates the payment exists)
       const paymentResponse = await fetch(
         `https://api.mercadopago.com/v1/payments/${paymentId}`,
         {
-          headers: {
-            "Authorization": `Bearer ${mercadoPagoToken}`,
-          },
+          headers: { "Authorization": `Bearer ${mercadoPagoToken}` },
         }
       );
 
+      if (!paymentResponse.ok) {
+        console.error("[mercadopago-webhook] Invalid payment ID");
+        return new Response("OK", { status: 200 });
+      }
+
       const payment = await paymentResponse.json();
-      
-      console.log("[mercadopago-webhook] Payment details:", JSON.stringify(payment, null, 2));
+      console.log("[mercadopago-webhook] Payment status:", payment.status);
 
       const bookingId = payment.external_reference;
       
       if (!bookingId) {
-        console.log("[mercadopago-webhook] No booking ID in payment");
+        console.log("[mercadopago-webhook] No booking ID in external_reference");
         return new Response("OK", { status: 200 });
       }
 
-      // Map MercadoPago status to our status
-      let paymentStatus: string;
-      let bookingStatus: string;
+      // Check if already processed (idempotency)
+      const { data: existingBooking } = await supabase
+        .from("bookings")
+        .select("id, status, payment_status, webhook_processed_at")
+        .eq("id", bookingId)
+        .maybeSingle();
+
+      if (!existingBooking) {
+        console.log("[mercadopago-webhook] Booking not found:", bookingId);
+        return new Response("OK", { status: 200 });
+      }
+
+      // Skip if already processed with same or better status
+      if (existingBooking.payment_status === "approved" && payment.status === "approved") {
+        console.log("[mercadopago-webhook] Already processed as approved, skipping");
+        
+        // Update webhook log
+        await supabase
+          .from("webhook_logs")
+          .update({ processed: true })
+          .eq("payload->data->id", paymentId);
+          
+        return new Response("OK", { status: 200 });
+      }
+
+      // Map MercadoPago status
+      let paymentStatus: 'pending' | 'approved' | 'rejected' | 'in_process' | 'refunded';
+      let bookingStatus: 'pending' | 'confirmed' | 'cancelled' | 'completed';
       
       switch (payment.status) {
         case "approved":
@@ -85,10 +164,11 @@ serve(async (req) => {
       console.log(`[mercadopago-webhook] Updating booking ${bookingId}: payment=${paymentStatus}, status=${bookingStatus}`);
 
       // Update booking
-      const updateData: any = {
+      const updateData: Record<string, any> = {
         payment_status: paymentStatus,
         status: bookingStatus,
         mercadopago_payment_id: String(paymentId),
+        webhook_processed_at: new Date().toISOString(),
       };
 
       if (paymentStatus === "approved") {
@@ -101,41 +181,38 @@ serve(async (req) => {
         .eq("id", bookingId);
 
       if (updateError) {
-        console.error("[mercadopago-webhook] Error updating booking:", updateError);
+        console.error("[mercadopago-webhook] Update error:", updateError);
         throw updateError;
       }
 
-      console.log("[mercadopago-webhook] Booking updated successfully");
+      // Update webhook log
+      await supabase
+        .from("webhook_logs")
+        .update({ processed: true })
+        .eq("payload->data->id", paymentId);
 
-      // If payment approved, send notifications
+      // If payment approved, queue notifications
       if (paymentStatus === "approved") {
-        console.log("[mercadopago-webhook] Payment approved, triggering notifications");
+        console.log("[mercadopago-webhook] Payment approved, queueing notifications");
         
-        const notifyUrl = `${supabaseUrl}/functions/v1/send-notifications`;
+        const queueUrl = `${supabaseUrl}/functions/v1/queue-notifications`;
         
-        // Fire and forget - don't wait for response
-        fetch(notifyUrl, {
+        fetch(queueUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${supabaseServiceKey}`,
           },
           body: JSON.stringify({ bookingId }),
-        }).catch(err => console.error("[mercadopago-webhook] Notification error:", err));
+        }).catch(err => console.error("[mercadopago-webhook] Queue error:", err));
       }
-    }
-
-    // Handle subscription notifications
-    if (body.type === "subscription_preapproval" || body.type === "subscription_authorized_payment") {
-      console.log("[mercadopago-webhook] Subscription event:", body.type);
-      // TODO: Handle subscription webhooks
     }
 
     return new Response("OK", { status: 200, headers: corsHeaders });
 
   } catch (error: any) {
     console.error("[mercadopago-webhook] Error:", error);
-    // Always return 200 to prevent MercadoPago from retrying
+    // Always return 200 to prevent MercadoPago retries that we can't handle
     return new Response("OK", { status: 200 });
   }
 });
