@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, CreditCard } from "lucide-react";
+import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, CreditCard, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { PAYMENTS_ENABLED } from "@/config/payments";
 
 interface Service {
   id: string;
@@ -72,8 +73,10 @@ const Reservar = () => {
     notes: "",
   });
 
-  // Check for payment return
+  // Check for payment return (only when payments enabled)
   useEffect(() => {
+    if (!PAYMENTS_ENABLED) return;
+    
     const paymentStatus = searchParams.get("collection_status");
     const externalRef = searchParams.get("external_reference");
     
@@ -117,7 +120,7 @@ const Reservar = () => {
         throw new Error("Seleccioná un servicio");
       }
 
-      console.log("[Reservar] Creating booking...");
+      console.log("[Reservar] Creating booking... paymentsEnabled:", PAYMENTS_ENABLED);
 
       // Create booking via edge function
       const { data: bookingResponse, error: bookingError } = await supabase.functions.invoke(
@@ -135,7 +138,8 @@ const Reservar = () => {
             bookingTime: formData.time,
             address: formData.address,
             notes: formData.notes,
-            requiresPayment: true,
+            requiresPayment: PAYMENTS_ENABLED,
+            paymentsEnabled: PAYMENTS_ENABLED,
           },
         }
       );
@@ -148,7 +152,17 @@ const Reservar = () => {
       console.log("[Reservar] Booking created:", bookingResponse);
       setBookingId(bookingResponse.booking.id);
 
-      // Create MercadoPago preference
+      // If payments disabled, go straight to confirmation
+      if (!PAYMENTS_ENABLED) {
+        setStep(4);
+        toast({
+          title: "¡Reserva Recibida!",
+          description: "Te contactaremos pronto para coordinar el pago.",
+        });
+        return;
+      }
+
+      // Payments enabled: Create MercadoPago preference
       console.log("[Reservar] Creating MercadoPago preference...");
       
       const { data: mpResponse, error: mpError } = await supabase.functions.invoke(
@@ -179,7 +193,6 @@ const Reservar = () => {
           description: "Serás redirigido para completar el pago.",
         });
         
-        // Small delay before redirect
         setTimeout(() => {
           window.location.href = mpResponse.initPoint;
         }, 1000);
@@ -250,7 +263,7 @@ const Reservar = () => {
                 <span className={`hidden md:block text-sm font-medium ${
                   step >= s ? "text-foreground" : "text-muted-foreground"
                 }`}>
-                  {s === 1 ? "Servicio" : s === 2 ? "Agenda" : "Datos y Pago"}
+                  {s === 1 ? "Servicio" : s === 2 ? "Agenda" : (PAYMENTS_ENABLED ? "Datos y Pago" : "Datos")}
                 </span>
                 {s < 3 && (
                   <div className={`w-12 md:w-24 h-1 rounded ${
@@ -411,7 +424,7 @@ const Reservar = () => {
               </motion.div>
             )}
 
-            {/* Step 3: Contact Details & Payment */}
+            {/* Step 3: Contact Details */}
             {step === 3 && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
@@ -505,7 +518,7 @@ const Reservar = () => {
                       <span className="font-medium truncate max-w-[200px]">{formData.address}</span>
                     </div>
                     <div className="border-t border-border pt-3 mt-3 flex justify-between items-center">
-                      <span className="font-semibold text-lg">Total a Pagar</span>
+                      <span className="font-semibold text-lg">Total</span>
                       <span className="font-display font-black text-primary text-2xl">
                         {formatPrice(getTotalPrice())}
                       </span>
@@ -513,16 +526,28 @@ const Reservar = () => {
                   </div>
                 </div>
 
-                {/* Payment Info */}
-                <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                  <div className="flex items-center gap-3">
-                    <CreditCard className="w-6 h-6 text-primary" />
-                    <div>
-                      <p className="font-medium text-foreground">Pago Seguro con MercadoPago</p>
-                      <p className="text-sm text-muted-foreground">Aceptamos todas las tarjetas y métodos de pago</p>
+                {/* Payment Info or Pay Later Notice */}
+                {PAYMENTS_ENABLED ? (
+                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
+                    <div className="flex items-center gap-3">
+                      <CreditCard className="w-6 h-6 text-primary" />
+                      <div>
+                        <p className="font-medium text-foreground">Pago Seguro con MercadoPago</p>
+                        <p className="text-sm text-muted-foreground">Aceptamos todas las tarjetas y métodos de pago</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-4 rounded-lg bg-washero-eco/10 border border-washero-eco/20">
+                    <div className="flex items-center gap-3">
+                      <Send className="w-6 h-6 text-washero-eco" />
+                      <div>
+                        <p className="font-medium text-foreground">Reserva sin pago online</p>
+                        <p className="text-sm text-muted-foreground">Te contactaremos para coordinar el pago</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -537,12 +562,22 @@ const Reservar = () => {
                   <CheckCircle className="w-12 h-12 text-washero-eco" />
                 </div>
                 <h2 className="font-display text-3xl font-black text-foreground mb-4">
-                  ¡Reserva Confirmada!
+                  {PAYMENTS_ENABLED ? "¡Reserva Confirmada!" : "¡Reserva Recibida!"}
                 </h2>
                 <p className="text-lg text-muted-foreground mb-8">
-                  ¡Gracias! Tu pago fue procesado correctamente.<br />
-                  Te enviamos una confirmación por email y WhatsApp.<br />
-                  Nuestro equipo llegará a tu ubicación en el horario acordado.
+                  {PAYMENTS_ENABLED ? (
+                    <>
+                      ¡Gracias! Tu pago fue procesado correctamente.<br />
+                      Te enviamos una confirmación por email y WhatsApp.<br />
+                      Nuestro equipo llegará a tu ubicación en el horario acordado.
+                    </>
+                  ) : (
+                    <>
+                      ¡Gracias por tu reserva!<br />
+                      <strong className="text-foreground">Te contactamos para coordinar el pago.</strong><br />
+                      Te enviamos los detalles por email y WhatsApp.
+                    </>
+                  )}
                 </p>
                 <Button variant="hero" size="lg" asChild>
                   <Link to="/">Volver al Inicio</Link>
@@ -587,10 +622,15 @@ const Reservar = () => {
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
                         Procesando...
                       </>
-                    ) : (
+                    ) : PAYMENTS_ENABLED ? (
                       <>
                         <CreditCard className="w-4 h-4 mr-2" />
                         Pagar {formatPrice(getTotalPrice())}
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Enviar Reserva
                       </>
                     )}
                   </Button>

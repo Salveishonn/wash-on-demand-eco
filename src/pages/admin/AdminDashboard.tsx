@@ -12,13 +12,27 @@ import {
   AlertCircle,
   LogOut,
   RefreshCw,
-  Filter
+  Filter,
+  DollarSign,
+  Eye,
+  Phone,
+  Mail,
+  MapPin
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import washeroLogo from '@/assets/washero-logo.jpeg';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { PAYMENTS_ENABLED } from '@/config/payments';
 
 interface Booking {
   id: string;
@@ -36,6 +50,7 @@ interface Booking {
   status: string;
   payment_status: string;
   is_subscription_booking: boolean;
+  requires_payment: boolean;
   created_at: string;
   confirmed_at: string | null;
 }
@@ -91,6 +106,8 @@ export default function AdminDashboard() {
   const [notifications, setNotifications] = useState<NotificationLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -144,9 +161,16 @@ export default function AdminDashboard() {
 
   const handleUpdateBookingStatus = async (bookingId: string, newStatus: 'pending' | 'confirmed' | 'cancelled' | 'completed') => {
     try {
+      const updateData: any = { status: newStatus };
+      
+      // If confirming, also set confirmed_at
+      if (newStatus === 'confirmed') {
+        updateData.confirmed_at = new Date().toISOString();
+      }
+
       const { error } = await supabase
         .from('bookings')
-        .update({ status: newStatus })
+        .update(updateData)
         .eq('id', bookingId);
 
       if (error) throw error;
@@ -164,11 +188,41 @@ export default function AdminDashboard() {
       });
 
       fetchData();
+      setIsDetailOpen(false);
     } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Error',
         description: 'No se pudo actualizar el estado',
+      });
+    }
+  };
+
+  const handleMarkAsPaid = async (bookingId: string) => {
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ 
+          payment_status: 'approved',
+          status: 'confirmed',
+          confirmed_at: new Date().toISOString()
+        })
+        .eq('id', bookingId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Pago registrado',
+        description: 'Reserva marcada como pagada y confirmada',
+      });
+
+      fetchData();
+      setIsDetailOpen(false);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo registrar el pago',
       });
     }
   };
@@ -184,6 +238,7 @@ export default function AdminDashboard() {
     confirmed: bookings.filter(b => b.status === 'confirmed').length,
     completed: bookings.filter(b => b.status === 'completed').length,
     cancelled: bookings.filter(b => b.status === 'cancelled').length,
+    pendingPayment: bookings.filter(b => b.payment_status === 'pending' && b.status !== 'cancelled').length,
   };
 
   const getStatusBadge = (status: string) => {
@@ -206,11 +261,18 @@ export default function AdminDashboard() {
     );
   };
 
-  const getPaymentBadge = (status: string, isSubscription: boolean) => {
+  const getPaymentBadge = (status: string, isSubscription: boolean, requiresPayment: boolean) => {
     if (isSubscription) {
       return (
         <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
           Suscripción
+        </span>
+      );
+    }
+    if (!requiresPayment) {
+      return (
+        <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+          Pago Offline
         </span>
       );
     }
@@ -246,6 +308,11 @@ export default function AdminDashboard() {
     );
   };
 
+  const openBookingDetail = (booking: Booking) => {
+    setSelectedBooking(booking);
+    setIsDetailOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Header */}
@@ -260,6 +327,11 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              {!PAYMENTS_ENABLED && (
+                <span className="px-3 py-1 bg-orange-500/20 text-orange-200 text-xs rounded-full">
+                  Modo Sin Pagos
+                </span>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -285,7 +357,7 @@ export default function AdminDashboard() {
 
       <div className="container mx-auto px-4 py-8">
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -315,6 +387,23 @@ export default function AdminDashboard() {
               <div>
                 <p className="text-2xl font-bold">{stats.pending}</p>
                 <p className="text-xs text-muted-foreground">Pendientes</p>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="bg-background rounded-xl p-4 shadow-sm"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.pendingPayment}</p>
+                <p className="text-xs text-muted-foreground">Sin Pago</p>
               </div>
             </div>
           </motion.div>
@@ -456,7 +545,6 @@ export default function AdminDashboard() {
                             <div>
                               <p className="font-medium text-sm">{booking.customer_name}</p>
                               <p className="text-xs text-muted-foreground">{booking.customer_phone}</p>
-                              <p className="text-xs text-muted-foreground">{booking.customer_email}</p>
                             </div>
                           </td>
                           <td className="px-4 py-4">
@@ -478,16 +566,36 @@ export default function AdminDashboard() {
                             {getStatusBadge(booking.status)}
                           </td>
                           <td className="px-4 py-4">
-                            {getPaymentBadge(booking.payment_status, booking.is_subscription_booking)}
+                            {getPaymentBadge(booking.payment_status, booking.is_subscription_booking, booking.requires_payment)}
                           </td>
                           <td className="px-4 py-4">
                             <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openBookingDetail(booking)}
+                                className="text-primary hover:text-primary/80"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              {booking.payment_status === 'pending' && booking.status !== 'cancelled' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleMarkAsPaid(booking.id)}
+                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  title="Marcar como pagado"
+                                >
+                                  <DollarSign className="w-4 h-4" />
+                                </Button>
+                              )}
                               {booking.status !== 'completed' && booking.status !== 'cancelled' && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => handleUpdateBookingStatus(booking.id, 'completed')}
                                   className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  title="Marcar como completada"
                                 >
                                   <CheckCircle className="w-4 h-4" />
                                 </Button>
@@ -498,6 +606,7 @@ export default function AdminDashboard() {
                                   variant="ghost"
                                   onClick={() => handleUpdateBookingStatus(booking.id, 'cancelled')}
                                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Cancelar reserva"
                                 >
                                   <XCircle className="w-4 h-4" />
                                 </Button>
@@ -596,6 +705,132 @@ export default function AdminDashboard() {
           </motion.div>
         )}
       </div>
+
+      {/* Booking Detail Dialog */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display">Detalle de Reserva</DialogTitle>
+            <DialogDescription>
+              ID: {selectedBooking?.id.substring(0, 8).toUpperCase()}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedBooking && (
+            <div className="space-y-4">
+              {/* Customer Info */}
+              <div className="p-4 rounded-lg bg-muted/50">
+                <h4 className="font-semibold mb-3">Cliente</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-muted-foreground" />
+                    <span>{selectedBooking.customer_name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-muted-foreground" />
+                    <a href={`tel:${selectedBooking.customer_phone}`} className="text-primary hover:underline">
+                      {selectedBooking.customer_phone}
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-muted-foreground" />
+                    <a href={`mailto:${selectedBooking.customer_email}`} className="text-primary hover:underline">
+                      {selectedBooking.customer_email}
+                    </a>
+                  </div>
+                  {selectedBooking.address && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-muted-foreground" />
+                      <span>{selectedBooking.address}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Service Info */}
+              <div className="p-4 rounded-lg bg-muted/50">
+                <h4 className="font-semibold mb-3">Servicio</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Servicio</span>
+                    <span className="font-medium">{selectedBooking.service_name}</span>
+                  </div>
+                  {selectedBooking.car_type && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Vehículo</span>
+                      <span className="font-medium">{selectedBooking.car_type}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Fecha</span>
+                    <span className="font-medium">{formatDate(selectedBooking.booking_date)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Hora</span>
+                    <span className="font-medium">{selectedBooking.booking_time} hs</span>
+                  </div>
+                  <div className="flex justify-between border-t border-border pt-2 mt-2">
+                    <span className="font-semibold">Total</span>
+                    <span className="font-bold text-primary">
+                      {formatPrice(selectedBooking.service_price_cents + (selectedBooking.car_type_extra_cents || 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedBooking.notes && (
+                <div className="p-4 rounded-lg bg-muted/50">
+                  <h4 className="font-semibold mb-2">Notas</h4>
+                  <p className="text-sm text-muted-foreground">{selectedBooking.notes}</p>
+                </div>
+              )}
+
+              {/* Status */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Estado:</span>
+                  {getStatusBadge(selectedBooking.status)}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Pago:</span>
+                  {getPaymentBadge(selectedBooking.payment_status, selectedBooking.is_subscription_booking, selectedBooking.requires_payment)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            {selectedBooking && selectedBooking.payment_status === 'pending' && selectedBooking.status !== 'cancelled' && (
+              <Button
+                onClick={() => handleMarkAsPaid(selectedBooking.id)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <DollarSign className="w-4 h-4 mr-2" />
+                Marcar como Pagado
+              </Button>
+            )}
+            {selectedBooking && selectedBooking.status === 'pending' && (
+              <Button
+                onClick={() => handleUpdateBookingStatus(selectedBooking.id, 'confirmed')}
+                variant="default"
+              >
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Confirmar
+              </Button>
+            )}
+            {selectedBooking && selectedBooking.status !== 'cancelled' && (
+              <Button
+                onClick={() => handleUpdateBookingStatus(selectedBooking.id, 'cancelled')}
+                variant="destructive"
+              >
+                <XCircle className="w-4 h-4 mr-2" />
+                Cancelar
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
