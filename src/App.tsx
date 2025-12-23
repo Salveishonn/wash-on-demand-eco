@@ -14,6 +14,8 @@ import Reservar from "./pages/Reservar";
 import PreguntasFrecuentes from "./pages/PreguntasFrecuentes";
 import Contacto from "./pages/Contacto";
 import ReservaConfirmada from "./pages/ReservaConfirmada";
+import Suscripciones from "./pages/Suscripciones";
+import SuscripcionConfirmada from "./pages/SuscripcionConfirmada";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import NotFound from "./pages/NotFound";
@@ -38,6 +40,8 @@ const App = () => (
             <Route path="/preguntas-frecuentes" element={<PreguntasFrecuentes />} />
             <Route path="/contacto" element={<Contacto />} />
             <Route path="/reserva-confirmada" element={<ReservaConfirmada />} />
+            <Route path="/suscripciones" element={<Suscripciones />} />
+            <Route path="/suscripcion-confirmada" element={<SuscripcionConfirmada />} />
             
             {/* Admin Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />

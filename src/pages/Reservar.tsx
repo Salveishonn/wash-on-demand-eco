@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, CreditCard, Wallet, Send } from "lucide-react";
+import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, CreditCard, Wallet, Send, Sparkles, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PAYMENTS_ENABLED } from "@/config/payments";
@@ -26,7 +26,16 @@ interface CarType {
   extraCents: number;
 }
 
-type PaymentMethod = "online" | "pay_later";
+interface SubscriptionInfo {
+  id: string;
+  planName: string;
+  washesPerMonth: number;
+  washesRemaining: number;
+  washesUsed: number;
+  periodEnd: string;
+}
+
+type PaymentMethod = "online" | "pay_later" | "subscription";
 
 const services: Service[] = [
   { id: "exterior", name: "Lavado Exterior", price: "$25.000", priceCents: 2500000, time: "45 min" },
@@ -62,7 +71,10 @@ const Reservar = () => {
   
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingSubscription, setIsCheckingSubscription] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
+  const [hasCheckedSubscription, setHasCheckedSubscription] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
     PAYMENTS_ENABLED ? "online" : "pay_later"
   );
@@ -100,6 +112,14 @@ const Reservar = () => {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    // Reset subscription check when email or phone changes
+    if (field === "email" || field === "phone") {
+      setHasCheckedSubscription(false);
+      setSubscriptionInfo(null);
+      if (paymentMethod === "subscription") {
+        setPaymentMethod(PAYMENTS_ENABLED ? "online" : "pay_later");
+      }
+    }
   };
 
   const getSelectedService = () => services.find(s => s.id === formData.service);
@@ -111,6 +131,58 @@ const Reservar = () => {
     if (!service) return 0;
     return service.priceCents + (carType?.extraCents || 0);
   };
+
+  // Check subscription when email and phone are entered
+  const checkSubscription = async () => {
+    if (!formData.email || !formData.phone) return;
+    
+    setIsCheckingSubscription(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke("check-subscription", {
+        body: {
+          customerEmail: formData.email,
+          customerPhone: formData.phone,
+        },
+      });
+
+      if (error) throw error;
+
+      console.log("[Reservar] Subscription check:", data);
+
+      if (data.hasActiveSubscription && data.hasQuota) {
+        setSubscriptionInfo(data.subscription);
+        setPaymentMethod("subscription");
+        toast({
+          title: "¡Suscripción detectada!",
+          description: data.message,
+        });
+      } else if (data.hasActiveSubscription && !data.hasQuota) {
+        setSubscriptionInfo(data.subscription);
+        toast({
+          variant: "destructive",
+          title: "Cuota agotada",
+          description: data.message,
+        });
+      }
+      
+      setHasCheckedSubscription(true);
+    } catch (error: any) {
+      console.error("[Reservar] Subscription check error:", error);
+    } finally {
+      setIsCheckingSubscription(false);
+    }
+  };
+
+  // Auto-check subscription when email and phone are filled
+  useEffect(() => {
+    if (formData.email && formData.phone && !hasCheckedSubscription && step === 3) {
+      const timer = setTimeout(() => {
+        checkSubscription();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [formData.email, formData.phone, step]);
 
   const handleSubmit = async () => {
     setIsLoading(true);

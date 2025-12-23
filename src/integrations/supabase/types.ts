@@ -32,6 +32,7 @@ export type Database = {
           mercadopago_preference_id: string | null
           notes: string | null
           notifications_queued: boolean | null
+          payment_method: string | null
           payment_status: Database["public"]["Enums"]["payment_status"]
           requires_payment: boolean | null
           service_name: string
@@ -59,6 +60,7 @@ export type Database = {
           mercadopago_preference_id?: string | null
           notes?: string | null
           notifications_queued?: boolean | null
+          payment_method?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           requires_payment?: boolean | null
           service_name: string
@@ -86,6 +88,7 @@ export type Database = {
           mercadopago_preference_id?: string | null
           notes?: string | null
           notifications_queued?: boolean | null
+          payment_method?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           requires_payment?: boolean | null
           service_name?: string
@@ -239,6 +242,41 @@ export type Database = {
         }
         Relationships: []
       }
+      subscription_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json | null
+          processed: boolean | null
+          subscription_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json | null
+          processed?: boolean | null
+          subscription_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          processed?: boolean | null
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_plans: {
         Row: {
           created_at: string
@@ -277,6 +315,9 @@ export type Database = {
           created_at: string
           current_period_end: string | null
           current_period_start: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
           id: string
           mercadopago_subscription_id: string | null
           plan_id: string
@@ -284,11 +325,15 @@ export type Database = {
           updated_at: string
           user_id: string
           washes_remaining: number
+          washes_used_in_cycle: number
         }
         Insert: {
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
           id?: string
           mercadopago_subscription_id?: string | null
           plan_id: string
@@ -296,11 +341,15 @@ export type Database = {
           updated_at?: string
           user_id: string
           washes_remaining?: number
+          washes_used_in_cycle?: number
         }
         Update: {
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
           id?: string
           mercadopago_subscription_id?: string | null
           plan_id?: string
@@ -308,6 +357,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           washes_remaining?: number
+          washes_used_in_cycle?: number
         }
         Relationships: [
           {
