@@ -6,9 +6,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface BookingNotificationRequest {
-  bookingId: string;
+interface SendNotificationsRequest {
+  bookingId?: string;
+  testMode?: boolean;
 }
+
+// Admin recipients
+const ADMIN_EMAIL = "washerocarwash@gmail.com";
+const ADMIN_WHATSAPP = "+5491130951804";
 
 const formatPrice = (cents: number) => {
   return new Intl.NumberFormat("es-AR", {
@@ -27,7 +32,52 @@ const formatDate = (date: string) => {
   });
 };
 
+// Normalize phone number to E.164 format
+function normalizePhoneNumber(phone: string): string {
+  let normalized = phone.replace(/[\s\-\(\)]/g, "");
+  
+  // Remove whatsapp: prefix if present
+  if (normalized.toLowerCase().startsWith("whatsapp:")) {
+    normalized = normalized.substring(9);
+  }
+  
+  // Ensure starts with +
+  if (!normalized.startsWith("+")) {
+    // Assume Argentina if no country code
+    if (normalized.startsWith("54")) {
+      normalized = "+" + normalized;
+    } else {
+      normalized = "+54" + normalized;
+    }
+  }
+  
+  return normalized;
+}
+
+// Format phone number for Twilio WhatsApp API
+function formatWhatsAppNumber(phone: string): string {
+  const normalized = normalizePhoneNumber(phone);
+  return `whatsapp:${normalized}`;
+}
+
+// Get Twilio From number, ensuring correct format
+function getTwilioFromNumber(envVar: string | undefined): string {
+  if (!envVar) {
+    return "whatsapp:+14155238886"; // Default sandbox number
+  }
+  
+  // If already has whatsapp: prefix, return as-is
+  if (envVar.toLowerCase().startsWith("whatsapp:")) {
+    return envVar;
+  }
+  
+  // Otherwise add the prefix
+  return `whatsapp:${envVar.startsWith("+") ? envVar : "+" + envVar}`;
+}
+
 async function sendResendEmail(apiKey: string, to: string, subject: string, html: string) {
+  console.log(`[send-notifications] Sending email via Resend to: ${to}`);
+  
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -43,6 +93,7 @@ async function sendResendEmail(apiKey: string, to: string, subject: string, html
   });
 
   const data = await response.json();
+  console.log(`[send-notifications] Resend response:`, JSON.stringify(data));
 
   if (!response.ok) {
     throw new Error(data.message || "Error sending email");
@@ -51,7 +102,71 @@ async function sendResendEmail(apiKey: string, to: string, subject: string, html
   return data;
 }
 
+async function sendTwilioWhatsApp(
+  accountSid: string,
+  authToken: string,
+  fromNumber: string,
+  toNumber: string,
+  message: string
+): Promise<{ success: boolean; sid?: string; status?: string; error?: string; from: string; to: string }> {
+  const from = getTwilioFromNumber(fromNumber);
+  const to = formatWhatsAppNumber(toNumber);
+  
+  console.log(`[send-notifications] Sending WhatsApp - From: ${from}, To: ${to}`);
+
+  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const auth = btoa(`${accountSid}:${authToken}`);
+
+  try {
+    const response = await fetch(twilioUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        From: from,
+        To: to,
+        Body: message,
+      }),
+    });
+
+    const data = await response.json();
+    console.log(`[send-notifications] Twilio response:`, JSON.stringify(data));
+
+    if (response.ok) {
+      return { 
+        success: true, 
+        sid: data.sid, 
+        status: data.status,
+        from,
+        to
+      };
+    } else {
+      return { 
+        success: false, 
+        error: data.message || `Twilio error: ${data.code}`,
+        from,
+        to
+      };
+    }
+  } catch (error: any) {
+    console.error(`[send-notifications] Twilio fetch error:`, error);
+    return { 
+      success: false, 
+      error: error.message,
+      from,
+      to
+    };
+  }
+}
+
 serve(async (req) => {
+  // Log at the VERY TOP to confirm invocation
+  console.log("[send-notifications] ====== FUNCTION INVOKED ======");
+  console.log(`[send-notifications] Method: ${req.method}`);
+  console.log(`[send-notifications] URL: ${req.url}`);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -63,10 +178,119 @@ serve(async (req) => {
   const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
   const twilioWhatsAppNumber = Deno.env.get("TWILIO_WHATSAPP_NUMBER");
 
+  console.log("[send-notifications] Env check - RESEND_API_KEY:", resendApiKey ? "set" : "NOT SET");
+  console.log("[send-notifications] Env check - TWILIO_ACCOUNT_SID:", twilioAccountSid ? "set" : "NOT SET");
+  console.log("[send-notifications] Env check - TWILIO_AUTH_TOKEN:", twilioAuthToken ? "set" : "NOT SET");
+  console.log("[send-notifications] Env check - TWILIO_WHATSAPP_NUMBER:", twilioWhatsAppNumber || "NOT SET");
+
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { bookingId }: BookingNotificationRequest = await req.json();
+    const body = await req.json();
+    const { bookingId, testMode }: SendNotificationsRequest = body;
+
+    console.log(`[send-notifications] Request body:`, JSON.stringify(body));
+    console.log(`[send-notifications] testMode: ${testMode}, bookingId: ${bookingId}`);
+
+    const results = { email: null as any, whatsapp: null as any };
+
+    // ===== TEST MODE =====
+    if (testMode === true) {
+      console.log("[send-notifications] Running in TEST MODE");
+      
+      const testMessage = `🧪 *TEST NOTIFICATION*\n\nEste es un mensaje de prueba de Washero.\n\nFecha: ${new Date().toLocaleString("es-AR")}\n\nSi recibís este mensaje, las notificaciones funcionan correctamente. ✅`;
+      
+      const testEmailHtml = `
+        <div style="font-family: sans-serif; padding: 20px; background: #f9f9f9;">
+          <div style="background: #1a1a1a; color: #FFD700; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1>🧪 Test Notification</h1>
+          </div>
+          <div style="background: white; padding: 20px; border-radius: 0 0 10px 10px;">
+            <p>Este es un email de prueba de Washero.</p>
+            <p>Fecha: ${new Date().toLocaleString("es-AR")}</p>
+            <p style="color: green; font-weight: bold;">✅ Si recibís este email, las notificaciones funcionan correctamente.</p>
+          </div>
+        </div>
+      `;
+
+      // Send test email
+      if (resendApiKey) {
+        try {
+          const emailResponse = await sendResendEmail(
+            resendApiKey,
+            ADMIN_EMAIL,
+            "🧪 Test Notification - Washero",
+            testEmailHtml
+          );
+
+          await supabase.from("notification_logs").insert({
+            booking_id: null,
+            notification_type: "email",
+            status: "sent",
+            recipient: ADMIN_EMAIL,
+            message_content: "Test notification",
+            external_id: emailResponse.id,
+          });
+
+          results.email = { success: true, id: emailResponse.id };
+        } catch (emailError: any) {
+          console.error("[send-notifications] Test email error:", emailError);
+
+          await supabase.from("notification_logs").insert({
+            booking_id: null,
+            notification_type: "email",
+            status: "failed",
+            recipient: ADMIN_EMAIL,
+            error_message: emailError.message,
+          });
+
+          results.email = { success: false, error: emailError.message };
+        }
+      } else {
+        results.email = { success: false, error: "RESEND_API_KEY not configured" };
+      }
+
+      // Send test WhatsApp
+      if (twilioAccountSid && twilioAuthToken) {
+        const whatsappResult = await sendTwilioWhatsApp(
+          twilioAccountSid,
+          twilioAuthToken,
+          twilioWhatsAppNumber || "",
+          ADMIN_WHATSAPP,
+          testMessage
+        );
+
+        await supabase.from("notification_logs").insert({
+          booking_id: null,
+          notification_type: "whatsapp",
+          status: whatsappResult.success ? "sent" : "failed",
+          recipient: whatsappResult.to,
+          message_content: `Test | From: ${whatsappResult.from} | To: ${whatsappResult.to}`,
+          external_id: whatsappResult.sid || null,
+          error_message: whatsappResult.error || null,
+        });
+
+        if (whatsappResult.success) {
+          results.whatsapp = { success: true, sid: whatsappResult.sid, status: whatsappResult.status };
+        } else {
+          results.whatsapp = { success: false, error: whatsappResult.error };
+        }
+      } else {
+        results.whatsapp = { success: false, error: "Twilio credentials not configured" };
+      }
+
+      console.log("[send-notifications] Test results:", JSON.stringify(results));
+
+      return new Response(JSON.stringify({ success: true, results, testMode: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ===== BOOKING MODE =====
+    if (!bookingId) {
+      throw new Error("bookingId is required when not in testMode");
+    }
 
     console.log(`[send-notifications] Processing booking: ${bookingId}`);
 
@@ -82,10 +306,7 @@ serve(async (req) => {
       throw new Error("Reserva no encontrada");
     }
 
-    console.log(`[send-notifications] Booking found: ${booking.customer_name}`);
-
-    const adminEmail = "washerocarwash@gmail.com";
-    const adminWhatsApp = "whatsapp:+5491130951804";
+    console.log(`[send-notifications] Booking found: ${booking.customer_name}, email: ${booking.customer_email}, phone: ${booking.customer_phone}`);
 
     const totalPrice = booking.service_price_cents + (booking.car_type_extra_cents || 0);
 
@@ -237,27 +458,21 @@ ${booking.payment_status === "approved" ? "✅ Pagado" : booking.is_subscription
 </html>
     `;
 
-    const results = { email: null as any, whatsapp: null as any };
-
     // Send Email via Resend
     if (resendApiKey) {
       try {
-        console.log(`[send-notifications] Sending email to ${adminEmail}`);
-
         const emailResponse = await sendResendEmail(
           resendApiKey,
-          adminEmail,
+          ADMIN_EMAIL,
           `🚗 Nueva Reserva: ${booking.customer_name} - ${formatDate(booking.booking_date)}`,
           emailHtml,
         );
-
-        console.log("[send-notifications] Email sent:", emailResponse);
 
         await supabase.from("notification_logs").insert({
           booking_id: bookingId,
           notification_type: "email",
           status: "sent",
-          recipient: adminEmail,
+          recipient: ADMIN_EMAIL,
           message_content: `Reserva ${booking.id.substring(0, 8)}`,
           external_id: emailResponse.id,
         });
@@ -270,7 +485,7 @@ ${booking.payment_status === "approved" ? "✅ Pagado" : booking.is_subscription
           booking_id: bookingId,
           notification_type: "email",
           status: "failed",
-          recipient: adminEmail,
+          recipient: ADMIN_EMAIL,
           error_message: emailError.message,
         });
 
@@ -281,61 +496,35 @@ ${booking.payment_status === "approved" ? "✅ Pagado" : booking.is_subscription
     }
 
     // Send WhatsApp via Twilio
-    if (twilioAccountSid && twilioAuthToken && twilioWhatsAppNumber) {
-      try {
-        console.log(`[send-notifications] Sending WhatsApp to ${adminWhatsApp}`);
+    if (twilioAccountSid && twilioAuthToken) {
+      const whatsappResult = await sendTwilioWhatsApp(
+        twilioAccountSid,
+        twilioAuthToken,
+        twilioWhatsAppNumber || "",
+        ADMIN_WHATSAPP,
+        messageContent
+      );
 
-        const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
-        const auth = btoa(`${twilioAccountSid}:${twilioAuthToken}`);
+      await supabase.from("notification_logs").insert({
+        booking_id: bookingId,
+        notification_type: "whatsapp",
+        status: whatsappResult.success ? "sent" : "failed",
+        recipient: whatsappResult.to,
+        message_content: messageContent.substring(0, 500),
+        external_id: whatsappResult.sid || null,
+        error_message: whatsappResult.error || null,
+      });
 
-        const whatsappResponse = await fetch(twilioUrl, {
-          method: "POST",
-          headers: {
-            Authorization: `Basic ${auth}`,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            From: `whatsapp:${twilioWhatsAppNumber}`,
-            To: adminWhatsApp,
-            Body: messageContent,
-          }),
-        });
-
-        const whatsappData = await whatsappResponse.json();
-        console.log("[send-notifications] WhatsApp response:", whatsappData);
-
-        if (whatsappResponse.ok) {
-          await supabase.from("notification_logs").insert({
-            booking_id: bookingId,
-            notification_type: "whatsapp",
-            status: "sent",
-            recipient: adminWhatsApp,
-            message_content: messageContent.substring(0, 500),
-            external_id: whatsappData.sid,
-          });
-
-          results.whatsapp = { success: true, sid: whatsappData.sid };
-        } else {
-          throw new Error(whatsappData.message || "Twilio error");
-        }
-      } catch (whatsappError: any) {
-        console.error("[send-notifications] WhatsApp error:", whatsappError);
-
-        await supabase.from("notification_logs").insert({
-          booking_id: bookingId,
-          notification_type: "whatsapp",
-          status: "failed",
-          recipient: adminWhatsApp,
-          error_message: whatsappError.message,
-        });
-
-        results.whatsapp = { success: false, error: whatsappError.message };
+      if (whatsappResult.success) {
+        results.whatsapp = { success: true, sid: whatsappResult.sid, status: whatsappResult.status };
+      } else {
+        results.whatsapp = { success: false, error: whatsappResult.error };
       }
     } else {
       console.warn("[send-notifications] Twilio credentials not configured");
     }
 
-    console.log("[send-notifications] Notification results:", results);
+    console.log("[send-notifications] Notification results:", JSON.stringify(results));
 
     return new Response(JSON.stringify({ success: true, results }), {
       status: 200,
