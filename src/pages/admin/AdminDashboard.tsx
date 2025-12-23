@@ -656,6 +656,19 @@ export default function AdminDashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
+            {/* WhatsApp Mode Info */}
+            <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">WhatsApp Mode:</span>
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                  Sandbox
+                </span>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                En modo sandbox, solo el admin recibe WhatsApp. Clientes reciben email.
+              </span>
+            </div>
+            
             <div className="bg-background rounded-xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
