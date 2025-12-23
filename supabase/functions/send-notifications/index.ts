@@ -43,18 +43,39 @@ async function sendEmail(
   }
 }
 
+// Normalize phone number to E.164 format
+function normalizePhoneNumber(phone: string): string {
+  let cleaned = phone.replace(/[^\d+]/g, "");
+  if (!cleaned.startsWith("+")) {
+    cleaned = "+" + cleaned;
+  }
+  return cleaned;
+}
+
+// Format number for WhatsApp (add whatsapp: prefix if not present)
+function formatWhatsAppNumber(phone: string): string {
+  const normalized = normalizePhoneNumber(phone);
+  if (phone.toLowerCase().startsWith("whatsapp:")) {
+    return phone;
+  }
+  return `whatsapp:${normalized}`;
+}
+
 async function sendWhatsApp(
   accountSid: string,
   authToken: string,
   fromNumber: string,
   to: string,
   body: string
-): Promise<{ success: boolean; sid?: string; error?: string }> {
+): Promise<{ success: boolean; sid?: string; status?: string; error?: string; errorCode?: number; from?: string; to?: string }> {
   try {
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
     const auth = btoa(`${accountSid}:${authToken}`);
 
-    const formattedTo = to.startsWith("+") ? to : `+${to.replace(/\D/g, "")}`;
+    const formattedFrom = formatWhatsAppNumber(fromNumber);
+    const formattedTo = formatWhatsAppNumber(to);
+
+    console.log(`[sendWhatsApp] From: ${formattedFrom} To: ${formattedTo}`);
 
     const response = await fetch(twilioUrl, {
       method: "POST",
@@ -63,20 +84,34 @@ async function sendWhatsApp(
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        From: `whatsapp:${fromNumber}`,
-        To: `whatsapp:${formattedTo}`,
+        From: formattedFrom,
+        To: formattedTo,
         Body: body,
       }),
     });
 
     const data = await response.json();
+    console.log(`[sendWhatsApp] Response:`, JSON.stringify(data));
 
     if (!response.ok) {
-      return { success: false, error: data.message || JSON.stringify(data) };
+      return { 
+        success: false, 
+        error: data.message || JSON.stringify(data),
+        errorCode: data.code,
+        from: formattedFrom,
+        to: formattedTo
+      };
     }
 
-    return { success: true, sid: data.sid };
+    return { 
+      success: true, 
+      sid: data.sid,
+      status: data.status,
+      from: formattedFrom,
+      to: formattedTo
+    };
   } catch (err: any) {
+    console.error(`[sendWhatsApp] Error:`, err);
     return { success: false, error: err.message };
   }
 }
@@ -118,7 +153,7 @@ serve(async (req) => {
       const testWhatsAppMessage = `🧪 *Test Notification - Washero*\n\nThis is a test from admin panel.\n\nTimestamp: ${new Date().toLocaleString('es-AR')}`;
 
       let emailResult: { success: boolean; id?: string; error?: string } = { success: false, error: "RESEND_API_KEY not configured" };
-      let whatsappResult: { success: boolean; sid?: string; error?: string } = { success: false, error: "Twilio not configured" };
+      let whatsappResult: { success: boolean; sid?: string; status?: string; error?: string; from?: string; to?: string } = { success: false, error: "Twilio not configured" };
 
       // Send test email
       if (resendApiKey) {
@@ -138,6 +173,8 @@ serve(async (req) => {
 
       // Send test WhatsApp
       if (twilioAccountSid && twilioAuthToken && twilioWhatsAppNumber) {
+        console.log(`[send-notifications] Sending test WhatsApp from ${twilioWhatsAppNumber} to ${ADMIN_WHATSAPP}`);
+        
         whatsappResult = await sendWhatsApp(
           twilioAccountSid,
           twilioAuthToken,
@@ -145,16 +182,22 @@ serve(async (req) => {
           ADMIN_WHATSAPP,
           testWhatsAppMessage
         );
-        console.log("[send-notifications] Test WhatsApp result:", whatsappResult);
+        console.log("[send-notifications] Test WhatsApp result:", JSON.stringify(whatsappResult));
 
-        // Log to notification_logs
+        // Log to notification_logs with full details
         await supabase.from("notification_logs").insert({
           notification_type: "whatsapp",
           status: whatsappResult.success ? "sent" : "failed",
-          recipient: ADMIN_WHATSAPP,
-          message_content: "Test notification",
+          recipient: whatsappResult.to || ADMIN_WHATSAPP,
+          message_content: `Test notification | From: ${whatsappResult.from || twilioWhatsAppNumber} | To: ${whatsappResult.to || ADMIN_WHATSAPP}`,
           error_message: whatsappResult.error || null,
           external_id: whatsappResult.sid || null,
+        });
+      } else {
+        console.log("[send-notifications] Twilio not configured:", { 
+          accountSid: !!twilioAccountSid, 
+          authToken: !!twilioAuthToken, 
+          whatsAppNumber: twilioWhatsAppNumber 
         });
       }
 

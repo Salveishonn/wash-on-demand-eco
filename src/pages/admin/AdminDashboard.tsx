@@ -242,9 +242,17 @@ export default function AdminDashboard() {
 
       if (error) throw error;
 
+      const emailStatus = data?.email?.success ? '✅ Enviado' : `❌ ${data?.email?.error || 'Error'}`;
+      const whatsappStatus = data?.whatsapp?.success 
+        ? `✅ Enviado (SID: ${data?.whatsapp?.sid?.substring(0, 12)}...)` 
+        : `❌ ${data?.whatsapp?.error || 'Error'}`;
+      
+      const description = `Email: ${emailStatus}\nWhatsApp: ${whatsappStatus}`;
+
       toast({
-        title: 'Test enviado',
-        description: `Email: ${data?.email?.success ? '✅' : '❌'} | WhatsApp: ${data?.whatsapp?.success ? '✅' : '❌'}`,
+        title: data?.whatsapp?.success ? 'Test enviado correctamente' : 'Test enviado con errores',
+        description: description,
+        duration: 8000,
       });
 
       // Refresh notification logs
@@ -741,7 +749,8 @@ export default function AdminDashboard() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Destinatario</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Reserva</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Estado</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Error</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">ID Externo</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Detalles</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -791,8 +800,17 @@ export default function AdminDashboard() {
                             </span>
                           </td>
                           <td className="px-4 py-4">
+                            {notification.external_id ? (
+                              <span className="font-mono text-xs text-green-600">{notification.external_id.substring(0, 16)}...</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4">
                             {notification.error_message ? (
                               <span className="text-xs text-red-600">{notification.error_message}</span>
+                            ) : notification.message_content ? (
+                              <span className="text-xs text-muted-foreground">{notification.message_content}</span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
