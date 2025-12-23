@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle, Calendar, Clock, MapPin, Loader2 } from 'lucide-react';
+import { CheckCircle, Calendar, Clock, MapPin, Loader2, Phone, CreditCard, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Layout } from '@/components/layout/Layout';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +16,9 @@ interface BookingDetails {
   address: string | null;
   service_price_cents: number;
   car_type_extra_cents: number;
+  requires_payment: boolean;
+  is_subscription_booking: boolean;
+  payment_status: string;
 }
 
 const formatPrice = (cents: number) => {
@@ -38,6 +41,7 @@ const formatDate = (date: string) => {
 export default function ReservaConfirmada() {
   const [searchParams] = useSearchParams();
   const bookingId = searchParams.get('booking_id') || searchParams.get('external_reference');
+  const paymentMethodParam = searchParams.get('payment_method');
   
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,7 +58,7 @@ export default function ReservaConfirmada() {
       try {
         const { data, error: fetchError } = await supabase
           .from('bookings')
-          .select('id, customer_name, customer_email, service_name, booking_date, booking_time, address, service_price_cents, car_type_extra_cents')
+          .select('id, customer_name, customer_email, service_name, booking_date, booking_time, address, service_price_cents, car_type_extra_cents, requires_payment, is_subscription_booking, payment_status')
           .eq('id', bookingId)
           .maybeSingle();
 
@@ -118,6 +122,39 @@ export default function ReservaConfirmada() {
   }
 
   const totalPrice = booking.service_price_cents + (booking.car_type_extra_cents || 0);
+  
+  // Determine payment method from booking data or URL param
+  const isPayLater = !booking.requires_payment && !booking.is_subscription_booking;
+  const isSubscription = booking.is_subscription_booking;
+  const isPaidOnline = booking.requires_payment && booking.payment_status === 'approved';
+
+  // Determine display content based on payment method
+  const getPaymentInfo = () => {
+    if (isSubscription) {
+      return {
+        icon: <CreditCard className="w-5 h-5 text-purple-600" />,
+        label: "Pagado con Suscripción",
+        bgColor: "bg-purple-100",
+        textColor: "text-purple-800",
+      };
+    }
+    if (isPayLater) {
+      return {
+        icon: <Wallet className="w-5 h-5 text-orange-600" />,
+        label: "Pago a Coordinar",
+        bgColor: "bg-orange-100",
+        textColor: "text-orange-800",
+      };
+    }
+    return {
+      icon: <CreditCard className="w-5 h-5 text-green-600" />,
+      label: "Pagado con MercadoPago",
+      bgColor: "bg-green-100",
+      textColor: "text-green-800",
+    };
+  };
+
+  const paymentInfo = getPaymentInfo();
 
   return (
     <Layout>
@@ -133,10 +170,20 @@ export default function ReservaConfirmada() {
               <CheckCircle className="w-10 h-10 text-washero-eco" />
             </div>
             <h1 className="font-display text-4xl md:text-5xl font-black text-background mb-4">
-              ¡Reserva <span className="text-primary">Confirmada</span>!
+              {isPayLater ? (
+                <>¡Reserva <span className="text-primary">Recibida</span>!</>
+              ) : (
+                <>¡Reserva <span className="text-primary">Confirmada</span>!</>
+              )}
             </h1>
             <p className="text-lg text-background/70">
-              Tu pago fue procesado exitosamente. Te enviamos los detalles por email y WhatsApp.
+              {isPayLater ? (
+                <>Te contactamos pronto para coordinar el pago. Enviamos los detalles por email y WhatsApp.</>
+              ) : isSubscription ? (
+                <>Tu lavado fue reservado con tu suscripción. Te enviamos los detalles por email y WhatsApp.</>
+              ) : (
+                <>Tu pago fue procesado exitosamente. Te enviamos los detalles por email y WhatsApp.</>
+              )}
             </p>
           </motion.div>
         </div>
@@ -199,9 +246,22 @@ export default function ReservaConfirmada() {
                   </div>
                 )}
 
+                {/* Payment Method Badge */}
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-lg ${paymentInfo.bgColor} flex items-center justify-center shrink-0`}>
+                    {paymentInfo.icon}
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Método de Pago</p>
+                    <p className={`font-semibold ${paymentInfo.textColor}`}>{paymentInfo.label}</p>
+                  </div>
+                </div>
+
                 <div className="border-t border-border pt-4 mt-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Total Pagado</span>
+                    <span className="text-muted-foreground">
+                      {isPayLater ? "Total a Pagar" : "Total Pagado"}
+                    </span>
                     <span className="font-display text-2xl font-black text-primary">
                       {formatPrice(totalPrice)}
                     </span>
@@ -217,12 +277,34 @@ export default function ReservaConfirmada() {
               </div>
             </div>
 
+            {/* Pay Later Notice */}
+            {isPayLater && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="mt-6 p-4 rounded-xl bg-orange-50 border border-orange-200"
+              >
+                <div className="flex items-start gap-3">
+                  <Phone className="w-5 h-5 text-orange-600 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-orange-800">¿Cómo sigue?</p>
+                    <p className="text-sm text-orange-700 mt-1">
+                      Te vamos a contactar por WhatsApp para coordinar el pago antes del lavado. 
+                      Aceptamos efectivo o transferencia bancaria.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {/* Next Steps */}
             <div className="mt-8 text-center">
               <h3 className="font-semibold text-foreground mb-3">¿Qué sigue?</h3>
               <ul className="text-sm text-muted-foreground space-y-2 mb-8">
                 <li>✅ Recibirás un email de confirmación</li>
                 <li>✅ Te contactaremos por WhatsApp antes del lavado</li>
+                {isPayLater && <li>✅ Coordinamos el pago por WhatsApp</li>}
                 <li>✅ Nuestro equipo llegará puntual a tu ubicación</li>
               </ul>
 

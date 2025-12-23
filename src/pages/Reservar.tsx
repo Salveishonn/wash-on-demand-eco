@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, CreditCard, Send } from "lucide-react";
+import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, CreditCard, Wallet, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PAYMENTS_ENABLED } from "@/config/payments";
@@ -25,6 +25,8 @@ interface CarType {
   extra: string;
   extraCents: number;
 }
+
+type PaymentMethod = "online" | "pay_later";
 
 const services: Service[] = [
   { id: "exterior", name: "Lavado Exterior", price: "$25.000", priceCents: 2500000, time: "45 min" },
@@ -54,12 +56,16 @@ const formatPrice = (cents: number) => {
 
 const Reservar = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const initialService = searchParams.get("servicio") || "";
   const { toast } = useToast();
   
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    PAYMENTS_ENABLED ? "online" : "pay_later"
+  );
   
   const [formData, setFormData] = useState({
     service: initialService,
@@ -81,11 +87,8 @@ const Reservar = () => {
     const externalRef = searchParams.get("external_reference");
     
     if (paymentStatus === "approved" && externalRef) {
-      setStep(4);
-      toast({
-        title: "¡Pago Confirmado!",
-        description: "Tu reserva ha sido confirmada exitosamente.",
-      });
+      // Redirect to confirmation page
+      navigate(`/reserva-confirmada?booking_id=${externalRef}&payment_method=online`);
     } else if (paymentStatus === "rejected" || paymentStatus === "failure") {
       toast({
         variant: "destructive",
@@ -93,7 +96,7 @@ const Reservar = () => {
         description: "Hubo un problema con tu pago. Por favor, intentá nuevamente.",
       });
     }
-  }, [searchParams, toast]);
+  }, [searchParams, toast, navigate]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -120,7 +123,8 @@ const Reservar = () => {
         throw new Error("Seleccioná un servicio");
       }
 
-      console.log("[Reservar] Creating booking... paymentsEnabled:", PAYMENTS_ENABLED);
+      const isPayLater = paymentMethod === "pay_later" || !PAYMENTS_ENABLED;
+      console.log("[Reservar] Creating booking... paymentMethod:", paymentMethod, "isPayLater:", isPayLater);
 
       // Create booking via edge function
       const { data: bookingResponse, error: bookingError } = await supabase.functions.invoke(
@@ -138,7 +142,7 @@ const Reservar = () => {
             bookingTime: formData.time,
             address: formData.address,
             notes: formData.notes,
-            requiresPayment: PAYMENTS_ENABLED,
+            paymentMethod: isPayLater ? "pay_later" : "mercadopago",
             paymentsEnabled: PAYMENTS_ENABLED,
           },
         }
@@ -152,17 +156,13 @@ const Reservar = () => {
       console.log("[Reservar] Booking created:", bookingResponse);
       setBookingId(bookingResponse.booking.id);
 
-      // If payments disabled, go straight to confirmation
-      if (!PAYMENTS_ENABLED) {
-        setStep(4);
-        toast({
-          title: "¡Reserva Recibida!",
-          description: "Te contactaremos pronto para coordinar el pago.",
-        });
+      // If pay later, go straight to confirmation page
+      if (isPayLater) {
+        navigate(`/reserva-confirmada?booking_id=${bookingResponse.booking.id}&payment_method=pay_later`);
         return;
       }
 
-      // Payments enabled: Create MercadoPago preference
+      // Online payment: Create MercadoPago preference
       console.log("[Reservar] Creating MercadoPago preference...");
       
       const { data: mpResponse, error: mpError } = await supabase.functions.invoke(
@@ -181,7 +181,7 @@ const Reservar = () => {
 
       if (mpError) {
         console.error("[Reservar] MercadoPago error:", mpError);
-        throw new Error("Error al procesar el pago");
+        throw new Error("Error al procesar el pago. Intentá con Pagar Después.");
       }
 
       console.log("[Reservar] MercadoPago preference created:", mpResponse);
@@ -263,7 +263,7 @@ const Reservar = () => {
                 <span className={`hidden md:block text-sm font-medium ${
                   step >= s ? "text-foreground" : "text-muted-foreground"
                 }`}>
-                  {s === 1 ? "Servicio" : s === 2 ? "Agenda" : (PAYMENTS_ENABLED ? "Datos y Pago" : "Datos")}
+                  {s === 1 ? "Servicio" : s === 2 ? "Agenda" : "Datos y Pago"}
                 </span>
                 {s < 3 && (
                   <div className={`w-12 md:w-24 h-1 rounded ${
@@ -424,7 +424,7 @@ const Reservar = () => {
               </motion.div>
             )}
 
-            {/* Step 3: Contact Details */}
+            {/* Step 3: Contact Details & Payment */}
             {step === 3 && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
@@ -526,67 +526,90 @@ const Reservar = () => {
                   </div>
                 </div>
 
-                {/* Payment Info or Pay Later Notice */}
-                {PAYMENTS_ENABLED ? (
-                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                    <div className="flex items-center gap-3">
-                      <CreditCard className="w-6 h-6 text-primary" />
-                      <div>
-                        <p className="font-medium text-foreground">Pago Seguro con MercadoPago</p>
-                        <p className="text-sm text-muted-foreground">Aceptamos todas las tarjetas y métodos de pago</p>
+                {/* Payment Method Selection */}
+                <div className="mt-8">
+                  <h3 className="font-display font-bold text-foreground mb-4">
+                    ¿Cómo querés pagar?
+                  </h3>
+                  <div className="space-y-3">
+                    {/* Pay Online Option */}
+                    <button
+                      type="button"
+                      onClick={() => PAYMENTS_ENABLED && setPaymentMethod("online")}
+                      disabled={!PAYMENTS_ENABLED}
+                      className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+                        paymentMethod === "online" && PAYMENTS_ENABLED
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
+                      } ${!PAYMENTS_ENABLED ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                          paymentMethod === "online" && PAYMENTS_ENABLED ? "bg-primary/20" : "bg-muted"
+                        }`}>
+                          <CreditCard className={`w-6 h-6 ${
+                            paymentMethod === "online" && PAYMENTS_ENABLED ? "text-primary" : "text-muted-foreground"
+                          }`} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-foreground">
+                              Pagar ahora online
+                            </span>
+                            {paymentMethod === "online" && PAYMENTS_ENABLED && (
+                              <CheckCircle className="w-5 h-5 text-primary" />
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {PAYMENTS_ENABLED 
+                              ? "Pago seguro con MercadoPago. Tarjetas, transferencia, efectivo en puntos de pago."
+                              : "No disponible temporalmente"
+                            }
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-lg bg-washero-eco/10 border border-washero-eco/20">
-                    <div className="flex items-center gap-3">
-                      <Send className="w-6 h-6 text-washero-eco" />
-                      <div>
-                        <p className="font-medium text-foreground">Reserva sin pago online</p>
-                        <p className="text-sm text-muted-foreground">Te contactaremos para coordinar el pago</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            )}
+                    </button>
 
-            {/* Step 4: Confirmation */}
-            {step === 4 && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-12"
-              >
-                <div className="w-24 h-24 rounded-full bg-washero-eco/20 flex items-center justify-center mx-auto mb-8">
-                  <CheckCircle className="w-12 h-12 text-washero-eco" />
+                    {/* Pay Later Option */}
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("pay_later")}
+                      className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+                        paymentMethod === "pay_later"
+                          ? "border-washero-eco bg-washero-eco/5"
+                          : "border-border hover:border-washero-eco/50"
+                      }`}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                          paymentMethod === "pay_later" ? "bg-washero-eco/20" : "bg-muted"
+                        }`}>
+                          <Wallet className={`w-6 h-6 ${
+                            paymentMethod === "pay_later" ? "text-washero-eco" : "text-muted-foreground"
+                          }`} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-foreground">
+                              Pagar después (efectivo / transferencia)
+                            </span>
+                            {paymentMethod === "pay_later" && (
+                              <CheckCircle className="w-5 h-5 text-washero-eco" />
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Coordinamos el pago por WhatsApp. Pagá en efectivo o transferencia antes del lavado.
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
                 </div>
-                <h2 className="font-display text-3xl font-black text-foreground mb-4">
-                  {PAYMENTS_ENABLED ? "¡Reserva Confirmada!" : "¡Reserva Recibida!"}
-                </h2>
-                <p className="text-lg text-muted-foreground mb-8">
-                  {PAYMENTS_ENABLED ? (
-                    <>
-                      ¡Gracias! Tu pago fue procesado correctamente.<br />
-                      Te enviamos una confirmación por email y WhatsApp.<br />
-                      Nuestro equipo llegará a tu ubicación en el horario acordado.
-                    </>
-                  ) : (
-                    <>
-                      ¡Gracias por tu reserva!<br />
-                      <strong className="text-foreground">Te contactamos para coordinar el pago.</strong><br />
-                      Te enviamos los detalles por email y WhatsApp.
-                    </>
-                  )}
-                </p>
-                <Button variant="hero" size="lg" asChild>
-                  <Link to="/">Volver al Inicio</Link>
-                </Button>
               </motion.div>
             )}
 
             {/* Navigation Buttons */}
-            {step < 4 && (
+            {step <= 3 && (
               <div className="flex justify-between mt-12">
                 {step > 1 ? (
                   <Button
@@ -622,7 +645,7 @@ const Reservar = () => {
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
                         Procesando...
                       </>
-                    ) : PAYMENTS_ENABLED ? (
+                    ) : paymentMethod === "online" && PAYMENTS_ENABLED ? (
                       <>
                         <CreditCard className="w-4 h-4 mr-2" />
                         Pagar {formatPrice(getTotalPrice())}
@@ -630,7 +653,7 @@ const Reservar = () => {
                     ) : (
                       <>
                         <Send className="w-4 h-4 mr-2" />
-                        Enviar Reserva
+                        Confirmar Reserva
                       </>
                     )}
                   </Button>
