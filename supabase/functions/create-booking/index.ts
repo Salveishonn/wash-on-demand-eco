@@ -21,8 +21,8 @@ interface CreateBookingRequest {
   userId?: string;
   subscriptionId?: string;
   isSubscriptionBooking?: boolean;
-  requiresPayment?: boolean;
-  paymentsEnabled?: boolean; // Feature flag from client
+  paymentMethod?: "mercadopago" | "pay_later";
+  paymentsEnabled?: boolean;
 }
 
 serve(async (req) => {
@@ -38,6 +38,7 @@ serve(async (req) => {
     const data: CreateBookingRequest = await req.json();
     
     console.log("[create-booking] Creating booking for:", data.customerName);
+    console.log("[create-booking] Payment method:", data.paymentMethod);
     console.log("[create-booking] Payments enabled:", data.paymentsEnabled);
 
     // Validate required fields
@@ -77,12 +78,31 @@ serve(async (req) => {
       console.log("[create-booking] Subscription booking - washes remaining updated");
     }
 
-    // Determine booking status based on payment mode
-    const isPayLater = data.paymentsEnabled === false && !data.isSubscriptionBooking;
-    const bookingStatus = data.isSubscriptionBooking ? "confirmed" : (isPayLater ? "pending" : "pending");
-    const paymentStatus = data.isSubscriptionBooking ? "approved" : (isPayLater ? "pending" : "pending");
+    // Determine booking/payment status based on payment method
+    const isPayLater = data.paymentMethod === "pay_later" || data.paymentsEnabled === false;
+    const isSubscription = data.isSubscriptionBooking === true;
+    
+    let bookingStatus: string;
+    let paymentStatus: string;
+    let requiresPayment: boolean;
 
-    console.log("[create-booking] Pay later mode:", isPayLater);
+    if (isSubscription) {
+      bookingStatus = "confirmed";
+      paymentStatus = "approved";
+      requiresPayment = false;
+    } else if (isPayLater) {
+      bookingStatus = "pending";
+      paymentStatus = "pending";
+      requiresPayment = false; // Will be paid offline
+    } else {
+      // MercadoPago - pending until payment confirmed
+      bookingStatus = "pending";
+      paymentStatus = "pending";
+      requiresPayment = true;
+    }
+
+    console.log("[create-booking] Status calculation - isPayLater:", isPayLater, "isSubscription:", isSubscription);
+    console.log("[create-booking] bookingStatus:", bookingStatus, "paymentStatus:", paymentStatus, "requiresPayment:", requiresPayment);
 
     // Create the booking
     const { data: booking, error: bookingError } = await supabase
@@ -101,11 +121,11 @@ serve(async (req) => {
         booking_time: data.bookingTime,
         address: data.address,
         notes: data.notes,
-        is_subscription_booking: data.isSubscriptionBooking || false,
-        requires_payment: data.paymentsEnabled !== false,
+        is_subscription_booking: isSubscription,
+        requires_payment: requiresPayment,
         status: bookingStatus,
         payment_status: paymentStatus,
-        confirmed_at: data.isSubscriptionBooking ? new Date().toISOString() : null,
+        confirmed_at: isSubscription ? new Date().toISOString() : null,
       })
       .select()
       .single();
@@ -117,13 +137,13 @@ serve(async (req) => {
 
     console.log("[create-booking] Booking created:", booking.id);
 
-    // Queue notifications immediately if:
-    // 1. Subscription booking (already paid)
-    // 2. Pay-later mode (no MercadoPago)
-    const shouldNotifyImmediately = data.isSubscriptionBooking || isPayLater;
+    // Queue notifications immediately for:
+    // 1. Subscription bookings (already paid through subscription)
+    // 2. Pay-later bookings (no online payment, notify admin)
+    const shouldNotifyImmediately = isSubscription || isPayLater;
     
     if (shouldNotifyImmediately) {
-      console.log("[create-booking] Queueing notifications immediately");
+      console.log("[create-booking] Queueing notifications immediately for", isSubscription ? "subscription" : "pay-later");
       
       const queueUrl = `${supabaseUrl}/functions/v1/queue-notifications`;
       
@@ -135,17 +155,20 @@ serve(async (req) => {
         },
         body: JSON.stringify({ 
           bookingId: booking.id,
-          isPayLater: isPayLater 
+          isPayLater: isPayLater,
+          isSubscription: isSubscription
         }),
       }).catch(err => console.error("[create-booking] Queue error:", err));
     }
 
     // Determine response message
-    let message = "Reserva creada, procedé al pago";
-    if (data.isSubscriptionBooking) {
+    let message: string;
+    if (isSubscription) {
       message = "¡Reserva confirmada con tu suscripción!";
     } else if (isPayLater) {
       message = "¡Reserva recibida! Te contactamos para coordinar el pago.";
+    } else {
+      message = "Reserva creada. Procedé al pago con MercadoPago.";
     }
 
     return new Response(
@@ -153,7 +176,9 @@ serve(async (req) => {
         success: true, 
         booking,
         message,
-        isPayLater
+        isPayLater,
+        isSubscription,
+        requiresOnlinePayment: requiresPayment
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

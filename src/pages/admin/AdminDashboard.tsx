@@ -264,18 +264,30 @@ export default function AdminDashboard() {
   const getPaymentBadge = (status: string, isSubscription: boolean, requiresPayment: boolean) => {
     if (isSubscription) {
       return (
-        <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-          Suscripción
-        </span>
+        <div className="flex flex-col gap-1">
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+            Suscripción
+          </span>
+        </div>
       );
     }
     if (!requiresPayment) {
+      // Pay Later booking
+      const isPaid = status === 'approved';
       return (
-        <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-          Pago Offline
-        </span>
+        <div className="flex flex-col gap-1">
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+            Pago en Persona
+          </span>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+            isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+          }`}>
+            {isPaid ? 'Cobrado' : 'Por Cobrar'}
+          </span>
+        </div>
       );
     }
+    // MercadoPago booking
     const styles: Record<string, string> = {
       pending: 'bg-yellow-100 text-yellow-800',
       approved: 'bg-green-100 text-green-800',
@@ -283,15 +295,20 @@ export default function AdminDashboard() {
       in_process: 'bg-blue-100 text-blue-800',
     };
     const labels: Record<string, string> = {
-      pending: 'Pendiente',
-      approved: 'Pagado',
-      rejected: 'Rechazado',
-      in_process: 'En proceso',
+      pending: 'MP Pendiente',
+      approved: 'MP Pagado',
+      rejected: 'MP Rechazado',
+      in_process: 'MP En proceso',
     };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {labels[status] || status}
-      </span>
+      <div className="flex flex-col gap-1">
+        <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+          MercadoPago
+        </span>
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-800'}`}>
+          {labels[status] || status}
+        </span>
+      </div>
     );
   };
 
