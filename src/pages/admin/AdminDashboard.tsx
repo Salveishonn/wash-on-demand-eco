@@ -18,7 +18,10 @@ import {
   Phone,
   Mail,
   MapPin,
-  Shield
+  Shield,
+  Send,
+  MessageCircle,
+  Loader2
 } from 'lucide-react';
 import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
 import { Button } from '@/components/ui/button';
@@ -108,6 +111,7 @@ export default function AdminDashboard() {
   const [notifications, setNotifications] = useState<NotificationLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
@@ -226,6 +230,34 @@ export default function AdminDashboard() {
         title: 'Error',
         description: 'No se pudo registrar el pago',
       });
+    }
+  };
+
+  const handleSendTestNotification = async () => {
+    setIsSendingTest(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-notifications', {
+        body: { testMode: true },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Test enviado',
+        description: `Email: ${data?.email?.success ? '✅' : '❌'} | WhatsApp: ${data?.whatsapp?.success ? '✅' : '❌'}`,
+      });
+
+      // Refresh notification logs
+      fetchData();
+    } catch (error: any) {
+      console.error('Test notification error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'No se pudo enviar la notificación de prueba',
+      });
+    } finally {
+      setIsSendingTest(false);
     }
   };
 
@@ -656,17 +688,47 @@ export default function AdminDashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            {/* WhatsApp Mode Info */}
-            <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">WhatsApp Mode:</span>
-                <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                  Sandbox
+            {/* WhatsApp Mode Info + Test Button */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 p-4 rounded-lg bg-muted/50 border border-border">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">WhatsApp Mode:</span>
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                    Sandbox
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  En sandbox, solo admin recibe WhatsApp. Clientes reciben email.
                 </span>
               </div>
-              <span className="text-xs text-muted-foreground">
-                En modo sandbox, solo el admin recibe WhatsApp. Clientes reciben email.
-              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSendTestNotification}
+                disabled={isSendingTest}
+              >
+                {isSendingTest ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Enviar Test
+                  </>
+                )}
+              </Button>
+            </div>
+            
+            {/* Resend Domain Warning */}
+            <div className="mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-sm">
+              <p className="font-medium text-yellow-800 mb-1">⚠️ Dominio Resend no verificado</p>
+              <p className="text-yellow-700 text-xs">
+                Emails solo pueden enviarse a tu email de Resend. Para enviar a otros destinatarios, 
+                verificá un dominio en <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline">resend.com/domains</a>.
+              </p>
             </div>
             
             <div className="bg-background rounded-xl shadow-sm overflow-hidden">
