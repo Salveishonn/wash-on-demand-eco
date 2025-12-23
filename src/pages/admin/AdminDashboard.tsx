@@ -17,8 +17,10 @@ import {
   Eye,
   Phone,
   Mail,
-  MapPin
+  MapPin,
+  Shield
 } from 'lucide-react';
+import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -67,7 +69,7 @@ interface NotificationLog {
   created_at: string;
 }
 
-type TabType = 'bookings' | 'notifications';
+type TabType = 'bookings' | 'notifications' | 'kipper';
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 const formatPrice = (cents: number) => {
@@ -493,6 +495,14 @@ export default function AdminDashboard() {
             <Bell className="w-4 h-4 mr-2" />
             Notificaciones
           </Button>
+          <Button
+            variant={activeTab === 'kipper' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('kipper')}
+            className={activeTab === 'kipper' ? 'bg-[#8B1E2F] hover:bg-[#6B1726]' : ''}
+          >
+            <Shield className="w-4 h-4 mr-2" />
+            Leads Kipper
+          </Button>
         </div>
 
         {/* Bookings Tab */}
@@ -721,6 +731,9 @@ export default function AdminDashboard() {
             </div>
           </motion.div>
         )}
+
+        {/* Kipper Leads Tab */}
+        {activeTab === 'kipper' && <KipperLeadsTab />}
       </div>
 
       {/* Booking Detail Dialog */}

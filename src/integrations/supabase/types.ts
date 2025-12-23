@@ -109,6 +109,65 @@ export type Database = {
           },
         ]
       }
+      kipper_leads: {
+        Row: {
+          benefit_type: string | null
+          benefit_value: string | null
+          booking_id: string | null
+          created_at: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          id: string
+          kipper_benefit_applied: boolean | null
+          notes: string | null
+          source: string
+          status: string
+          updated_at: string
+          vehicle_type: string | null
+        }
+        Insert: {
+          benefit_type?: string | null
+          benefit_value?: string | null
+          booking_id?: string | null
+          created_at?: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          id?: string
+          kipper_benefit_applied?: boolean | null
+          notes?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          vehicle_type?: string | null
+        }
+        Update: {
+          benefit_type?: string | null
+          benefit_value?: string | null
+          booking_id?: string | null
+          created_at?: string
+          customer_email?: string
+          customer_name?: string
+          customer_phone?: string
+          id?: string
+          kipper_benefit_applied?: boolean | null
+          notes?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          vehicle_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kipper_leads_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_logs: {
         Row: {
           booking_id: string | null

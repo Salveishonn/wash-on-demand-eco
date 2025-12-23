@@ -277,6 +277,11 @@ export default function Suscripciones() {
               })}
             </div>
           )}
+
+          {/* Kipper Seguros Partnership Banner */}
+          <div className="mt-12 max-w-4xl mx-auto">
+            <KipperSubscriptionBanner />
+          </div>
         </div>
       </section>
 
