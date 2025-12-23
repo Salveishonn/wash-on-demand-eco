@@ -253,7 +253,16 @@ serve(async (req) => {
     let succeeded = 0;
     let failed = 0;
 
-    for (const notification of pendingNotifications) {
+    // Rate limiting: add delay between notifications to avoid Resend 2 rps limit
+    const DELAY_BETWEEN_SENDS_MS = 600; // 600ms = ~1.6 rps, safe for 2 rps limit
+
+    for (let i = 0; i < pendingNotifications.length; i++) {
+      const notification = pendingNotifications[i];
+      
+      // Rate limiting delay (skip for first notification)
+      if (i > 0 && notification.notification_type === "email") {
+        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_SENDS_MS));
+      }
       // Mark as processing
       await supabase
         .from("notification_queue")

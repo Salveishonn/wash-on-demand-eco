@@ -6,49 +6,79 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface BookingNotificationRequest {
-  bookingId: string;
+// Admin contact info
+const ADMIN_EMAIL = "washerocarwash@gmail.com";
+const ADMIN_WHATSAPP = "+5491130951804";
+
+async function sendEmail(
+  resendApiKey: string,
+  to: string,
+  subject: string,
+  html: string
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "Washero <onboarding@resend.dev>",
+        to: [to],
+        subject,
+        html,
+      }),
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return { success: false, error: data.message || "Email send failed" };
+    }
+    
+    return { success: true, id: data.id };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
 
-const formatPrice = (cents: number) => {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 0,
-  }).format(cents / 100);
-};
+async function sendWhatsApp(
+  accountSid: string,
+  authToken: string,
+  fromNumber: string,
+  to: string,
+  body: string
+): Promise<{ success: boolean; sid?: string; error?: string }> {
+  try {
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    const auth = btoa(`${accountSid}:${authToken}`);
 
-const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('es-AR', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-};
+    const formattedTo = to.startsWith("+") ? to : `+${to.replace(/\D/g, "")}`;
 
-async function sendResendEmail(apiKey: string, to: string, subject: string, html: string) {
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "Washero <onboarding@resend.dev>",
-      to: [to],
-      subject,
-      html,
-    }),
-  });
+    const response = await fetch(twilioUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        From: `whatsapp:${fromNumber}`,
+        To: `whatsapp:${formattedTo}`,
+        Body: body,
+      }),
+    });
 
-  const data = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(data.message || "Error sending email");
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.message || JSON.stringify(data) };
+    }
+
+    return { success: true, sid: data.sid };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
-  
-  return data;
 }
 
 serve(async (req) => {
@@ -66,269 +96,105 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { bookingId }: BookingNotificationRequest = await req.json();
-    
-    console.log(`[send-notifications] Processing booking: ${bookingId}`);
+    const body = await req.json();
+    const { testMode, bookingId } = body;
 
-    // Fetch booking details
-    const { data: booking, error: bookingError } = await supabase
-      .from("bookings")
-      .select("*")
-      .eq("id", bookingId)
-      .maybeSingle();
+    console.log("[send-notifications] Request received, testMode:", testMode, "bookingId:", bookingId);
 
-    if (bookingError || !booking) {
-      console.error("[send-notifications] Booking not found:", bookingError);
-      throw new Error("Reserva no encontrada");
-    }
+    if (testMode) {
+      // Send test notifications to admin
+      const testSubject = "🧪 Test Notification - Washero";
+      const testHtml = `
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: sans-serif; padding: 20px;">
+          <h1 style="color: #FFD700;">🧪 Test Notification</h1>
+          <p>This is a test notification from Washero admin panel.</p>
+          <p>Timestamp: ${new Date().toISOString()}</p>
+          <p style="color: #888;">If you received this, email notifications are working!</p>
+        </body>
+        </html>
+      `;
+      const testWhatsAppMessage = `🧪 *Test Notification - Washero*\n\nThis is a test from admin panel.\n\nTimestamp: ${new Date().toLocaleString('es-AR')}`;
 
-    console.log(`[send-notifications] Booking found: ${booking.customer_name}`);
+      let emailResult: { success: boolean; id?: string; error?: string } = { success: false, error: "RESEND_API_KEY not configured" };
+      let whatsappResult: { success: boolean; sid?: string; error?: string } = { success: false, error: "Twilio not configured" };
 
-    const adminEmail = "washerocarwash@gmail.com";
-    const adminWhatsApp = "whatsapp:+5491130951804";
+      // Send test email
+      if (resendApiKey) {
+        emailResult = await sendEmail(resendApiKey, ADMIN_EMAIL, testSubject, testHtml);
+        console.log("[send-notifications] Test email result:", emailResult);
 
-    const totalPrice = booking.service_price_cents + (booking.car_type_extra_cents || 0);
+        // Log to notification_logs
+        await supabase.from("notification_logs").insert({
+          notification_type: "email",
+          status: emailResult.success ? "sent" : "failed",
+          recipient: ADMIN_EMAIL,
+          message_content: "Test notification",
+          error_message: emailResult.error || null,
+          external_id: emailResult.id || null,
+        });
+      }
 
-    const messageContent = `
-🚗 *NUEVA RESERVA WASHERO*
-
-📋 *Detalles de la Reserva*
-• ID: ${booking.id.substring(0, 8).toUpperCase()}
-• Servicio: ${booking.service_name}
-• Tipo de vehículo: ${booking.car_type || 'No especificado'}
-• Precio total: ${formatPrice(totalPrice)}
-
-👤 *Cliente*
-• Nombre: ${booking.customer_name}
-• Email: ${booking.customer_email}
-• Teléfono: ${booking.customer_phone}
-
-📅 *Fecha y Hora*
-• ${formatDate(booking.booking_date)}
-• Horario: ${booking.booking_time} hs
-
-📍 *Ubicación*
-${booking.address || 'No especificada'}
-
-${booking.notes ? `📝 *Notas*\n${booking.notes}` : ''}
-
-💳 *Estado del Pago*
-${booking.payment_status === 'approved' ? '✅ Pagado' : booking.is_subscription_booking ? '🔄 Suscripción' : '⏳ Pendiente'}
-
-⏰ Reserva creada: ${new Date(booking.created_at).toLocaleString('es-AR')}
-    `.trim();
-
-    const emailHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: #1a1a1a; color: #FFD700; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-    .header h1 { margin: 0; font-size: 28px; }
-    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-    .section { margin-bottom: 25px; }
-    .section h3 { color: #1a1a1a; margin-bottom: 10px; font-size: 16px; border-bottom: 2px solid #FFD700; padding-bottom: 5px; }
-    .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-    .label { color: #666; }
-    .value { font-weight: 600; color: #1a1a1a; }
-    .price { font-size: 24px; color: #FFD700; font-weight: bold; }
-    .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-    .status-approved { background: #10B981; color: white; }
-    .status-pending { background: #F59E0B; color: white; }
-    .status-subscription { background: #3B82F6; color: white; }
-    .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>🚗 Nueva Reserva Washero</h1>
-      <p style="margin: 10px 0 0 0; opacity: 0.9;">ID: ${booking.id.substring(0, 8).toUpperCase()}</p>
-    </div>
-    <div class="content">
-      <div class="section">
-        <h3>📋 Servicio</h3>
-        <div class="detail-row">
-          <span class="label">Servicio</span>
-          <span class="value">${booking.service_name}</span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Vehículo</span>
-          <span class="value">${booking.car_type || 'No especificado'}</span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Total</span>
-          <span class="price">${formatPrice(totalPrice)}</span>
-        </div>
-      </div>
-      
-      <div class="section">
-        <h3>👤 Cliente</h3>
-        <div class="detail-row">
-          <span class="label">Nombre</span>
-          <span class="value">${booking.customer_name}</span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Email</span>
-          <span class="value">${booking.customer_email}</span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Teléfono</span>
-          <span class="value">${booking.customer_phone}</span>
-        </div>
-      </div>
-      
-      <div class="section">
-        <h3>📅 Fecha y Hora</h3>
-        <div class="detail-row">
-          <span class="label">Fecha</span>
-          <span class="value">${formatDate(booking.booking_date)}</span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Horario</span>
-          <span class="value">${booking.booking_time} hs</span>
-        </div>
-      </div>
-      
-      <div class="section">
-        <h3>📍 Ubicación</h3>
-        <p style="margin: 0;">${booking.address || 'No especificada'}</p>
-      </div>
-      
-      ${booking.notes ? `
-      <div class="section">
-        <h3>📝 Notas</h3>
-        <p style="margin: 0;">${booking.notes}</p>
-      </div>
-      ` : ''}
-      
-      <div class="section">
-        <h3>💳 Estado del Pago</h3>
-        <span class="status-badge ${
-          booking.payment_status === 'approved' ? 'status-approved' : 
-          booking.is_subscription_booking ? 'status-subscription' : 'status-pending'
-        }">
-          ${booking.payment_status === 'approved' ? '✅ Pagado' : 
-            booking.is_subscription_booking ? '🔄 Suscripción' : '⏳ Pendiente'}
-        </span>
-      </div>
-    </div>
-    <div class="footer">
-      <p>Reserva creada: ${new Date(booking.created_at).toLocaleString('es-AR')}</p>
-      <p>© ${new Date().getFullYear()} Washero - Lavado Premium a Domicilio</p>
-    </div>
-  </div>
-</body>
-</html>
-    `;
-
-    const results = { email: null as any, whatsapp: null as any };
-
-    // Send Email via Resend
-    if (resendApiKey) {
-      try {
-        console.log(`[send-notifications] Sending email to ${adminEmail}`);
-        
-        const emailResponse = await sendResendEmail(
-          resendApiKey,
-          adminEmail,
-          `🚗 Nueva Reserva: ${booking.customer_name} - ${formatDate(booking.booking_date)}`,
-          emailHtml
+      // Send test WhatsApp
+      if (twilioAccountSid && twilioAuthToken && twilioWhatsAppNumber) {
+        whatsappResult = await sendWhatsApp(
+          twilioAccountSid,
+          twilioAuthToken,
+          twilioWhatsAppNumber,
+          ADMIN_WHATSAPP,
+          testWhatsAppMessage
         );
+        console.log("[send-notifications] Test WhatsApp result:", whatsappResult);
 
-        console.log("[send-notifications] Email sent:", emailResponse);
-
+        // Log to notification_logs
         await supabase.from("notification_logs").insert({
-          booking_id: bookingId,
-          notification_type: "email",
-          status: "sent",
-          recipient: adminEmail,
-          message_content: `Reserva ${booking.id.substring(0, 8)}`,
-          external_id: emailResponse.id,
-        });
-
-        results.email = { success: true, id: emailResponse.id };
-      } catch (emailError: any) {
-        console.error("[send-notifications] Email error:", emailError);
-        
-        await supabase.from("notification_logs").insert({
-          booking_id: bookingId,
-          notification_type: "email",
-          status: "failed",
-          recipient: adminEmail,
-          error_message: emailError.message,
-        });
-
-        results.email = { success: false, error: emailError.message };
-      }
-    } else {
-      console.warn("[send-notifications] RESEND_API_KEY not configured");
-    }
-
-    // Send WhatsApp via Twilio
-    if (twilioAccountSid && twilioAuthToken && twilioWhatsAppNumber) {
-      try {
-        console.log(`[send-notifications] Sending WhatsApp to ${adminWhatsApp}`);
-        
-        const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
-        const auth = btoa(`${twilioAccountSid}:${twilioAuthToken}`);
-
-        const whatsappResponse = await fetch(twilioUrl, {
-          method: "POST",
-          headers: {
-            "Authorization": `Basic ${auth}`,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            From: `whatsapp:${twilioWhatsAppNumber}`,
-            To: adminWhatsApp,
-            Body: messageContent,
-          }),
-        });
-
-        const whatsappData = await whatsappResponse.json();
-        console.log("[send-notifications] WhatsApp response:", whatsappData);
-
-        if (whatsappResponse.ok) {
-          await supabase.from("notification_logs").insert({
-            booking_id: bookingId,
-            notification_type: "whatsapp",
-            status: "sent",
-            recipient: adminWhatsApp,
-            message_content: messageContent.substring(0, 500),
-            external_id: whatsappData.sid,
-          });
-
-          results.whatsapp = { success: true, sid: whatsappData.sid };
-        } else {
-          throw new Error(whatsappData.message || "Twilio error");
-        }
-      } catch (whatsappError: any) {
-        console.error("[send-notifications] WhatsApp error:", whatsappError);
-        
-        await supabase.from("notification_logs").insert({
-          booking_id: bookingId,
           notification_type: "whatsapp",
-          status: "failed",
-          recipient: adminWhatsApp,
-          error_message: whatsappError.message,
+          status: whatsappResult.success ? "sent" : "failed",
+          recipient: ADMIN_WHATSAPP,
+          message_content: "Test notification",
+          error_message: whatsappResult.error || null,
+          external_id: whatsappResult.sid || null,
         });
-
-        results.whatsapp = { success: false, error: whatsappError.message };
       }
-    } else {
-      console.warn("[send-notifications] Twilio credentials not configured");
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          email: emailResult,
+          whatsapp: whatsappResult,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    console.log("[send-notifications] Notification results:", results);
+    // If bookingId provided, process that specific booking
+    if (bookingId) {
+      // Trigger process-notifications for specific booking
+      const { data, error } = await supabase.functions.invoke("process-notifications", {
+        body: { bookingId }
+      });
 
-    return new Response(JSON.stringify({ success: true, results }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+      if (error) throw error;
+
+      return new Response(
+        JSON.stringify({ success: true, result: data }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Default: trigger process-notifications for all pending
+    const { data, error } = await supabase.functions.invoke("process-notifications");
+
+    if (error) {
+      console.error("[send-notifications] Error invoking process-notifications:", error);
+      throw error;
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, result: data }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
 
   } catch (error: any) {
     console.error("[send-notifications] Error:", error);

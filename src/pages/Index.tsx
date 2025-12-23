@@ -13,7 +13,9 @@ import {
   Star,
   ChevronRight,
   CheckCircle,
+  Gift,
 } from "lucide-react";
+import kipperLogo from "@/assets/kipper-logo.png";
 import heroImage from "@/assets/hero-washero-branded.jpg";
 import detailImage from "@/assets/washero-detail-1.jpg";
 import interiorImage from "@/assets/washero-interior.jpg";
@@ -515,6 +517,63 @@ const Index = () => {
                 </div>
               </motion.div>
             ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Kipper Seguros Partnership Section */}
+      <section className="py-20 bg-gradient-to-br from-[#8B1E2F]/5 via-background to-background">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="max-w-4xl mx-auto"
+          >
+            <div className="bg-background rounded-3xl border-2 border-[#8B1E2F]/20 p-8 md:p-12 shadow-lg">
+              <div className="flex flex-col md:flex-row items-center gap-8">
+                <div className="w-24 h-24 rounded-2xl bg-[#8B1E2F]/10 flex items-center justify-center shrink-0">
+                  <img
+                    src={kipperLogo}
+                    alt="Kipper Seguros"
+                    className="w-16 h-16 object-contain"
+                  />
+                </div>
+                <div className="flex-1 text-center md:text-left">
+                  <div className="flex items-center justify-center md:justify-start gap-2 mb-3">
+                    <Shield className="w-5 h-5 text-[#8B1E2F]" />
+                    <span className="text-sm font-semibold text-[#8B1E2F] uppercase tracking-wide">
+                      Alianza Exclusiva
+                    </span>
+                  </div>
+                  <h2 className="font-display text-2xl md:text-3xl font-black text-foreground mb-3">
+                    Beneficios con <span className="text-[#8B1E2F]">Kipper Seguros</span>
+                  </h2>
+                  <p className="text-muted-foreground mb-6">
+                    Si contratás tu seguro con Kipper Seguros, accedés a beneficios
+                    exclusivos en Washero: descuentos especiales, prioridad de agenda
+                    y promociones únicas.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
+                    <Button
+                      asChild
+                      size="lg"
+                      className="bg-[#8B1E2F] hover:bg-[#6d1725]"
+                    >
+                      <Link to="/kipper-seguros">
+                        <Gift className="w-4 h-4 mr-2" />
+                        Ver cómo funciona
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+                <div className="hidden lg:flex flex-col items-center gap-1 text-[#8B1E2F]">
+                  <Star className="w-6 h-6 fill-current" />
+                  <Star className="w-6 h-6 fill-current" />
+                  <Star className="w-6 h-6 fill-current" />
+                </div>
+              </div>
+            </div>
           </motion.div>
         </div>
       </section>
