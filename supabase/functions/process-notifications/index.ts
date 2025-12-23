@@ -62,19 +62,43 @@ async function sendEmail(
   }
 }
 
+// Normalize phone number to E.164 format
+function normalizePhoneNumber(phone: string): string {
+  // Remove all non-digit characters except leading +
+  let cleaned = phone.replace(/[^\d+]/g, "");
+  // Ensure it starts with +
+  if (!cleaned.startsWith("+")) {
+    cleaned = "+" + cleaned;
+  }
+  return cleaned;
+}
+
+// Format number for WhatsApp (add whatsapp: prefix if not present)
+function formatWhatsAppNumber(phone: string): string {
+  const normalized = normalizePhoneNumber(phone);
+  // If already has whatsapp: prefix, return as-is
+  if (phone.toLowerCase().startsWith("whatsapp:")) {
+    return phone;
+  }
+  return `whatsapp:${normalized}`;
+}
+
 async function sendWhatsApp(
   accountSid: string,
   authToken: string,
   fromNumber: string,
   to: string,
   body: string
-): Promise<{ success: boolean; sid?: string; error?: string }> {
+): Promise<{ success: boolean; sid?: string; status?: string; error?: string; errorCode?: number; from?: string; to?: string }> {
   try {
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
     const auth = btoa(`${accountSid}:${authToken}`);
 
-    // Ensure proper E.164 format with whatsapp: prefix
-    const formattedTo = to.startsWith("+") ? to : `+${to.replace(/\D/g, "")}`;
+    // Format From and To correctly for WhatsApp
+    const formattedFrom = formatWhatsAppNumber(fromNumber);
+    const formattedTo = formatWhatsAppNumber(to);
+
+    console.log(`[sendWhatsApp] Sending from: ${formattedFrom} to: ${formattedTo}`);
 
     const response = await fetch(twilioUrl, {
       method: "POST",
@@ -83,20 +107,35 @@ async function sendWhatsApp(
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        From: `whatsapp:${fromNumber}`,
-        To: `whatsapp:${formattedTo}`,
+        From: formattedFrom,
+        To: formattedTo,
         Body: body,
       }),
     });
 
     const data = await response.json();
+    
+    console.log(`[sendWhatsApp] Twilio response:`, JSON.stringify(data));
 
     if (!response.ok) {
-      return { success: false, error: data.message || "WhatsApp send failed" };
+      return { 
+        success: false, 
+        error: data.message || JSON.stringify(data),
+        errorCode: data.code,
+        from: formattedFrom,
+        to: formattedTo
+      };
     }
 
-    return { success: true, sid: data.sid };
+    return { 
+      success: true, 
+      sid: data.sid,
+      status: data.status,
+      from: formattedFrom,
+      to: formattedTo
+    };
   } catch (err: any) {
+    console.error(`[sendWhatsApp] Exception:`, err);
     return { success: false, error: err.message };
   }
 }
