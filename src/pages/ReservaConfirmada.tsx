@@ -5,6 +5,7 @@ import { CheckCircle, Calendar, Clock, MapPin, Loader2, Phone, CreditCard, Walle
 import { Button } from '@/components/ui/button';
 import { Layout } from '@/components/layout/Layout';
 import { supabase } from '@/integrations/supabase/client';
+import { KipperConfirmationBanner } from '@/components/kipper/KipperConfirmationBanner';
 
 interface BookingDetails {
   id: string;
@@ -317,6 +318,14 @@ export default function ReservaConfirmada() {
                 </Button>
               </div>
             </div>
+
+            {/* Kipper Seguros Banner */}
+            <KipperConfirmationBanner
+              customerName={booking.customer_name}
+              customerPhone={""}
+              customerEmail={booking.customer_email}
+              bookingId={booking.id}
+            />
           </motion.div>
         </div>
       </section>

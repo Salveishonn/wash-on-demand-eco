@@ -9,6 +9,7 @@ import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, Credi
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PAYMENTS_ENABLED } from "@/config/payments";
+import { KipperOptIn } from "@/components/kipper/KipperOptIn";
 
 interface Service {
   id: string;
@@ -90,6 +91,8 @@ const Reservar = () => {
     phone: "",
     notes: "",
   });
+  
+  const [kipperOptIn, setKipperOptIn] = useState(false);
 
   // Check for payment return (only when payments enabled)
   useEffect(() => {
@@ -227,6 +230,24 @@ const Reservar = () => {
 
       console.log("[Reservar] Booking created:", bookingResponse);
       setBookingId(bookingResponse.booking.id);
+
+      // If Kipper opt-in, create lead
+      if (kipperOptIn) {
+        try {
+          await supabase.functions.invoke("create-kipper-lead", {
+            body: {
+              customerName: formData.name,
+              customerPhone: formData.phone,
+              customerEmail: formData.email,
+              vehicleType: carType?.name,
+              bookingId: bookingResponse.booking.id,
+              source: "booking",
+            },
+          });
+        } catch (kipperErr) {
+          console.error("[Reservar] Kipper lead error:", kipperErr);
+        }
+      }
 
       // If pay later, go straight to confirmation page
       if (isPayLater) {
@@ -557,7 +578,11 @@ const Reservar = () => {
                   </div>
                 </div>
 
-                {/* Order Summary */}
+                {/* Kipper Seguros Opt-In */}
+                <KipperOptIn 
+                  checked={kipperOptIn} 
+                  onCheckedChange={setKipperOptIn} 
+                />
                 <div className="p-6 rounded-xl bg-secondary mt-8">
                   <h3 className="font-display font-bold text-foreground mb-4">
                     Resumen de tu Reserva
