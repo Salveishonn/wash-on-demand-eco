@@ -9,6 +9,7 @@ const corsHeaders = {
 interface QueueNotificationsRequest {
   bookingId: string;
   isPayLater?: boolean;
+  whatsappOptIn?: boolean;
 }
 
 // Admin recipients
@@ -24,10 +25,13 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  // WhatsApp mode: "sandbox" = only admin gets WhatsApp, "production" = everyone
+  const whatsappMode = Deno.env.get("WHATSAPP_MODE") || "sandbox";
+
   try {
-    const { bookingId, isPayLater }: QueueNotificationsRequest = await req.json();
+    const { bookingId, isPayLater, whatsappOptIn }: QueueNotificationsRequest = await req.json();
     
-    console.log(`[queue-notifications] Processing booking: ${bookingId}, isPayLater: ${isPayLater}`);
+    console.log(`[queue-notifications] Processing booking: ${bookingId}, isPayLater: ${isPayLater}, whatsappOptIn: ${whatsappOptIn}, whatsappMode: ${whatsappMode}`);
 
     // Check if notifications already queued (idempotency at booking level)
     const { data: booking, error: bookingError } = await supabase
@@ -51,7 +55,9 @@ serve(async (req) => {
 
     const notifications = [];
 
-    // Customer email notification
+    // ===== CUSTOMER NOTIFICATIONS =====
+    
+    // Customer email notification (ALWAYS sent)
     notifications.push({
       booking_id: bookingId,
       notification_type: "email",
@@ -62,16 +68,27 @@ serve(async (req) => {
     });
 
     // Customer WhatsApp notification
-    notifications.push({
-      booking_id: bookingId,
-      notification_type: "whatsapp",
-      recipient: booking.customer_phone,
-      idempotency_key: `${bookingId}:whatsapp:customer`,
-      status: "pending",
-      next_retry_at: new Date().toISOString(),
-    });
+    // Only send if:
+    // 1. In production mode OR
+    // 2. Customer explicitly opted in (we'll attempt anyway but log warning in sandbox)
+    if (whatsappMode === "production" && whatsappOptIn) {
+      notifications.push({
+        booking_id: bookingId,
+        notification_type: "whatsapp",
+        recipient: booking.customer_phone,
+        idempotency_key: `${bookingId}:whatsapp:customer`,
+        status: "pending",
+        next_retry_at: new Date().toISOString(),
+      });
+      console.log("[queue-notifications] Customer WhatsApp queued (production mode + opt-in)");
+    } else if (whatsappMode === "sandbox" && whatsappOptIn) {
+      // In sandbox mode, log that customer opted in but we can't send
+      console.log("[queue-notifications] Customer opted in for WhatsApp but sandbox mode active - email only");
+    }
 
-    // Admin email notification
+    // ===== ADMIN NOTIFICATIONS =====
+    
+    // Admin email notification (ALWAYS sent)
     notifications.push({
       booking_id: bookingId,
       notification_type: "email",
@@ -81,7 +98,7 @@ serve(async (req) => {
       next_retry_at: new Date().toISOString(),
     });
 
-    // Admin WhatsApp notification
+    // Admin WhatsApp notification (ALWAYS sent - sandbox works for admin)
     notifications.push({
       booking_id: bookingId,
       notification_type: "whatsapp",
@@ -127,7 +144,12 @@ serve(async (req) => {
     }).catch(err => console.error("[queue-notifications] Process trigger error:", err));
 
     return new Response(
-      JSON.stringify({ success: true, message: "Notifications queued", count: notifications.length }),
+      JSON.stringify({ 
+        success: true, 
+        message: "Notifications queued", 
+        count: notifications.length,
+        whatsappMode 
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

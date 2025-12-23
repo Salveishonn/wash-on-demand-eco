@@ -23,6 +23,7 @@ interface CreateBookingRequest {
   isSubscriptionBooking?: boolean;
   paymentMethod?: "mercadopago" | "pay_later";
   paymentsEnabled?: boolean;
+  whatsappOptIn?: boolean;
 }
 
 serve(async (req) => {
@@ -144,6 +145,7 @@ serve(async (req) => {
     
     if (shouldNotifyImmediately) {
       console.log("[create-booking] Queueing notifications immediately for", isSubscription ? "subscription" : "pay-later");
+      console.log("[create-booking] WhatsApp opt-in:", data.whatsappOptIn);
       
       const queueUrl = `${supabaseUrl}/functions/v1/queue-notifications`;
       
@@ -156,7 +158,8 @@ serve(async (req) => {
         body: JSON.stringify({ 
           bookingId: booking.id,
           isPayLater: isPayLater,
-          isSubscription: isSubscription
+          isSubscription: isSubscription,
+          whatsappOptIn: data.whatsappOptIn || false
         }),
       }).catch(err => console.error("[create-booking] Queue error:", err));
     }

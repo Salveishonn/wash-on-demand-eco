@@ -9,6 +9,9 @@ const corsHeaders = {
 const BACKOFF_MULTIPLIER = 2;
 const BASE_DELAY_SECONDS = 60;
 
+// Admin WhatsApp number for sandbox validation
+const ADMIN_WHATSAPP = "+5491130951804";
+
 const formatPrice = (cents: number) => {
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
@@ -70,6 +73,9 @@ async function sendWhatsApp(
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
     const auth = btoa(`${accountSid}:${authToken}`);
 
+    // Ensure proper E.164 format with whatsapp: prefix
+    const formattedTo = to.startsWith("+") ? to : `+${to.replace(/\D/g, "")}`;
+
     const response = await fetch(twilioUrl, {
       method: "POST",
       headers: {
@@ -78,7 +84,7 @@ async function sendWhatsApp(
       },
       body: new URLSearchParams({
         From: `whatsapp:${fromNumber}`,
-        To: `whatsapp:${to}`,
+        To: `whatsapp:${formattedTo}`,
         Body: body,
       }),
     });
@@ -95,8 +101,12 @@ async function sendWhatsApp(
   }
 }
 
-function buildEmailHtml(booking: any): string {
+function buildEmailHtml(booking: any, isCustomer: boolean = false): string {
   const totalPrice = booking.service_price_cents + (booking.car_type_extra_cents || 0);
+  
+  const title = isCustomer 
+    ? "¡Tu Reserva está Confirmada!" 
+    : "🚗 Nueva Reserva Washero";
   
   return `
 <!DOCTYPE html>
@@ -118,7 +128,7 @@ function buildEmailHtml(booking: any): string {
 <body>
   <div class="container">
     <div class="header">
-      <h1>🚗 Nueva Reserva Washero</h1>
+      <h1>${title}</h1>
       <p>ID: ${booking.id.substring(0, 8).toUpperCase()}</p>
     </div>
     <div class="content">
@@ -128,12 +138,13 @@ function buildEmailHtml(booking: any): string {
         <div class="detail-row"><span>Vehículo</span><span>${booking.car_type || 'No especificado'}</span></div>
         <div class="detail-row"><span>Total</span><span class="price">${formatPrice(totalPrice)}</span></div>
       </div>
+      ${!isCustomer ? `
       <div class="section">
         <h3>👤 Cliente</h3>
         <div class="detail-row"><span>Nombre</span><span>${booking.customer_name}</span></div>
         <div class="detail-row"><span>Email</span><span>${booking.customer_email}</span></div>
         <div class="detail-row"><span>Teléfono</span><span>${booking.customer_phone}</span></div>
-      </div>
+      </div>` : ''}
       <div class="section">
         <h3>📅 Fecha y Hora</h3>
         <div class="detail-row"><span>Fecha</span><span>${formatDate(booking.booking_date)}</span></div>
@@ -148,14 +159,32 @@ function buildEmailHtml(booking: any): string {
         <h3>💳 Estado</h3>
         <span class="status-badge">${booking.payment_status === 'approved' ? '✅ Pagado' : booking.is_subscription_booking ? '🔄 Suscripción' : '⏳ Pendiente'}</span>
       </div>
+      ${isCustomer ? '<p style="margin-top: 20px; text-align: center; color: #666;">¡Gracias por elegirnos! Te esperamos.</p>' : ''}
     </div>
   </div>
 </body>
 </html>`;
 }
 
-function buildWhatsAppMessage(booking: any): string {
+function buildWhatsAppMessage(booking: any, isCustomer: boolean = false): string {
   const totalPrice = booking.service_price_cents + (booking.car_type_extra_cents || 0);
+  
+  if (isCustomer) {
+    return `✅ *RESERVA CONFIRMADA - WASHERO*
+
+Hola ${booking.customer_name}! Tu reserva está lista.
+
+📋 *Servicio:* ${booking.service_name}
+🚗 *Vehículo:* ${booking.car_type || 'No especificado'}
+💰 *Total:* ${formatPrice(totalPrice)}
+
+📅 ${formatDate(booking.booking_date)} - ${booking.booking_time}hs
+📍 ${booking.address || 'Sin dirección'}
+
+ID: ${booking.id.substring(0, 8).toUpperCase()}
+
+¡Gracias por elegirnos! 🚗✨`;
+  }
   
   return `🚗 *NUEVA RESERVA WASHERO*
 
@@ -187,11 +216,13 @@ serve(async (req) => {
   const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
   const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
   const twilioWhatsAppNumber = Deno.env.get("TWILIO_WHATSAPP_NUMBER");
+  const whatsappMode = Deno.env.get("WHATSAPP_MODE") || "sandbox";
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
     console.log("[process-notifications] Starting notification processing");
+    console.log(`[process-notifications] WhatsApp mode: ${whatsappMode}`);
 
     // Get pending notifications (limit batch size)
     const { data: pendingNotifications, error: fetchError } = await supabase
@@ -248,17 +279,25 @@ serve(async (req) => {
         continue;
       }
 
+      // Determine if this is a customer or admin notification
+      const isCustomerNotification = notification.recipient !== "washerocarwash@gmail.com" && 
+                                      notification.recipient !== ADMIN_WHATSAPP;
+
       let result: { success: boolean; id?: string; sid?: string; error?: string };
 
       if (notification.notification_type === "email") {
         if (!resendApiKey) {
           result = { success: false, error: "RESEND_API_KEY not configured" };
         } else {
-          const html = buildEmailHtml(booking);
+          const html = buildEmailHtml(booking, isCustomerNotification);
+          const subject = isCustomerNotification 
+            ? `✅ Reserva Confirmada - ${formatDate(booking.booking_date)}`
+            : `🚗 Nueva Reserva: ${booking.customer_name} - ${formatDate(booking.booking_date)}`;
+          
           result = await sendEmail(
             resendApiKey,
             notification.recipient,
-            `🚗 Nueva Reserva: ${booking.customer_name} - ${formatDate(booking.booking_date)}`,
+            subject,
             html
           );
         }
@@ -266,14 +305,23 @@ serve(async (req) => {
         if (!twilioAccountSid || !twilioAuthToken || !twilioWhatsAppNumber) {
           result = { success: false, error: "Twilio credentials not configured" };
         } else {
-          const message = buildWhatsAppMessage(booking);
-          result = await sendWhatsApp(
-            twilioAccountSid,
-            twilioAuthToken,
-            twilioWhatsAppNumber,
-            notification.recipient,
-            message
-          );
+          // In sandbox mode, only send to admin number
+          if (whatsappMode === "sandbox" && isCustomerNotification) {
+            result = { 
+              success: false, 
+              error: "WhatsApp in sandbox mode - customer messages not sent. Customer will receive email confirmation." 
+            };
+            console.log(`[process-notifications] Skipping customer WhatsApp in sandbox mode for ${notification.recipient}`);
+          } else {
+            const message = buildWhatsAppMessage(booking, isCustomerNotification);
+            result = await sendWhatsApp(
+              twilioAccountSid,
+              twilioAuthToken,
+              twilioWhatsAppNumber,
+              notification.recipient,
+              message
+            );
+          }
         }
       } else {
         result = { success: false, error: "Unknown notification type" };
@@ -306,32 +354,62 @@ serve(async (req) => {
         succeeded++;
         console.log(`[process-notifications] ✅ ${notification.notification_type} sent for ${notification.booking_id}`);
       } else {
-        // Failure - schedule retry with exponential backoff
-        const nextRetryDelay = BASE_DELAY_SECONDS * Math.pow(BACKOFF_MULTIPLIER, newAttempts);
-        const nextRetryAt = new Date(Date.now() + nextRetryDelay * 1000);
-        const newStatus = newAttempts >= 3 ? "exhausted" : "failed";
+        // For sandbox mode customer WhatsApp, mark as skipped (not exhausted)
+        const isSandboxSkip = whatsappMode === "sandbox" && 
+                              notification.notification_type === "whatsapp" && 
+                              isCustomerNotification;
+        
+        if (isSandboxSkip) {
+          // Mark as sent with note about sandbox mode
+          await supabase
+            .from("notification_queue")
+            .update({
+              status: "sent",
+              attempts: newAttempts,
+              last_error: "Skipped - sandbox mode (customer receives email)",
+              sent_at: new Date().toISOString(),
+            })
+            .eq("id", notification.id);
 
-        await supabase
-          .from("notification_queue")
-          .update({
-            status: newStatus,
-            attempts: newAttempts,
-            next_retry_at: nextRetryAt.toISOString(),
-            last_error: result.error,
-          })
-          .eq("id", notification.id);
+          // Log for admin visibility
+          await supabase.from("notification_logs").insert({
+            booking_id: notification.booking_id,
+            notification_type: notification.notification_type,
+            status: "sent",
+            recipient: notification.recipient,
+            message_content: "Skipped - sandbox mode",
+          });
 
-        // Log failure
-        await supabase.from("notification_logs").insert({
-          booking_id: notification.booking_id,
-          notification_type: notification.notification_type,
-          status: "failed",
-          recipient: notification.recipient,
-          error_message: result.error,
-        });
+          console.log(`[process-notifications] ⏭️ WhatsApp skipped for customer (sandbox mode)`);
+          succeeded++; // Count as success since expected behavior
+        } else {
+          // Failure - schedule retry with exponential backoff
+          const nextRetryDelay = BASE_DELAY_SECONDS * Math.pow(BACKOFF_MULTIPLIER, newAttempts);
+          const nextRetryAt = new Date(Date.now() + nextRetryDelay * 1000);
+          const newStatus = newAttempts >= 3 ? "exhausted" : "failed";
 
-        failed++;
-        console.log(`[process-notifications] ❌ ${notification.notification_type} failed: ${result.error}`);
+          await supabase
+            .from("notification_queue")
+            .update({
+              status: newStatus,
+              attempts: newAttempts,
+              next_retry_at: nextRetryAt.toISOString(),
+              last_error: result.error,
+            })
+            .eq("id", notification.id);
+
+          // Log failure
+          await supabase.from("notification_logs").insert({
+            booking_id: notification.booking_id,
+            notification_type: notification.notification_type,
+            status: "failed",
+            recipient: notification.recipient,
+            error_message: result.error,
+          });
+
+          failed++;
+          console.log(`[process-notifications] ❌ ${notification.notification_type} failed: ${result.error}`);
+        }
       }
 
       processed++;
@@ -340,7 +418,7 @@ serve(async (req) => {
     console.log(`[process-notifications] Completed: ${processed} processed, ${succeeded} succeeded, ${failed} failed`);
 
     return new Response(
-      JSON.stringify({ success: true, processed, succeeded, failed }),
+      JSON.stringify({ success: true, processed, succeeded, failed, whatsappMode }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, CreditCard, Wallet, Send, Sparkles, AlertCircle } from "lucide-react";
+import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, CreditCard, Wallet, Send, Sparkles, AlertCircle, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PAYMENTS_ENABLED } from "@/config/payments";
@@ -91,8 +91,8 @@ const Reservar = () => {
     phone: "",
     notes: "",
   });
-  
   const [kipperOptIn, setKipperOptIn] = useState(false);
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
 
   // Check for payment return (only when payments enabled)
   useEffect(() => {
@@ -219,6 +219,7 @@ const Reservar = () => {
             notes: formData.notes,
             paymentMethod: isPayLater ? "pay_later" : "mercadopago",
             paymentsEnabled: PAYMENTS_ENABLED,
+            whatsappOptIn: whatsappOptIn,
           },
         }
       );
@@ -578,12 +579,32 @@ const Reservar = () => {
                   </div>
                 </div>
 
+                {/* WhatsApp Opt-In */}
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border border-border">
+                  <input
+                    type="checkbox"
+                    id="whatsappOptIn"
+                    checked={whatsappOptIn}
+                    onChange={(e) => setWhatsappOptIn(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  <div>
+                    <label htmlFor="whatsappOptIn" className="font-medium text-foreground cursor-pointer flex items-center gap-2">
+                      <MessageCircle className="w-4 h-4 text-green-600" />
+                      Recibir confirmación por WhatsApp
+                    </label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Además del email, recibirás un mensaje de confirmación a tu WhatsApp.
+                    </p>
+                  </div>
+                </div>
+
                 {/* Kipper Seguros Opt-In */}
                 <KipperOptIn 
                   checked={kipperOptIn} 
                   onCheckedChange={setKipperOptIn} 
                 />
-                <div className="p-6 rounded-xl bg-secondary mt-8">
+                <div className="p-6 rounded-xl bg-secondary mt-4">
                   <h3 className="font-display font-bold text-foreground mb-4">
                     Resumen de tu Reserva
                   </h3>
