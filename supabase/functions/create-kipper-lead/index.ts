@@ -31,10 +31,10 @@ serve(async (req: Request) => {
 
     // Validate required fields
     if (!body.customerName || !body.customerPhone || !body.customerEmail || !body.source) {
-      return new Response(
-        JSON.stringify({ error: "Campos requeridos: nombre, teléfono, email, source" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Campos requeridos: nombre, teléfono, email, source" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Create Supabase client
@@ -88,7 +88,7 @@ Este cliente está interesado en recibir una cotización de seguro con Kipper Se
       try {
         const resend = new Resend(resendApiKey);
         const emailResult = await resend.emails.send({
-          from: "Washero <onboarding@resend.dev>",
+          from: "Washero <reservas@washero.online>",
           to: [ADMIN_EMAIL],
           subject: `🏷️ Nuevo Lead Kipper Seguros - ${body.customerName}`,
           html: `
@@ -118,12 +118,16 @@ Este cliente está interesado en recibir una cotización de seguro con Kipper Se
                     <td style="padding: 8px 0; font-weight: bold;">Vehículo:</td>
                     <td style="padding: 8px 0;">${body.vehicleType || "No especificado"}</td>
                   </tr>
-                  ${body.bookingId ? `
+                  ${
+                    body.bookingId
+                      ? `
                   <tr>
                     <td style="padding: 8px 0; font-weight: bold;">Reserva:</td>
                     <td style="padding: 8px 0; font-family: monospace;">${body.bookingId.substring(0, 8).toUpperCase()}</td>
                   </tr>
-                  ` : ""}
+                  `
+                      : ""
+                  }
                 </table>
                 <p style="margin-top: 20px; color: #666;">
                   Este cliente está interesado en recibir una cotización de seguro con Kipper Seguros.
@@ -147,11 +151,11 @@ Este cliente está interesado en recibir una cotización de seguro con Kipper Se
       try {
         const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
         const auth = btoa(`${twilioAccountSid}:${twilioAuthToken}`);
-        
+
         const whatsappResult = await fetch(twilioUrl, {
           method: "POST",
           headers: {
-            "Authorization": `Basic ${auth}`,
+            Authorization: `Basic ${auth}`,
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: new URLSearchParams({
@@ -168,15 +172,15 @@ Este cliente está interesado en recibir una cotización de seguro con Kipper Se
       }
     }
 
-    return new Response(
-      JSON.stringify({ success: true, leadId: lead.id }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ success: true, leadId: lead.id }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error: any) {
     console.error("[create-kipper-lead] Error:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
