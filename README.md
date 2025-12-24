@@ -1,73 +1,115 @@
-# Welcome to your Lovable project
+# Washero - Premium Mobile Car Wash
 
-## Project info
+Premium on-demand car wash service in Buenos Aires, Argentina.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## MercadoPago Integration
 
-## How can I edit this code?
+### Setup
 
-There are several ways of editing your application.
+1. **Environment Variables (Secrets)**
+   - `MERCADOPAGO_ACCESS_TOKEN`: Your MP access token from [MercadoPago Developers](https://www.mercadopago.com.ar/developers/panel)
+   - `MERCADOPAGO_ENV`: Set to `sandbox` for testing, `production` for live payments
 
-**Use Lovable**
+### Testing with MercadoPago Sandbox
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+#### Step 1: Create Test Users
+1. Go to [MercadoPago Developers](https://www.mercadopago.com.ar/developers/panel)
+2. Navigate to "Test accounts" (Cuentas de prueba)
+3. Create two test accounts:
+   - **Seller account**: Use this account's Access Token as `MERCADOPAGO_ACCESS_TOKEN`
+   - **Buyer account**: Use this to make test payments
 
-Changes made via Lovable will be committed automatically to this repo.
+#### Step 2: Get Test Credentials
+1. Log in to your test SELLER account
+2. Go to Developer settings → Credentials
+3. Copy the **Access Token** for sandbox testing
+4. Add it as `MERCADOPAGO_ACCESS_TOKEN` in Lovable secrets
 
-**Use your preferred IDE**
+#### Step 3: Test a Payment
+1. In Washero Admin Panel (/admin), click "Test MP Payment"
+2. This creates a preference with $1 ARS test amount
+3. A new tab opens with MercadoPago checkout
+4. Log in with your test BUYER account
+5. Use test card details:
+   - **Visa**: 4509 9535 6623 3704
+   - **CVV**: 123
+   - **Expiry**: Any future date
+   - **Name**: APRO (for approved payments)
+   - **Document**: Any valid DNI
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+#### Step 4: Verify Webhook
+After payment, the webhook should:
+1. Receive notification from MercadoPago
+2. Fetch payment details
+3. Update booking status to "confirmed"
+4. Update payment_status to "approved"
+5. Queue confirmation notifications
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+Check webhook_logs table to see received webhooks.
 
-Follow these steps:
+### Production Deployment
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+1. Update `MERCADOPAGO_ENV` secret to `production`
+2. Replace `MERCADOPAGO_ACCESS_TOKEN` with production credentials
+3. Verify washero.online domain in MercadoPago
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+### Webhook URL
+```
+https://pkndizbozytnpgqxymms.supabase.co/functions/v1/mercadopago-webhook
 ```
 
-**Edit a file directly in GitHub**
+### Back URLs (configured automatically)
+- Success: `https://washero.online/reserva-confirmada?booking_id=...`
+- Failure: `https://washero.online/reservar?error=payment_failed`
+- Pending: `https://washero.online/reserva-confirmada?booking_id=...&status=pending`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## Notification System
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Email
+- Provider: Resend
+- From: `Washero <reservas@washero.online>`
+- Verify domain at resend.com
 
-## What technologies are used for this project?
+### WhatsApp
+- Provider: Twilio
+- Mode: `sandbox` or `production`
+- Sandbox sends to admin only
+- Production requires Twilio WhatsApp approval
+
+---
+
+## Edge Functions
+
+| Function | Purpose |
+|----------|---------|
+| `create-booking` | Creates new booking records |
+| `create-mercadopago-preference` | Creates MP checkout preference |
+| `mercadopago-webhook` | Receives MP payment notifications |
+| `create-subscription` | Creates MP subscription (preapproval) |
+| `subscription-webhook` | Handles subscription events |
+| `queue-notifications` | Queues email/WhatsApp for processing |
+| `process-notifications` | Sends queued notifications |
+| `send-notifications` | Direct notification sending + tests |
+
+---
+
+## Development
 
 This project is built with:
-
 - Vite
 - TypeScript
 - React
 - shadcn-ui
 - Tailwind CSS
+- Supabase (via Lovable Cloud)
 
-## How can I deploy this project?
+### Local Development
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```sh
+git clone <YOUR_GIT_URL>
+cd <YOUR_PROJECT_NAME>
+npm i
+npm run dev
+```
