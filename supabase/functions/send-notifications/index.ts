@@ -9,6 +9,7 @@ const corsHeaders = {
 interface SendNotificationsRequest {
   bookingId?: string;
   testMode?: boolean;
+  testEmailTo?: string; // Allow testing to a specific email address
 }
 
 // Admin recipients
@@ -75,8 +76,11 @@ function getTwilioFromNumber(envVar: string | undefined): string {
   return `whatsapp:${envVar.startsWith("+") ? envVar : "+" + envVar}`;
 }
 
-async function sendResendEmail(apiKey: string, to: string, subject: string, html: string) {
-  console.log(`[send-notifications] Sending email via Resend to: ${to}`);
+async function sendResendEmail(apiKey: string, fromEmail: string, to: string, subject: string, html: string) {
+  console.log(`[send-notifications] Sending email via Resend`);
+  console.log(`[send-notifications] From: ${fromEmail}`);
+  console.log(`[send-notifications] To: ${to}`);
+  console.log(`[send-notifications] API Key prefix: ${apiKey.substring(0, 8)}...`);
   
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -85,7 +89,7 @@ async function sendResendEmail(apiKey: string, to: string, subject: string, html
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "Washero <reservas@washero.online>",
+      from: fromEmail,
       to: [to],
       subject,
       html,
@@ -96,7 +100,7 @@ async function sendResendEmail(apiKey: string, to: string, subject: string, html
   console.log(`[send-notifications] Resend response:`, JSON.stringify(data));
 
   if (!response.ok) {
-    throw new Error(data.message || "Error sending email");
+    throw new Error(data.message || data.name || "Error sending email");
   }
 
   return data;
@@ -174,11 +178,13 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const resendApiKey = Deno.env.get("RESEND_API_KEY");
+  const resendFromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "Washero <reservas@washero.online>";
   const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
   const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
   const twilioWhatsAppNumber = Deno.env.get("TWILIO_WHATSAPP_NUMBER");
 
-  console.log("[send-notifications] Env check - RESEND_API_KEY:", resendApiKey ? "set" : "NOT SET");
+  console.log("[send-notifications] Env check - RESEND_API_KEY:", resendApiKey ? `set (${resendApiKey.substring(0, 8)}...)` : "NOT SET");
+  console.log("[send-notifications] Env check - RESEND_FROM_EMAIL:", resendFromEmail);
   console.log("[send-notifications] Env check - TWILIO_ACCOUNT_SID:", twilioAccountSid ? "set" : "NOT SET");
   console.log("[send-notifications] Env check - TWILIO_AUTH_TOKEN:", twilioAuthToken ? "set" : "NOT SET");
   console.log("[send-notifications] Env check - TWILIO_WHATSAPP_NUMBER:", twilioWhatsAppNumber || "NOT SET");
@@ -187,7 +193,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { bookingId, testMode }: SendNotificationsRequest = body;
+    const { bookingId, testMode, testEmailTo }: SendNotificationsRequest = body;
 
     console.log(`[send-notifications] Request body:`, JSON.stringify(body));
     console.log(`[send-notifications] testMode: ${testMode}, bookingId: ${bookingId}`);
@@ -213,12 +219,14 @@ serve(async (req) => {
         </div>
       `;
 
-      // Send test email
+      // Send test email - allow custom recipient for testing
+      const testEmailRecipient = testEmailTo || ADMIN_EMAIL;
       if (resendApiKey) {
         try {
           const emailResponse = await sendResendEmail(
             resendApiKey,
-            ADMIN_EMAIL,
+            resendFromEmail,
+            testEmailRecipient,
             "🧪 Test Notification - Washero",
             testEmailHtml
           );
@@ -227,8 +235,8 @@ serve(async (req) => {
             booking_id: null,
             notification_type: "email",
             status: "sent",
-            recipient: ADMIN_EMAIL,
-            message_content: "Test notification",
+            recipient: testEmailRecipient,
+            message_content: `Test notification | From: ${resendFromEmail}`,
             external_id: emailResponse.id,
           });
 
@@ -240,7 +248,7 @@ serve(async (req) => {
             booking_id: null,
             notification_type: "email",
             status: "failed",
-            recipient: ADMIN_EMAIL,
+            recipient: testEmailRecipient,
             error_message: emailError.message,
           });
 
@@ -463,6 +471,7 @@ ${booking.payment_status === "approved" ? "✅ Pagado" : booking.is_subscription
       try {
         const emailResponse = await sendResendEmail(
           resendApiKey,
+          resendFromEmail,
           ADMIN_EMAIL,
           `🚗 Nueva Reserva: ${booking.customer_name} - ${formatDate(booking.booking_date)}`,
           emailHtml,
