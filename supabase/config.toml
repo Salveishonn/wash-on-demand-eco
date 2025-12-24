@@ -41,6 +41,9 @@ verify_jwt = false
 [functions.mercadopago-webhook]
 verify_jwt = false
 
+[functions.subscription-webhook]
+verify_jwt = false
+
 [functions.create-subscription]
 verify_jwt = false
 
@@ -51,4 +54,13 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.bootstrap-admin]
+verify_jwt = false
+
+[functions.check-subscription]
+verify_jwt = false
+
+[functions.create-guest-subscription]
+verify_jwt = false
+
+[functions.create-kipper-lead]
 verify_jwt = false

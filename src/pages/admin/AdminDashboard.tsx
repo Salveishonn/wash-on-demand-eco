@@ -113,6 +113,7 @@ export default function AdminDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [isSendingTestExternal, setIsSendingTestExternal] = useState(false);
+  const [isTestingMP, setIsTestingMP] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
@@ -308,6 +309,102 @@ export default function AdminDashboard() {
       });
     } finally {
       setIsSendingTestExternal(false);
+    }
+  };
+
+  const handleTestMercadoPago = async () => {
+    setIsTestingMP(true);
+    try {
+      // First, get a recent pending booking to test with
+      const { data: pendingBookings, error: fetchError } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (fetchError) throw fetchError;
+
+      let testBookingId: string;
+      
+      if (pendingBookings && pendingBookings.length > 0) {
+        testBookingId = pendingBookings[0].id;
+        toast({
+          title: 'Usando reserva existente',
+          description: `ID: ${testBookingId.substring(0, 8).toUpperCase()}`,
+        });
+      } else {
+        // Create a test booking
+        const { data: bookingResponse, error: bookingError } = await supabase.functions.invoke(
+          'create-booking',
+          {
+            body: {
+              customerName: 'Test MercadoPago',
+              customerEmail: 'test@washero.online',
+              customerPhone: '1155555555',
+              serviceName: 'Lavado Exterior',
+              servicePriceCents: 2500000,
+              carType: 'Sedán',
+              carTypeExtraCents: 0,
+              bookingDate: new Date().toISOString().split('T')[0],
+              bookingTime: '10:00',
+              address: 'Test Address',
+              notes: 'Test MP Payment',
+              paymentMethod: 'mercadopago',
+              paymentsEnabled: true,
+              whatsappOptIn: false,
+            },
+          }
+        );
+
+        if (bookingError) throw new Error('Error creando booking de test');
+        testBookingId = bookingResponse.booking.id;
+      }
+
+      // Create MercadoPago preference
+      const { data: mpResponse, error: mpError } = await supabase.functions.invoke(
+        'create-mercadopago-preference',
+        {
+          body: {
+            bookingId: testBookingId,
+            title: 'TEST - Washero Lavado',
+            description: 'Test payment - do not pay',
+            priceInCents: 100, // $1 ARS for testing
+            customerEmail: 'test@washero.online',
+            customerName: 'Test User',
+          },
+        }
+      );
+
+      if (mpError) throw mpError;
+
+      console.log('[Admin] MP Test Response:', mpResponse);
+
+      toast({
+        title: '✅ Preferencia MP creada',
+        description: `
+Preference ID: ${mpResponse.preferenceId?.substring(0, 16)}...
+Environment: ${mpResponse.environment}
+Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
+        `.trim(),
+        duration: 15000,
+      });
+
+      // Open MP checkout in new tab for testing
+      if (mpResponse.initPoint) {
+        window.open(mpResponse.initPoint, '_blank');
+      }
+
+      fetchData();
+    } catch (error: any) {
+      console.error('Test MP error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error testing MercadoPago',
+        description: error.message || 'No se pudo crear la preferencia de pago',
+      });
+    } finally {
+      setIsTestingMP(false);
     }
   };
 
@@ -593,26 +690,49 @@ export default function AdminDashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            {/* Filters */}
-            <div className="flex items-center gap-2 mb-4">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Filtrar:</span>
-              {(['all', 'pending', 'confirmed', 'completed', 'cancelled'] as StatusFilter[]).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                    statusFilter === status
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted hover:bg-muted/80'
-                  }`}
+            {/* MP Test + Filters */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Filtrar:</span>
+                {(['all', 'pending', 'confirmed', 'completed', 'cancelled'] as StatusFilter[]).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                      statusFilter === status
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted hover:bg-muted/80'
+                    }`}
+                  >
+                    {status === 'all' ? 'Todas' : 
+                     status === 'pending' ? 'Pendientes' :
+                     status === 'confirmed' ? 'Confirmadas' :
+                     status === 'completed' ? 'Completadas' : 'Canceladas'}
+                  </button>
+                ))}
+              </div>
+              {PAYMENTS_ENABLED && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleTestMercadoPago}
+                  disabled={isTestingMP}
+                  className="border-blue-300 text-blue-700 hover:bg-blue-50"
                 >
-                  {status === 'all' ? 'Todas' : 
-                   status === 'pending' ? 'Pendientes' :
-                   status === 'confirmed' ? 'Confirmadas' :
-                   status === 'completed' ? 'Completadas' : 'Canceladas'}
-                </button>
-              ))}
+                  {isTestingMP ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creando...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      Test MP Payment
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
 
             {/* Bookings Table */}
