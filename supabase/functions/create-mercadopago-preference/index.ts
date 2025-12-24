@@ -16,6 +16,8 @@ interface CreatePreferenceRequest {
 }
 
 serve(async (req) => {
+  console.log("[create-mercadopago-preference] ====== FUNCTION INVOKED ======");
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -23,6 +25,10 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const mercadoPagoToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+  const mpEnv = Deno.env.get("MERCADOPAGO_ENV") || "sandbox";
+
+  console.log("[create-mercadopago-preference] Environment:", mpEnv);
+  console.log("[create-mercadopago-preference] MP Token set:", !!mercadoPagoToken);
 
   if (!mercadoPagoToken) {
     console.error("[create-mercadopago-preference] MERCADOPAGO_ACCESS_TOKEN not configured");
@@ -37,11 +43,24 @@ serve(async (req) => {
   try {
     const data: CreatePreferenceRequest = await req.json();
     
+    console.log("[create-mercadopago-preference] Request data:", JSON.stringify(data, null, 2));
     console.log("[create-mercadopago-preference] Creating preference for booking:", data.bookingId);
 
-    // Get the site URL from environment or use default
-    const siteUrl = Deno.env.get("SITE_URL") || "https://pkndizbozytnpgqxymms.lovable.app";
+    // Production site URL - always use washero.online
+    const siteUrl = "https://washero.online";
     
+    // Webhook URL - uses Supabase edge function
+    const webhookUrl = `${supabaseUrl}/functions/v1/mercadopago-webhook`;
+    
+    console.log("[create-mercadopago-preference] Site URL:", siteUrl);
+    console.log("[create-mercadopago-preference] Webhook URL:", webhookUrl);
+
+    // Convert cents to ARS (divide by 100)
+    const amountARS = data.priceInCents / 100;
+    
+    console.log("[create-mercadopago-preference] Amount in cents:", data.priceInCents);
+    console.log("[create-mercadopago-preference] Amount in ARS:", amountARS);
+
     // Create MercadoPago preference
     const preferenceData = {
       items: [
@@ -51,7 +70,7 @@ serve(async (req) => {
           description: data.description,
           quantity: 1,
           currency_id: "ARS",
-          unit_price: data.priceInCents / 100, // Convert cents to ARS
+          unit_price: amountARS,
         },
       ],
       payer: {
@@ -59,13 +78,13 @@ serve(async (req) => {
         name: data.customerName,
       },
       back_urls: {
-        success: `${siteUrl}/reserva-confirmada?booking_id=${data.bookingId}`,
+        success: `${siteUrl}/reserva-confirmada?booking_id=${data.bookingId}&payment_method=online`,
         failure: `${siteUrl}/reservar?error=payment_failed`,
-        pending: `${siteUrl}/reserva-pendiente?booking_id=${data.bookingId}`,
+        pending: `${siteUrl}/reserva-confirmada?booking_id=${data.bookingId}&payment_method=online&status=pending`,
       },
       auto_return: "approved",
       external_reference: data.bookingId,
-      notification_url: `${supabaseUrl}/functions/v1/mercadopago-webhook`,
+      notification_url: webhookUrl,
       statement_descriptor: "WASHERO",
       expires: true,
       expiration_date_from: new Date().toISOString(),
@@ -85,6 +104,9 @@ serve(async (req) => {
 
     const mpData = await mpResponse.json();
     
+    console.log("[create-mercadopago-preference] MP Response status:", mpResponse.status);
+    console.log("[create-mercadopago-preference] MP Response:", JSON.stringify(mpData, null, 2));
+    
     if (!mpResponse.ok) {
       console.error("[create-mercadopago-preference] MercadoPago error:", mpData);
       throw new Error(mpData.message || "Error al crear preferencia de pago");
@@ -93,17 +115,29 @@ serve(async (req) => {
     console.log("[create-mercadopago-preference] Preference created:", mpData.id);
 
     // Update booking with preference ID
-    await supabase
+    const { error: updateError } = await supabase
       .from("bookings")
       .update({ mercadopago_preference_id: mpData.id })
       .eq("id", data.bookingId);
+
+    if (updateError) {
+      console.error("[create-mercadopago-preference] Error updating booking:", updateError);
+    }
+
+    // Return the appropriate init_point based on environment
+    const initPoint = mpEnv === "production" ? mpData.init_point : mpData.sandbox_init_point;
+    
+    console.log("[create-mercadopago-preference] Using init_point:", initPoint);
+    console.log("[create-mercadopago-preference] sandbox_init_point:", mpData.sandbox_init_point);
+    console.log("[create-mercadopago-preference] production init_point:", mpData.init_point);
 
     return new Response(
       JSON.stringify({
         success: true,
         preferenceId: mpData.id,
-        initPoint: mpData.init_point,
+        initPoint: initPoint || mpData.init_point, // Fallback to production URL
         sandboxInitPoint: mpData.sandbox_init_point,
+        environment: mpEnv,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
