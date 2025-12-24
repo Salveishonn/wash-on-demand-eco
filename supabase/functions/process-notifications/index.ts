@@ -31,11 +31,17 @@ const formatDate = (date: string) => {
 
 async function sendEmail(
   resendApiKey: string,
+  fromEmail: string,
   to: string,
   subject: string,
   html: string,
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
+    console.log(`[process-notifications] Sending email via Resend`);
+    console.log(`[process-notifications] From: ${fromEmail}`);
+    console.log(`[process-notifications] To: ${to}`);
+    console.log(`[process-notifications] API Key prefix: ${resendApiKey.substring(0, 8)}...`);
+    
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -43,7 +49,7 @@ async function sendEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Washero <reservas@washero.online>",
+        from: fromEmail,
         to: [to],
         subject,
         html,
@@ -51,9 +57,10 @@ async function sendEmail(
     });
 
     const data = await response.json();
+    console.log(`[process-notifications] Resend response:`, JSON.stringify(data));
 
     if (!response.ok) {
-      return { success: false, error: data.message || "Email send failed" };
+      return { success: false, error: data.message || data.name || "Email send failed" };
     }
 
     return { success: true, id: data.id };
@@ -262,6 +269,7 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const resendApiKey = Deno.env.get("RESEND_API_KEY");
+  const resendFromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "Washero <reservas@washero.online>";
   const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
   const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
   const twilioWhatsAppNumber = Deno.env.get("TWILIO_WHATSAPP_NUMBER");
@@ -349,7 +357,7 @@ serve(async (req) => {
             ? `✅ Reserva Confirmada - ${formatDate(booking.booking_date)}`
             : `🚗 Nueva Reserva: ${booking.customer_name} - ${formatDate(booking.booking_date)}`;
 
-          result = await sendEmail(resendApiKey, notification.recipient, subject, html);
+          result = await sendEmail(resendApiKey, resendFromEmail, notification.recipient, subject, html);
         }
       } else if (notification.notification_type === "whatsapp") {
         if (!twilioAccountSid || !twilioAuthToken || !twilioWhatsAppNumber) {

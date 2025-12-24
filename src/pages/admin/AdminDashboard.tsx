@@ -112,6 +112,7 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [isSendingTestExternal, setIsSendingTestExternal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
@@ -242,15 +243,19 @@ export default function AdminDashboard() {
 
       if (error) throw error;
 
-      const emailStatus = data?.email?.success ? '✅ Enviado' : `❌ ${data?.email?.error || 'Error'}`;
-      const whatsappStatus = data?.whatsapp?.success 
-        ? `✅ Enviado (SID: ${data?.whatsapp?.sid?.substring(0, 12)}...)` 
-        : `❌ ${data?.whatsapp?.error || 'Error'}`;
+      const emailStatus = data?.results?.email?.success 
+        ? `✅ Enviado (ID: ${data?.results?.email?.id?.substring(0, 12)}...)` 
+        : `❌ ${data?.results?.email?.error || 'Error'}`;
+      const whatsappStatus = data?.results?.whatsapp?.success 
+        ? `✅ Enviado (SID: ${data?.results?.whatsapp?.sid?.substring(0, 12)}...)` 
+        : `❌ ${data?.results?.whatsapp?.error || 'Error'}`;
       
       const description = `Email: ${emailStatus}\nWhatsApp: ${whatsappStatus}`;
 
       toast({
-        title: data?.whatsapp?.success ? 'Test enviado correctamente' : 'Test enviado con errores',
+        title: data?.results?.email?.success && data?.results?.whatsapp?.success 
+          ? 'Test enviado correctamente' 
+          : 'Test enviado con errores',
         description: description,
         duration: 8000,
       });
@@ -266,6 +271,43 @@ export default function AdminDashboard() {
       });
     } finally {
       setIsSendingTest(false);
+    }
+  };
+
+  const handleSendTestEmailExternal = async () => {
+    setIsSendingTestExternal(true);
+    try {
+      // Send to a different email to test production sending
+      const testEmail = 'salvadormarinkipper@gmail.com';
+      const { data, error } = await supabase.functions.invoke('send-notifications', {
+        body: { testMode: true, testEmailTo: testEmail },
+      });
+
+      if (error) throw error;
+
+      const emailStatus = data?.results?.email?.success 
+        ? `✅ Enviado a ${testEmail} (ID: ${data?.results?.email?.id?.substring(0, 12)}...)` 
+        : `❌ ${data?.results?.email?.error || 'Error'}`;
+      
+      toast({
+        title: data?.results?.email?.success 
+          ? 'Email externo enviado' 
+          : 'Error enviando email externo',
+        description: emailStatus,
+        duration: 10000,
+      });
+
+      // Refresh notification logs
+      fetchData();
+    } catch (error: any) {
+      console.error('Test email error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'No se pudo enviar el email de prueba',
+      });
+    } finally {
+      setIsSendingTestExternal(false);
     }
   };
 
@@ -710,32 +752,52 @@ export default function AdminDashboard() {
                   En sandbox, solo admin recibe WhatsApp. Clientes reciben email.
                 </span>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleSendTestNotification}
-                disabled={isSendingTest}
-              >
-                {isSendingTest ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Enviando...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4 mr-2" />
-                    Enviar Test
-                  </>
-                )}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSendTestNotification}
+                  disabled={isSendingTest}
+                >
+                  {isSendingTest ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" />
+                      Test Admin
+                    </>
+                  )}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={handleSendTestEmailExternal}
+                  disabled={isSendingTestExternal}
+                  className="bg-primary"
+                >
+                  {isSendingTestExternal ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4 h-4 mr-2" />
+                      Test Email Externo
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
             
-            {/* Resend Domain Warning */}
-            <div className="mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-sm">
-              <p className="font-medium text-yellow-800 mb-1">⚠️ Dominio Resend no verificado</p>
-              <p className="text-yellow-700 text-xs">
-                Emails solo pueden enviarse a tu email de Resend. Para enviar a otros destinatarios, 
-                verificá un dominio en <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline">resend.com/domains</a>.
+            {/* Info banner about domain */}
+            <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm">
+              <p className="font-medium text-blue-800 mb-1">📧 Verificar dominio: washero.online</p>
+              <p className="text-blue-700 text-xs">
+                Asegurate de que RESEND_FROM_EMAIL esté configurado como "Washero &lt;reservas@washero.online&gt;" y que la API Key corresponda a la cuenta donde washero.online está verificado.
               </p>
             </div>
             
