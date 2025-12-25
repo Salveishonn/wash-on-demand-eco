@@ -176,6 +176,13 @@ export type Database = {
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "kipper_leads_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_bookings_v"
+            referencedColumns: ["id"]
+          },
         ]
       }
       notification_logs: {
@@ -221,6 +228,13 @@ export type Database = {
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_logs_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_bookings_v"
             referencedColumns: ["id"]
           },
         ]
@@ -282,6 +296,13 @@ export type Database = {
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "notification_queue_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_bookings_v"
+            referencedColumns: ["id"]
+          },
         ]
       }
       payment_intents: {
@@ -330,6 +351,13 @@ export type Database = {
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intents_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_bookings_v"
             referencedColumns: ["id"]
           },
           {
@@ -675,7 +703,83 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      calendar_bookings_v: {
+        Row: {
+          address: string | null
+          booking_date: string | null
+          booking_status: Database["public"]["Enums"]["booking_status"] | null
+          booking_time: string | null
+          car_type: string | null
+          car_type_extra_cents: number | null
+          confirmed_at: string | null
+          created_at: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          id: string | null
+          is_subscription_booking: boolean | null
+          notes: string | null
+          payment_method: string | null
+          payment_status: Database["public"]["Enums"]["payment_status"] | null
+          service_name: string | null
+          service_price_cents: number | null
+          subscription_id: string | null
+          total_cents: number | null
+        }
+        Insert: {
+          address?: string | null
+          booking_date?: string | null
+          booking_status?: Database["public"]["Enums"]["booking_status"] | null
+          booking_time?: string | null
+          car_type?: string | null
+          car_type_extra_cents?: number | null
+          confirmed_at?: string | null
+          created_at?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string | null
+          is_subscription_booking?: boolean | null
+          notes?: string | null
+          payment_method?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          service_name?: string | null
+          service_price_cents?: number | null
+          subscription_id?: string | null
+          total_cents?: never
+        }
+        Update: {
+          address?: string | null
+          booking_date?: string | null
+          booking_status?: Database["public"]["Enums"]["booking_status"] | null
+          booking_time?: string | null
+          car_type?: string | null
+          car_type_extra_cents?: number | null
+          confirmed_at?: string | null
+          created_at?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string | null
+          is_subscription_booking?: boolean | null
+          notes?: string | null
+          payment_method?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          service_name?: string | null
+          service_price_cents?: number | null
+          subscription_id?: string | null
+          total_cents?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       has_role: {
