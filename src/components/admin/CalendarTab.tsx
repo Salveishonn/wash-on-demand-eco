@@ -617,8 +617,10 @@ export function CalendarTab() {
               {/* Status badges */}
               <div className="flex gap-2 flex-wrap">
                 <Badge variant={selectedBooking.booking_status === 'confirmed' ? 'default' : 'secondary'}>
-                  {selectedBooking.booking_status === 'confirmed' ? 'Confirmada' : 
+                  {selectedBooking.booking_status === 'confirmed' ? 'Aceptada' : 
                    selectedBooking.booking_status === 'completed' ? 'Completada' : 
+                   selectedBooking.booking_status === 'pending' ? 'Pendiente' :
+                   selectedBooking.booking_status === 'cancelled' ? 'Cancelada' :
                    selectedBooking.booking_status}
                 </Badge>
                 {getPaymentBadge(selectedBooking)}
@@ -749,6 +751,7 @@ export function CalendarTab() {
                 <h4 className="font-medium text-sm text-muted-foreground uppercase">Acciones</h4>
                 
                 <div className="grid grid-cols-2 gap-2">
+                  {/* Marcar pagado: only if payment pending and not subscription */}
                   {selectedBooking.payment_status === 'pending' && !selectedBooking.is_subscription_booking && (
                     <Button
                       onClick={() => handleMarkAsPaid(selectedBooking.id)}
@@ -760,6 +763,7 @@ export function CalendarTab() {
                     </Button>
                   )}
                   
+                  {/* Completar: only for confirmed/accepted bookings - removes from calendar */}
                   {selectedBooking.booking_status === 'confirmed' && (
                     <Button
                       onClick={() => handleComplete(selectedBooking.id)}
@@ -770,7 +774,8 @@ export function CalendarTab() {
                     </Button>
                   )}
 
-                  {selectedBooking.booking_status !== 'cancelled' && selectedBooking.booking_status !== 'completed' && (
+                  {/* Cancelar: for confirmed bookings */}
+                  {selectedBooking.booking_status === 'confirmed' && (
                     <Button
                       variant="destructive"
                       onClick={() => handleCancel(selectedBooking.id)}
@@ -780,6 +785,13 @@ export function CalendarTab() {
                     </Button>
                   )}
                 </div>
+                
+                {/* Info about what happens */}
+                {selectedBooking.booking_status === 'confirmed' && (
+                  <p className="text-xs text-muted-foreground">
+                    Al completar o cancelar, la reserva desaparecerá del calendario.
+                  </p>
+                )}
               </div>
 
               {/* Booking ID */}
