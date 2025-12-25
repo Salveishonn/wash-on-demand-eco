@@ -1,10 +1,13 @@
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
-import { CheckCircle, Clock, ChevronRight, Sparkles, Car, Sofa, Droplet, Wind, Cog, Leaf } from "lucide-react";
+import { CheckCircle, Clock, ChevronRight, Sparkles, Car, Sofa, Droplet, Wind, Cog, Leaf, Check } from "lucide-react";
 import detailImage from "@/assets/washero-detail-1.jpg";
 import interiorImage from "@/assets/washero-interior.jpg";
+import { useServiceAddons, ServiceAddon } from "@/hooks/useServiceAddons";
+import { useToast } from "@/hooks/use-toast";
 
 const services = [
   {
@@ -60,12 +63,21 @@ const services = [
   },
 ];
 
-const addOns = [
-  { name: "Sellador de Pintura", price: "+$15.000", icon: Droplet },
-  { name: "Pelo de Mascotas", price: "+$10.000", icon: Wind },
-  { name: "Limpieza de Motor", price: "+$18.000", icon: Cog },
-  { name: "Eliminación de Olores", price: "+$12.000", icon: Leaf },
-];
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  Sparkles,
+  Droplet,
+  Wind,
+  Cog,
+  Leaf,
+};
+
+const formatPrice = (cents: number) => {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 0,
+  }).format(cents / 100);
+};
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -82,6 +94,22 @@ const staggerContainer = {
 };
 
 const Servicios = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { addons, selectedAddons, toggleAddon, isSelected } = useServiceAddons();
+  
+  const handleReservarWithExtras = () => {
+    // Store selected addons in sessionStorage for the booking page
+    if (selectedAddons.length > 0) {
+      sessionStorage.setItem('preselected_addons', JSON.stringify(selectedAddons));
+      toast({
+        title: `${selectedAddons.length} extra(s) seleccionado(s)`,
+        description: "Se agregarán a tu reserva",
+      });
+    }
+    navigate('/reservar');
+  };
+  
   return (
     <Layout>
       {/* Hero Section */}
@@ -201,22 +229,53 @@ const Servicios = () => {
             variants={staggerContainer}
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
           >
-            {addOns.map((addon) => (
-              <motion.div
-                key={addon.name}
-                variants={fadeInUp}
-                className="p-6 rounded-xl bg-background border border-border hover:border-primary/50 transition-all duration-300 text-center"
-              >
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <addon.icon className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="font-display font-bold text-foreground mb-2">
-                  {addon.name}
-                </h3>
-                <p className="text-primary font-bold">{addon.price}</p>
-              </motion.div>
-            ))}
+            {addons.map((addon) => {
+              const IconComponent = iconMap[addon.icon || 'Sparkles'] || Sparkles;
+              const selected = isSelected(addon.id);
+              
+              return (
+                <motion.button
+                  key={addon.id}
+                  variants={fadeInUp}
+                  onClick={() => toggleAddon(addon)}
+                  className={`relative p-6 rounded-xl bg-background border-2 transition-all duration-300 text-center cursor-pointer ${
+                    selected 
+                      ? 'border-primary bg-primary/5 shadow-md' 
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  {selected && (
+                    <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                      <Check className="w-4 h-4 text-washero-charcoal" />
+                    </div>
+                  )}
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                    selected ? 'bg-primary/20' : 'bg-primary/10'
+                  }`}>
+                    <IconComponent className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="font-display font-bold text-foreground mb-2">
+                    {addon.name}
+                  </h3>
+                  <p className={`font-bold ${selected ? 'text-primary' : 'text-muted-foreground'}`}>
+                    +{formatPrice(addon.price_cents)}
+                  </p>
+                </motion.button>
+              );
+            })}
           </motion.div>
+          
+          {selectedAddons.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-8 text-center"
+            >
+              <Button variant="hero" size="lg" onClick={handleReservarWithExtras}>
+                Reservar con {selectedAddons.length} extra{selectedAddons.length > 1 ? 's' : ''} <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </motion.div>
+          )}
         </div>
       </section>
 

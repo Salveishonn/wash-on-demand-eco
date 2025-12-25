@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       bookings: {
         Row: {
+          addons: Json | null
+          addons_total_cents: number | null
           address: string | null
           booking_date: string
           booking_time: string
@@ -40,11 +42,14 @@ export type Database = {
           service_price_cents: number
           status: Database["public"]["Enums"]["booking_status"]
           subscription_id: string | null
+          total_cents: number | null
           updated_at: string
           user_id: string | null
           webhook_processed_at: string | null
         }
         Insert: {
+          addons?: Json | null
+          addons_total_cents?: number | null
           address?: string | null
           booking_date: string
           booking_time: string
@@ -69,11 +74,14 @@ export type Database = {
           service_price_cents: number
           status?: Database["public"]["Enums"]["booking_status"]
           subscription_id?: string | null
+          total_cents?: number | null
           updated_at?: string
           user_id?: string | null
           webhook_processed_at?: string | null
         }
         Update: {
+          addons?: Json | null
+          addons_total_cents?: number | null
           address?: string | null
           booking_date?: string
           booking_time?: string
@@ -98,6 +106,7 @@ export type Database = {
           service_price_cents?: number
           status?: Database["public"]["Enums"]["booking_status"]
           subscription_id?: string | null
+          total_cents?: number | null
           updated_at?: string
           user_id?: string | null
           webhook_processed_at?: string | null
@@ -482,6 +491,39 @@ export type Database = {
         }
         Relationships: []
       }
+      service_addons: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          price_cents: number
+          sort_order: number | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          price_cents?: number
+          sort_order?: number | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          price_cents?: number
+          sort_order?: number | null
+        }
+        Relationships: []
+      }
       subscription_credits: {
         Row: {
           created_at: string
@@ -705,6 +747,8 @@ export type Database = {
     Views: {
       calendar_bookings_v: {
         Row: {
+          addons: Json | null
+          addons_total_cents: number | null
           address: string | null
           booking_date: string | null
           booking_status: Database["public"]["Enums"]["booking_status"] | null
@@ -727,6 +771,8 @@ export type Database = {
           total_cents: number | null
         }
         Insert: {
+          addons?: Json | null
+          addons_total_cents?: number | null
           address?: string | null
           booking_date?: string | null
           booking_status?: Database["public"]["Enums"]["booking_status"] | null
@@ -749,6 +795,8 @@ export type Database = {
           total_cents?: never
         }
         Update: {
+          addons?: Json | null
+          addons_total_cents?: number | null
           address?: string | null
           booking_date?: string | null
           booking_status?: Database["public"]["Enums"]["booking_status"] | null
