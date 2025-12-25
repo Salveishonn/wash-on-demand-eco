@@ -17,6 +17,7 @@ import ReservaConfirmada from "./pages/ReservaConfirmada";
 import Suscripciones from "./pages/Suscripciones";
 import SuscripcionConfirmada from "./pages/SuscripcionConfirmada";
 import KipperSeguros from "./pages/KipperSeguros";
+import Pagar from "./pages/Pagar";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import NotFound from "./pages/NotFound";
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/suscripciones" element={<Suscripciones />} />
             <Route path="/suscripcion-confirmada" element={<SuscripcionConfirmada />} />
             <Route path="/kipper-seguros" element={<KipperSeguros />} />
+            <Route path="/pagar/:paymentIntentId" element={<Pagar />} />
             
             {/* Admin Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />

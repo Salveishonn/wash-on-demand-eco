@@ -32,6 +32,7 @@ export type Database = {
           mercadopago_preference_id: string | null
           notes: string | null
           notifications_queued: boolean | null
+          payment_intent_id: string | null
           payment_method: string | null
           payment_status: Database["public"]["Enums"]["payment_status"]
           requires_payment: boolean | null
@@ -60,6 +61,7 @@ export type Database = {
           mercadopago_preference_id?: string | null
           notes?: string | null
           notifications_queued?: boolean | null
+          payment_intent_id?: string | null
           payment_method?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           requires_payment?: boolean | null
@@ -88,6 +90,7 @@ export type Database = {
           mercadopago_preference_id?: string | null
           notes?: string | null
           notifications_queued?: boolean | null
+          payment_intent_id?: string | null
           payment_method?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           requires_payment?: boolean | null
@@ -100,6 +103,13 @@ export type Database = {
           webhook_processed_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bookings_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bookings_subscription_id_fkey"
             columns: ["subscription_id"]
@@ -274,8 +284,105 @@ export type Database = {
           },
         ]
       }
+      payment_intents: {
+        Row: {
+          amount_ars: number
+          booking_id: string | null
+          created_at: string
+          currency: string
+          expires_at: string | null
+          id: string
+          proof_submitted: boolean
+          status: Database["public"]["Enums"]["payment_intent_status"]
+          subscription_id: string | null
+          type: Database["public"]["Enums"]["payment_intent_type"]
+          updated_at: string
+        }
+        Insert: {
+          amount_ars: number
+          booking_id?: string | null
+          created_at?: string
+          currency?: string
+          expires_at?: string | null
+          id?: string
+          proof_submitted?: boolean
+          status?: Database["public"]["Enums"]["payment_intent_status"]
+          subscription_id?: string | null
+          type?: Database["public"]["Enums"]["payment_intent_type"]
+          updated_at?: string
+        }
+        Update: {
+          amount_ars?: number
+          booking_id?: string | null
+          created_at?: string
+          currency?: string
+          expires_at?: string | null
+          id?: string
+          proof_submitted?: boolean
+          status?: Database["public"]["Enums"]["payment_intent_status"]
+          subscription_id?: string | null
+          type?: Database["public"]["Enums"]["payment_intent_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_intents_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_intents_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_proofs: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          payer_name: string | null
+          payment_intent_id: string
+          receipt_url: string | null
+          reference: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payer_name?: string | null
+          payment_intent_id: string
+          receipt_url?: string | null
+          reference?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payer_name?: string | null
+          payment_intent_id?: string
+          receipt_url?: string | null
+          reference?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_proofs_payment_intent_id_fkey"
+            columns: ["payment_intent_id"]
+            isOneToOne: false
+            referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_settings: {
         Row: {
+          account_holder_name: string | null
+          bank_name: string | null
           created_at: string | null
           id: string
           is_enabled: boolean
@@ -285,8 +392,11 @@ export type Database = {
           mp_notes: string | null
           mp_payment_link: string
           updated_at: string | null
+          whatsapp_admin_phone: string | null
         }
         Insert: {
+          account_holder_name?: string | null
+          bank_name?: string | null
           created_at?: string | null
           id?: string
           is_enabled?: boolean
@@ -296,8 +406,11 @@ export type Database = {
           mp_notes?: string | null
           mp_payment_link: string
           updated_at?: string | null
+          whatsapp_admin_phone?: string | null
         }
         Update: {
+          account_holder_name?: string | null
+          bank_name?: string | null
           created_at?: string | null
           id?: string
           is_enabled?: boolean
@@ -307,6 +420,7 @@ export type Database = {
           mp_notes?: string | null
           mp_payment_link?: string
           updated_at?: string | null
+          whatsapp_admin_phone?: string | null
         }
         Relationships: []
       }
@@ -339,6 +453,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      subscription_credits: {
+        Row: {
+          created_at: string
+          id: string
+          month: string
+          remaining_credits: number
+          subscription_id: string
+          total_credits: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: string
+          remaining_credits: number
+          subscription_id: string
+          total_credits: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: string
+          remaining_credits?: number
+          subscription_id?: string
+          total_credits?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_credits_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscription_events: {
         Row: {
@@ -539,6 +691,8 @@ export type Database = {
       booking_status: "pending" | "confirmed" | "cancelled" | "completed"
       notification_status: "sent" | "failed" | "pending"
       notification_type: "email" | "whatsapp"
+      payment_intent_status: "pending" | "paid" | "expired" | "cancelled"
+      payment_intent_type: "one_time" | "subscription_monthly"
       payment_status:
         | "pending"
         | "approved"
@@ -677,6 +831,8 @@ export const Constants = {
       booking_status: ["pending", "confirmed", "cancelled", "completed"],
       notification_status: ["sent", "failed", "pending"],
       notification_type: ["email", "whatsapp"],
+      payment_intent_status: ["pending", "paid", "expired", "cancelled"],
+      payment_intent_type: ["one_time", "subscription_monthly"],
       payment_status: [
         "pending",
         "approved",
