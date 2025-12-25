@@ -67,3 +67,15 @@ verify_jwt = false
 
 [functions.create-payment-intent]
 verify_jwt = false
+
+[functions.admin-set-subscription-status]
+verify_jwt = false
+
+[functions.admin-adjust-subscription-credits]
+verify_jwt = false
+
+[functions.admin-generate-cycle]
+verify_jwt = false
+
+[functions.admin-send-subscription-payment-email]
+verify_jwt = false
