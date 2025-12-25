@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
 import { SubscriptionsTab } from '@/components/admin/SubscriptionsTab';
+import { CalendarTab } from '@/components/admin/CalendarTab';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -73,7 +74,7 @@ interface NotificationLog {
   created_at: string;
 }
 
-type TabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions';
+type TabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario';
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 const formatPrice = (cents: number) => {
@@ -718,6 +719,13 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             <Users className="w-4 h-4 mr-2" />
             Suscripciones
           </Button>
+          <Button
+            variant={activeTab === 'calendario' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('calendario')}
+          >
+            <Calendar className="w-4 h-4 mr-2" />
+            Calendario
+          </Button>
         </div>
 
         {/* Bookings Tab */}
@@ -1048,6 +1056,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* Subscriptions Tab */}
         {activeTab === 'subscriptions' && <SubscriptionsTab />}
+
+        {/* Calendario Tab */}
+        {activeTab === 'calendario' && <CalendarTab />}
       </div>
 
       {/* Booking Detail Dialog */}

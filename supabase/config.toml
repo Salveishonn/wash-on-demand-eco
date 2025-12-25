@@ -1,5 +1,8 @@
 project_id = "pkndizbozytnpgqxymms"
 
+[functions.admin-get-calendar-bookings]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 54321
