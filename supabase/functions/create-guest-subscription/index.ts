@@ -74,12 +74,11 @@ serve(async (req) => {
     // Pay Later flow (always use this since we're not using MP API)
     console.log("[create-guest-subscription] Creating pending subscription (pay later)");
 
-    // Step 1: Insert subscription
+    // Step 1: Insert subscription (no user_id for guest subscriptions)
     const { data: subscription, error: subError } = await supabase
       .from("subscriptions")
       .insert({
         plan_id: data.planId,
-        user_id: "00000000-0000-0000-0000-000000000000", // Placeholder for guest
         customer_name: data.customerName,
         customer_email: data.customerEmail.toLowerCase(),
         customer_phone: data.customerPhone,

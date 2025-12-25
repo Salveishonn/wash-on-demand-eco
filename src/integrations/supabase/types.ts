@@ -573,7 +573,7 @@ export type Database = {
           plan_id: string
           status: Database["public"]["Enums"]["subscription_status"]
           updated_at: string
-          user_id: string
+          user_id: string | null
           washes_remaining: number
           washes_used_in_cycle: number
         }
@@ -589,7 +589,7 @@ export type Database = {
           plan_id: string
           status?: Database["public"]["Enums"]["subscription_status"]
           updated_at?: string
-          user_id: string
+          user_id?: string | null
           washes_remaining?: number
           washes_used_in_cycle?: number
         }
@@ -605,7 +605,7 @@ export type Database = {
           plan_id?: string
           status?: Database["public"]["Enums"]["subscription_status"]
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           washes_remaining?: number
           washes_used_in_cycle?: number
         }
