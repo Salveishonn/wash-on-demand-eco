@@ -86,20 +86,24 @@ serve(async (req) => {
     let bookingStatus: string;
     let paymentStatus: string;
     let requiresPayment: boolean;
+    let paymentMethodValue: string | null = null;
 
     if (isSubscription) {
       bookingStatus = "confirmed";
       paymentStatus = "approved";
       requiresPayment = false;
+      paymentMethodValue = "subscription";
     } else if (isPayLater) {
       bookingStatus = "pending";
       paymentStatus = "pending";
       requiresPayment = false; // Will be paid offline
+      paymentMethodValue = "mercadopago_link"; // They'll pay via MP link/transfer
     } else {
-      // MercadoPago - pending until payment confirmed
+      // MercadoPago checkout - pending until payment confirmed
       bookingStatus = "pending";
       paymentStatus = "pending";
       requiresPayment = true;
+      paymentMethodValue = "mercadopago";
     }
 
     console.log("[create-booking] Status calculation - isPayLater:", isPayLater, "isSubscription:", isSubscription);
@@ -126,6 +130,7 @@ serve(async (req) => {
         requires_payment: requiresPayment,
         status: bookingStatus,
         payment_status: paymentStatus,
+        payment_method: paymentMethodValue,
         confirmed_at: isSubscription ? new Date().toISOString() : null,
       })
       .select()
@@ -138,14 +143,11 @@ serve(async (req) => {
 
     console.log("[create-booking] Booking created:", booking.id);
 
-    // Queue notifications immediately for:
-    // 1. Subscription bookings (already paid through subscription)
-    // 2. Pay-later bookings (no online payment, notify admin)
-    const shouldNotifyImmediately = isSubscription || isPayLater;
+    // Queue admin notifications for subscription or pay-later bookings
+    const shouldNotifyAdmin = isSubscription || isPayLater;
     
-    if (shouldNotifyImmediately) {
-      console.log("[create-booking] Queueing notifications immediately for", isSubscription ? "subscription" : "pay-later");
-      console.log("[create-booking] WhatsApp opt-in:", data.whatsappOptIn);
+    if (shouldNotifyAdmin) {
+      console.log("[create-booking] Queueing admin notifications for", isSubscription ? "subscription" : "pay-later");
       
       const queueUrl = `${supabaseUrl}/functions/v1/queue-notifications`;
       
@@ -164,12 +166,31 @@ serve(async (req) => {
       }).catch(err => console.error("[create-booking] Queue error:", err));
     }
 
+    // For pay-later bookings, also send payment instructions to customer
+    if (isPayLater && data.customerEmail) {
+      console.log("[create-booking] Sending payment instructions to customer:", data.customerEmail);
+      
+      const sendNotificationsUrl = `${supabaseUrl}/functions/v1/send-notifications`;
+      
+      fetch(sendNotificationsUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({ 
+          bookingId: booking.id,
+          messageType: "payment_instructions"
+        }),
+      }).catch(err => console.error("[create-booking] Payment instructions error:", err));
+    }
+
     // Determine response message
     let message: string;
     if (isSubscription) {
       message = "¡Reserva confirmada con tu suscripción!";
     } else if (isPayLater) {
-      message = "¡Reserva recibida! Te contactamos para coordinar el pago.";
+      message = "¡Reserva recibida! Te enviamos las instrucciones de pago por email.";
     } else {
       message = "Reserva creada. Procedé al pago con MercadoPago.";
     }

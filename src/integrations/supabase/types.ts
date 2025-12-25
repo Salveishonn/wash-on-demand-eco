@@ -176,6 +176,7 @@ export type Database = {
           external_id: string | null
           id: string
           message_content: string | null
+          message_type: string | null
           notification_type: Database["public"]["Enums"]["notification_type"]
           recipient: string
           status: Database["public"]["Enums"]["notification_status"]
@@ -187,6 +188,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           message_content?: string | null
+          message_type?: string | null
           notification_type: Database["public"]["Enums"]["notification_type"]
           recipient: string
           status?: Database["public"]["Enums"]["notification_status"]
@@ -198,6 +200,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           message_content?: string | null
+          message_type?: string | null
           notification_type?: Database["public"]["Enums"]["notification_type"]
           recipient?: string
           status?: Database["public"]["Enums"]["notification_status"]
@@ -270,6 +273,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payment_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_enabled: boolean
+          mp_alias: string
+          mp_cvu: string | null
+          mp_holder_name: string | null
+          mp_notes: string | null
+          mp_payment_link: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_enabled?: boolean
+          mp_alias: string
+          mp_cvu?: string | null
+          mp_holder_name?: string | null
+          mp_notes?: string | null
+          mp_payment_link: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_enabled?: boolean
+          mp_alias?: string
+          mp_cvu?: string | null
+          mp_holder_name?: string | null
+          mp_notes?: string | null
+          mp_payment_link?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
