@@ -9,6 +9,8 @@ import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, Send,
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { KipperOptIn } from "@/components/kipper/KipperOptIn";
+import { AddonsSelector } from "@/components/booking/AddonsSelector";
+import { useServiceAddons } from "@/hooks/useServiceAddons";
 
 interface Service {
   id: string;
@@ -77,6 +79,15 @@ const Reservar = () => {
   const [hasCheckedSubscription, setHasCheckedSubscription] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pay_later");
   
+  // Service addons hook
+  const { 
+    addons, 
+    selectedAddons, 
+    toggleAddon, 
+    isSelected, 
+    getAddonsTotal 
+  } = useServiceAddons();
+  
   const [formData, setFormData] = useState({
     service: initialService,
     carType: "",
@@ -108,6 +119,13 @@ const Reservar = () => {
   const getSelectedCarType = () => carTypes.find(c => c.id === formData.carType);
   
   const getTotalPrice = () => {
+    const service = getSelectedService();
+    const carType = getSelectedCarType();
+    if (!service) return 0;
+    return service.priceCents + (carType?.extraCents || 0) + getAddonsTotal();
+  };
+  
+  const getBasePrice = () => {
     const service = getSelectedService();
     const carType = getSelectedCarType();
     if (!service) return 0;
@@ -203,13 +221,22 @@ const Reservar = () => {
             isSubscriptionBooking: !!isSubscriptionBooking,
             subscriptionId: isSubscriptionBooking ? subscriptionInfo.id : undefined,
             whatsappOptIn: whatsappOptIn,
+            addons: selectedAddons,
+            addonsTotalCents: getAddonsTotal(),
           },
         }
       );
 
       if (bookingError) {
         console.error("[Reservar] Booking error:", bookingError);
-        throw new Error("Error al crear la reserva");
+        // Check if there's a message in the error
+        const errorMessage = bookingError.message || "Error al crear la reserva";
+        throw new Error(errorMessage);
+      }
+      
+      // Check for validation errors in the response
+      if (bookingResponse?.error) {
+        throw new Error(bookingResponse.message || bookingResponse.error);
       }
 
       console.log("[Reservar] Booking created:", bookingResponse);
@@ -392,6 +419,16 @@ const Reservar = () => {
                     ))}
                   </div>
                 </div>
+
+                {/* Service Add-ons */}
+                {addons.length > 0 && (
+                  <AddonsSelector
+                    addons={addons}
+                    selectedAddons={selectedAddons}
+                    onToggle={toggleAddon}
+                    isSelected={isSelected}
+                  />
+                )}
               </motion.div>
             )}
 
@@ -656,6 +693,19 @@ const Reservar = () => {
                         {getSelectedCarType()?.name} ({getSelectedCarType()?.extra})
                       </span>
                     </div>
+                    {selectedAddons.length > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Extras ({selectedAddons.length})</span>
+                        <span className="font-medium text-primary">
+                          +{formatPrice(getAddonsTotal())}
+                        </span>
+                      </div>
+                    )}
+                    {selectedAddons.length > 0 && (
+                      <div className="text-xs text-muted-foreground pl-2">
+                        {selectedAddons.map(a => a.name).join(", ")}
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Fecha y Hora</span>
                       <span className="font-medium">{formData.date} a las {formData.time} hs</span>

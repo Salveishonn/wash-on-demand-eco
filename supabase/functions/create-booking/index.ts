@@ -6,6 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface AddonItem {
+  addon_id: string;
+  name: string;
+  price_cents: number;
+}
+
 interface CreateBookingRequest {
   customerName: string;
   customerEmail: string;
@@ -23,6 +29,8 @@ interface CreateBookingRequest {
   isSubscriptionBooking?: boolean;
   paymentMethod?: "transfer" | "pay_later" | "subscription";
   whatsappOptIn?: boolean;
+  addons?: AddonItem[];
+  addonsTotalCents?: number;
 }
 
 serve(async (req) => {
@@ -39,13 +47,28 @@ serve(async (req) => {
     
     console.log("[create-booking] Creating booking for:", data.customerName);
     console.log("[create-booking] Payment method:", data.paymentMethod);
+    console.log("[create-booking] Addons:", data.addons);
 
-    // Validate required fields
-    if (!data.customerName || !data.customerEmail || !data.customerPhone) {
-      throw new Error("Faltan datos del cliente");
-    }
-    if (!data.serviceName || !data.bookingDate || !data.bookingTime) {
-      throw new Error("Faltan datos del servicio o fecha");
+    // Validate required fields with specific messages
+    const validationErrors: string[] = [];
+    if (!data.customerName?.trim()) validationErrors.push("Nombre es requerido");
+    if (!data.customerEmail?.trim()) validationErrors.push("Email es requerido");
+    if (!data.customerPhone?.trim()) validationErrors.push("Teléfono es requerido");
+    if (!data.serviceName?.trim()) validationErrors.push("Servicio es requerido");
+    if (!data.bookingDate) validationErrors.push("Fecha es requerida");
+    if (!data.bookingTime) validationErrors.push("Horario es requerido");
+    if (!data.address?.trim()) validationErrors.push("Dirección es requerida");
+    
+    if (validationErrors.length > 0) {
+      console.error("[create-booking] Validation errors:", validationErrors);
+      return new Response(
+        JSON.stringify({ 
+          error: "Faltan datos requeridos", 
+          validationErrors,
+          message: validationErrors.join(", ")
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const isSubscription = data.isSubscriptionBooking === true && data.subscriptionId;
@@ -107,36 +130,75 @@ serve(async (req) => {
 
     console.log("[create-booking] Status - booking:", bookingStatus, "payment:", paymentStatus);
 
+    // Prepare addons data
+    const addonsData = data.addons || [];
+    const addonsTotalCents = data.addonsTotalCents || addonsData.reduce((sum, a) => sum + a.price_cents, 0);
+
     // Create the booking
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .insert({
         user_id: data.userId || null,
         subscription_id: data.subscriptionId || null,
-        customer_name: data.customerName,
-        customer_email: data.customerEmail,
-        customer_phone: data.customerPhone,
+        customer_name: data.customerName.trim(),
+        customer_email: data.customerEmail.trim().toLowerCase(),
+        customer_phone: data.customerPhone.trim(),
         service_name: data.serviceName,
-        service_price_cents: data.servicePriceCents,
-        car_type: data.carType,
+        service_price_cents: data.servicePriceCents || 0,
+        car_type: data.carType || null,
         car_type_extra_cents: data.carTypeExtraCents || 0,
         booking_date: data.bookingDate,
         booking_time: data.bookingTime,
-        address: data.address,
-        notes: data.notes,
+        address: data.address.trim(),
+        notes: data.notes?.trim() || null,
         is_subscription_booking: isSubscription,
         requires_payment: requiresPayment,
         status: bookingStatus,
         payment_status: paymentStatus,
         payment_method: paymentMethodValue,
         confirmed_at: isSubscription ? new Date().toISOString() : null,
+        addons: addonsData,
+        addons_total_cents: addonsTotalCents,
       })
       .select()
       .single();
 
     if (bookingError) {
-      console.error("[create-booking] Error creating booking:", bookingError);
-      throw new Error("Error al crear la reserva");
+      console.error("[create-booking] Error creating booking:", {
+        message: bookingError.message,
+        code: bookingError.code,
+        details: bookingError.details,
+        hint: bookingError.hint,
+      });
+      
+      // Log error to database for debugging (fire and forget)
+      try {
+        await supabase.from("webhook_logs").insert({
+          source: "create-booking-error",
+          event_type: "booking_creation_failed",
+          payload: {
+            error_message: bookingError.message,
+            error_code: bookingError.code,
+            request_data: {
+              customerEmail: data.customerEmail,
+              serviceName: data.serviceName,
+              bookingDate: data.bookingDate,
+            }
+          },
+          processed: false,
+        });
+      } catch (logError) {
+        console.error("[create-booking] Failed to log error:", logError);
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          error: "Error al crear la reserva", 
+          details: bookingError.message,
+          code: bookingError.code 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     console.log("[create-booking] Booking created:", booking.id);

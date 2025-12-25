@@ -62,16 +62,33 @@ serve(async (req) => {
 
     console.log("[create-guest-subscription] Plan found:", plan.name);
 
-    // Check for existing active subscription
+    // Check for existing active/pending subscription - return it instead of error (idempotent)
     const { data: existingSub } = await supabase
       .from("subscriptions")
-      .select("id, status")
+      .select("*, subscription_plans(*)")
       .eq("customer_email", data.customerEmail.toLowerCase())
-      .in("status", ["active", "pending"])
+      .in("status", ["active", "pending", "paused"])
       .maybeSingle();
 
     if (existingSub) {
-      throw new Error("Ya tenés una suscripción activa o pendiente con este email");
+      console.log("[create-guest-subscription] Found existing subscription:", existingSub.id);
+      
+      // Return existing subscription - don't error
+      return new Response(
+        JSON.stringify({
+          success: true,
+          existing: true,
+          subscription: {
+            ...existingSub,
+            plan_name: existingSub.subscription_plans?.name || "Plan",
+            washes_per_month: existingSub.subscription_plans?.washes_per_month || 0,
+          },
+          message: existingSub.status === "active" 
+            ? "Ya tenés una suscripción activa. Podés reservar usando tus créditos."
+            : "Ya tenés una suscripción pendiente. Completá el pago para activarla.",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const siteUrl = Deno.env.get("SITE_URL") || "https://washero.online";
