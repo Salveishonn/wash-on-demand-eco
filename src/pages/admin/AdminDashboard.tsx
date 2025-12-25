@@ -24,6 +24,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
+import { SubscriptionsTab } from '@/components/admin/SubscriptionsTab';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -72,7 +73,7 @@ interface NotificationLog {
   created_at: string;
 }
 
-type TabType = 'bookings' | 'notifications' | 'kipper';
+type TabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions';
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 const formatPrice = (cents: number) => {
@@ -710,6 +711,13 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             <Shield className="w-4 h-4 mr-2" />
             Leads Kipper
           </Button>
+          <Button
+            variant={activeTab === 'subscriptions' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('subscriptions')}
+          >
+            <Users className="w-4 h-4 mr-2" />
+            Suscripciones
+          </Button>
         </div>
 
         {/* Bookings Tab */}
@@ -1037,6 +1045,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* Kipper Leads Tab */}
         {activeTab === 'kipper' && <KipperLeadsTab />}
+
+        {/* Subscriptions Tab */}
+        {activeTab === 'subscriptions' && <SubscriptionsTab />}
       </div>
 
       {/* Booking Detail Dialog */}
