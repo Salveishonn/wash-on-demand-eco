@@ -188,7 +188,7 @@ export default function AdminDashboard() {
 
       const statusLabels = {
         pending: 'pendiente',
-        confirmed: 'confirmada',
+        confirmed: 'aceptada',
         completed: 'completada',
         cancelled: 'cancelada',
       };
@@ -459,9 +459,10 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
       completed: 'bg-green-100 text-green-800',
       cancelled: 'bg-red-100 text-red-800',
     };
+    // Spanish labels: Aceptada for confirmed (operational meaning)
     const labels: Record<string, string> = {
       pending: 'Pendiente',
-      confirmed: 'Confirmada',
+      confirmed: 'Aceptada',
       completed: 'Completada',
       cancelled: 'Cancelada',
     };
@@ -648,7 +649,7 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.confirmed}</p>
-                <p className="text-xs text-muted-foreground">Confirmadas</p>
+                <p className="text-xs text-muted-foreground">Aceptadas</p>
               </div>
             </div>
           </motion.div>
@@ -751,7 +752,7 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                   >
                     {status === 'all' ? 'Todas' : 
                      status === 'pending' ? 'Pendientes' :
-                     status === 'confirmed' ? 'Confirmadas' :
+                     status === 'confirmed' ? 'Aceptadas' :
                      status === 'completed' ? 'Completadas' : 'Canceladas'}
                   </button>
                 ))}
@@ -851,7 +852,20 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
-                              {booking.payment_status === 'pending' && booking.status !== 'cancelled' && (
+                              {/* Aceptar: only for pending bookings - moves to calendar */}
+                              {booking.status === 'pending' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleUpdateBookingStatus(booking.id, 'confirmed')}
+                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title="Aceptar (aparece en calendario)"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {/* Marcar pagado: only if payment pending */}
+                              {booking.payment_status === 'pending' && booking.status !== 'cancelled' && !booking.is_subscription_booking && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -862,18 +876,20 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                                   <DollarSign className="w-4 h-4" />
                                 </Button>
                               )}
-                              {booking.status !== 'completed' && booking.status !== 'cancelled' && (
+                              {/* Completar: only for confirmed/accepted bookings - removes from calendar */}
+                              {booking.status === 'confirmed' && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => handleUpdateBookingStatus(booking.id, 'completed')}
                                   className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                  title="Marcar como completada"
+                                  title="Completar (desaparece del calendario)"
                                 >
                                   <CheckCircle className="w-4 h-4" />
                                 </Button>
                               )}
-                              {booking.status !== 'cancelled' && (
+                              {/* Cancelar: for pending or confirmed */}
+                              {(booking.status === 'pending' || booking.status === 'confirmed') && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
