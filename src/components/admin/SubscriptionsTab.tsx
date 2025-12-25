@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   CheckCircle, 
@@ -9,11 +9,11 @@ import {
   Play,
   Mail,
   Phone,
-  CreditCard,
   Loader2,
   Eye,
   Send,
-  DollarSign
+  Plus,
+  Minus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,6 +48,23 @@ interface Subscription {
   };
 }
 
+// Canonical status values (must match DB enum)
+const SUBSCRIPTION_STATUSES = {
+  pending: 'pending',
+  active: 'active',
+  paused: 'paused',
+  cancelled: 'cancelled',
+  payment_failed: 'payment_failed',
+} as const;
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Pendiente',
+  active: 'Activa',
+  paused: 'Pausada',
+  cancelled: 'Cancelada',
+  payment_failed: 'Pago fallido',
+};
+
 const formatPrice = (cents: number) => {
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
@@ -74,9 +91,9 @@ export function SubscriptionsTab() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isSendingPayment, setIsSendingPayment] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'cancelled' | 'pending'>('all');
-  const [adjustCredits, setAdjustCredits] = useState<number>(0);
+  const [creditsDelta, setCreditsDelta] = useState<number>(0);
 
-  const fetchSubscriptions = async () => {
+  const fetchSubscriptions = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('subscriptions')
@@ -102,11 +119,11 @@ export function SubscriptionsTab() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchSubscriptions();
-  }, []);
+  }, [fetchSubscriptions]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -118,107 +135,110 @@ export function SubscriptionsTab() {
     });
   };
 
-  const handleUpdateStatus = async (subscriptionId: string, newStatus: 'active' | 'paused' | 'cancelled') => {
+  // Use edge function for status update
+  const handleUpdateStatus = async (subscriptionId: string, newStatus: string) => {
     setIsUpdating(true);
     try {
-      const subscription = subscriptions.find(s => s.id === subscriptionId);
-      const plan = subscription?.subscription_plans;
+      console.log('[SubscriptionsTab] Updating status:', { subscriptionId, newStatus });
       
-      const updateData: any = { status: newStatus };
-      
-      // If activating, set washes_remaining to plan amount
-      if (newStatus === 'active' && plan) {
-        updateData.washes_remaining = plan.washes_per_month;
-        updateData.washes_used_in_cycle = 0;
-      }
-
-      const { error } = await supabase
-        .from('subscriptions')
-        .update(updateData)
-        .eq('id', subscriptionId);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Estado actualizado',
-        description: `Suscripción ${newStatus === 'active' ? 'activada' : newStatus === 'paused' ? 'pausada' : 'cancelada'}`,
-      });
-
-      fetchSubscriptions();
-      setIsDetailOpen(false);
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No se pudo actualizar el estado',
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleAdjustCredits = async (subscriptionId: string, delta: number) => {
-    setIsUpdating(true);
-    try {
-      const subscription = subscriptions.find(s => s.id === subscriptionId);
-      if (!subscription) throw new Error('Suscripción no encontrada');
-
-      const newRemaining = Math.max(0, subscription.washes_remaining + delta);
-
-      const { error } = await supabase
-        .from('subscriptions')
-        .update({ washes_remaining: newRemaining })
-        .eq('id', subscriptionId);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Créditos ajustados',
-        description: `Ahora tiene ${newRemaining} lavados disponibles`,
-      });
-
-      fetchSubscriptions();
-      setAdjustCredits(0);
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No se pudieron ajustar los créditos',
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleSendPaymentEmail = async (subscription: Subscription) => {
-    setIsSendingPayment(true);
-    try {
-      const plan = subscription.subscription_plans;
-      if (!plan) throw new Error('Plan no encontrado');
-
-      // For now, use the existing send-notifications with a custom message
-      // In a full implementation, we'd create a payment_intent first
-      const { data, error } = await supabase.functions.invoke('send-notifications', {
+      const { data, error } = await supabase.functions.invoke('admin-set-subscription-status', {
         body: {
-          subscriptionId: subscription.id,
-          messageType: 'subscription_payment_request',
-          customerEmail: subscription.customer_email,
-          customerName: subscription.customer_name,
-          planName: plan.name,
-          amount: plan.price_cents,
+          subscription_id: subscriptionId,
+          status: newStatus,
+          reset_credits: newStatus === SUBSCRIPTION_STATUSES.active,
         },
       });
 
       if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Error desconocido');
+
+      toast({
+        title: 'Estado actualizado',
+        description: data.message || `Suscripción ${STATUS_LABELS[newStatus] || newStatus}`,
+      });
+
+      // Refresh data and close dialog
+      await fetchSubscriptions();
+      setIsDetailOpen(false);
+    } catch (error: any) {
+      console.error('[SubscriptionsTab] Update status error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'No se pudo actualizar el estado',
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Use edge function for credits adjustment
+  const handleAdjustCredits = async (subscriptionId: string, delta: number) => {
+    if (delta === 0) return;
+    
+    setIsUpdating(true);
+    try {
+      console.log('[SubscriptionsTab] Adjusting credits:', { subscriptionId, delta });
+      
+      const { data, error } = await supabase.functions.invoke('admin-adjust-subscription-credits', {
+        body: {
+          subscription_id: subscriptionId,
+          delta,
+          reason: 'Ajuste manual desde panel admin',
+        },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Error desconocido');
+
+      toast({
+        title: 'Créditos ajustados',
+        description: data.message || `Ahora tiene ${data.new_credits} lavados disponibles`,
+      });
+
+      await fetchSubscriptions();
+      setCreditsDelta(0);
+      
+      // Update selected subscription if still open
+      if (selectedSubscription && selectedSubscription.id === subscriptionId) {
+        setSelectedSubscription(prev => prev ? { ...prev, washes_remaining: data.new_credits } : null);
+      }
+    } catch (error: any) {
+      console.error('[SubscriptionsTab] Adjust credits error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'No se pudieron ajustar los créditos',
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Use edge function for sending payment email
+  const handleSendPaymentEmail = async (subscription: Subscription) => {
+    setIsSendingPayment(true);
+    try {
+      console.log('[SubscriptionsTab] Sending payment email:', subscription.id);
+      
+      const { data, error } = await supabase.functions.invoke('admin-send-subscription-payment-email', {
+        body: {
+          subscription_id: subscription.id,
+          mode: 'manual',
+        },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Error desconocido');
 
       toast({
         title: 'Email enviado',
-        description: `Instrucciones de pago enviadas a ${subscription.customer_email}`,
+        description: data.message || `Instrucciones de pago enviadas a ${subscription.customer_email}`,
       });
 
-      fetchSubscriptions();
+      await fetchSubscriptions();
     } catch (error: any) {
-      console.error('Error sending payment email:', error);
+      console.error('[SubscriptionsTab] Send payment email error:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -229,40 +249,33 @@ export function SubscriptionsTab() {
     }
   };
 
+  // Use edge function for generating new cycle
   const handleGenerateNewCycle = async (subscription: Subscription) => {
     setIsUpdating(true);
     try {
-      const plan = subscription.subscription_plans;
-      if (!plan) throw new Error('Plan no encontrado');
-
-      // Reset washes for new cycle
-      const now = new Date();
-      const periodEnd = new Date(now);
-      periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-      const { error } = await supabase
-        .from('subscriptions')
-        .update({
-          washes_remaining: plan.washes_per_month,
-          washes_used_in_cycle: 0,
-          current_period_start: now.toISOString(),
-          current_period_end: periodEnd.toISOString(),
-        })
-        .eq('id', subscription.id);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Nuevo ciclo generado',
-        description: `${plan.washes_per_month} lavados disponibles para este mes`,
+      console.log('[SubscriptionsTab] Generating new cycle:', subscription.id);
+      
+      const { data, error } = await supabase.functions.invoke('admin-generate-cycle', {
+        body: {
+          subscription_id: subscription.id,
+        },
       });
 
-      fetchSubscriptions();
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Error desconocido');
+
+      toast({
+        title: data.created ? 'Nuevo ciclo generado' : 'Ciclo existente',
+        description: data.message,
+      });
+
+      await fetchSubscriptions();
     } catch (error: any) {
+      console.error('[SubscriptionsTab] Generate cycle error:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'No se pudo generar el nuevo ciclo',
+        description: error.message || 'No se pudo generar el nuevo ciclo',
       });
     } finally {
       setIsUpdating(false);
@@ -276,10 +289,10 @@ export function SubscriptionsTab() {
 
   const stats = {
     total: subscriptions.length,
-    active: subscriptions.filter(s => s.status === 'active').length,
-    pending: subscriptions.filter(s => s.status === 'pending').length,
-    paused: subscriptions.filter(s => s.status === 'paused').length,
-    cancelled: subscriptions.filter(s => s.status === 'cancelled').length,
+    active: subscriptions.filter(s => s.status === SUBSCRIPTION_STATUSES.active).length,
+    pending: subscriptions.filter(s => s.status === SUBSCRIPTION_STATUSES.pending).length,
+    paused: subscriptions.filter(s => s.status === SUBSCRIPTION_STATUSES.paused).length,
+    cancelled: subscriptions.filter(s => s.status === SUBSCRIPTION_STATUSES.cancelled).length,
   };
 
   const getStatusBadge = (status: string) => {
@@ -290,16 +303,9 @@ export function SubscriptionsTab() {
       cancelled: 'bg-red-100 text-red-800',
       payment_failed: 'bg-red-100 text-red-800',
     };
-    const labels: Record<string, string> = {
-      active: 'Activa',
-      pending: 'Pendiente',
-      paused: 'Pausada',
-      cancelled: 'Cancelada',
-      payment_failed: 'Pago fallido',
-    };
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {labels[status] || status}
+        {STATUS_LABELS[status] || status}
       </span>
     );
   };
@@ -339,8 +345,8 @@ export function SubscriptionsTab() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-muted-foreground">Filtrar:</span>
           {(['all', 'active', 'pending', 'paused', 'cancelled'] as const).map((filter) => (
             <Button
@@ -349,7 +355,7 @@ export function SubscriptionsTab() {
               size="sm"
               onClick={() => setStatusFilter(filter)}
             >
-              {filter === 'all' ? 'Todas' : filter === 'active' ? 'Activas' : filter === 'pending' ? 'Pendientes' : filter === 'paused' ? 'Pausadas' : 'Canceladas'}
+              {filter === 'all' ? 'Todas' : STATUS_LABELS[filter]}
             </Button>
           ))}
         </div>
@@ -413,6 +419,7 @@ export function SubscriptionsTab() {
                         size="sm"
                         onClick={() => {
                           setSelectedSubscription(sub);
+                          setCreditsDelta(0);
                           setIsDetailOpen(true);
                         }}
                       >
@@ -484,28 +491,30 @@ export function SubscriptionsTab() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setAdjustCredits(prev => prev - 1)}
+                    onClick={() => setCreditsDelta(prev => prev - 1)}
+                    disabled={isUpdating}
                   >
-                    -
+                    <Minus className="w-4 h-4" />
                   </Button>
                   <Input
                     type="number"
-                    value={adjustCredits}
-                    onChange={(e) => setAdjustCredits(parseInt(e.target.value) || 0)}
+                    value={creditsDelta}
+                    onChange={(e) => setCreditsDelta(parseInt(e.target.value) || 0)}
                     className="w-20 text-center"
                   />
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setAdjustCredits(prev => prev + 1)}
+                    onClick={() => setCreditsDelta(prev => prev + 1)}
+                    disabled={isUpdating}
                   >
-                    +
+                    <Plus className="w-4 h-4" />
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => handleAdjustCredits(selectedSubscription.id, adjustCredits)}
-                    disabled={adjustCredits === 0 || isUpdating}
+                    onClick={() => handleAdjustCredits(selectedSubscription.id, creditsDelta)}
+                    disabled={creditsDelta === 0 || isUpdating}
                   >
                     {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
                   </Button>
@@ -514,9 +523,9 @@ export function SubscriptionsTab() {
 
               {/* Actions */}
               <DialogFooter className="flex-col sm:flex-row gap-2">
-                {selectedSubscription.status === 'pending' && (
+                {selectedSubscription.status === SUBSCRIPTION_STATUSES.pending && (
                   <Button
-                    onClick={() => handleUpdateStatus(selectedSubscription.id, 'active')}
+                    onClick={() => handleUpdateStatus(selectedSubscription.id, SUBSCRIPTION_STATUSES.active)}
                     disabled={isUpdating}
                     className="flex-1"
                   >
@@ -525,7 +534,7 @@ export function SubscriptionsTab() {
                   </Button>
                 )}
                 
-                {selectedSubscription.status === 'active' && (
+                {selectedSubscription.status === SUBSCRIPTION_STATUSES.active && (
                   <>
                     <Button
                       variant="outline"
@@ -545,7 +554,7 @@ export function SubscriptionsTab() {
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => handleUpdateStatus(selectedSubscription.id, 'paused')}
+                      onClick={() => handleUpdateStatus(selectedSubscription.id, SUBSCRIPTION_STATUSES.paused)}
                       disabled={isUpdating}
                     >
                       <Pause className="w-4 h-4 mr-2" />
@@ -554,9 +563,9 @@ export function SubscriptionsTab() {
                   </>
                 )}
 
-                {selectedSubscription.status === 'paused' && (
+                {selectedSubscription.status === SUBSCRIPTION_STATUSES.paused && (
                   <Button
-                    onClick={() => handleUpdateStatus(selectedSubscription.id, 'active')}
+                    onClick={() => handleUpdateStatus(selectedSubscription.id, SUBSCRIPTION_STATUSES.active)}
                     disabled={isUpdating}
                   >
                     <Play className="w-4 h-4 mr-2" />
@@ -564,10 +573,10 @@ export function SubscriptionsTab() {
                   </Button>
                 )}
 
-                {selectedSubscription.status !== 'cancelled' && (
+                {selectedSubscription.status !== SUBSCRIPTION_STATUSES.cancelled && (
                   <Button
                     variant="destructive"
-                    onClick={() => handleUpdateStatus(selectedSubscription.id, 'cancelled')}
+                    onClick={() => handleUpdateStatus(selectedSubscription.id, SUBSCRIPTION_STATUSES.cancelled)}
                     disabled={isUpdating}
                   >
                     <XCircle className="w-4 h-4 mr-2" />
