@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   ChevronLeft,
@@ -15,7 +15,9 @@ import {
   Users,
   Loader2,
   Copy,
-  CheckCircle
+  CheckCircle,
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +55,12 @@ import {
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+interface AddonItem {
+  addon_id: string;
+  name: string;
+  price_cents: number;
+}
+
 interface CalendarBooking {
   id: string;
   booking_date: string;
@@ -65,6 +73,8 @@ interface CalendarBooking {
   car_type: string | null;
   service_price_cents: number;
   car_type_extra_cents: number;
+  addons: AddonItem[] | null;
+  addons_total_cents: number | null;
   total_cents: number;
   booking_status: string;
   payment_status: string;
@@ -109,6 +119,11 @@ const getServiceColor = (serviceName: string): string => {
   return 'border-l-gray-500 bg-gray-50';
 };
 
+const getAddonsCount = (booking: CalendarBooking): number => {
+  if (!booking.addons || !Array.isArray(booking.addons)) return 0;
+  return booking.addons.length;
+};
+
 export function CalendarTab() {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
@@ -120,6 +135,8 @@ export function CalendarTab() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [subscriptionOnly, setSubscriptionOnly] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Calculate date range based on view mode
   const dateRange = useMemo(() => {
@@ -135,8 +152,9 @@ export function CalendarTab() {
     }
   }, [viewMode, currentDate]);
 
-  const fetchCalendarBookings = async () => {
-    setIsLoading(true);
+  const fetchCalendarBookings = useCallback(async (showLoadingState = true) => {
+    if (showLoadingState) setIsLoading(true);
+    setIsRefreshing(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
@@ -159,6 +177,7 @@ export function CalendarTab() {
       }
 
       setBookings(response.data?.bookings || []);
+      setLastUpdated(new Date());
     } catch (error: any) {
       console.error('Error fetching calendar bookings:', error);
       toast({
@@ -168,22 +187,55 @@ export function CalendarTab() {
       });
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, [dateRange.from, dateRange.to, subscriptionOnly, searchTerm, toast]);
 
   useEffect(() => {
     fetchCalendarBookings();
-  }, [dateRange.from, dateRange.to, subscriptionOnly]);
+  }, [fetchCalendarBookings]);
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchTerm !== undefined) {
-        fetchCalendarBookings();
+        fetchCalendarBookings(false);
       }
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  // Real-time subscription to bookings table
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-calendar-bookings')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+        },
+        (payload) => {
+          console.log('Booking change detected:', payload);
+          // Refetch when any booking changes
+          fetchCalendarBookings(false);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchCalendarBookings]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchCalendarBookings(false);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchCalendarBookings]);
 
   const navigatePrev = () => {
     switch (viewMode) {
@@ -387,7 +439,28 @@ export function CalendarTab() {
             <Users className="h-4 w-4 mr-1" />
             Suscripciones
           </Button>
+
+          {/* Refresh button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchCalendarBookings(false)}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
         </div>
+      </div>
+
+      {/* Last updated indicator */}
+      <div className="flex items-center justify-end mb-2 text-xs text-muted-foreground">
+        <span>Última actualización: {format(lastUpdated, 'HH:mm:ss', { locale: es })}</span>
+        {bookings.length > 0 && (
+          <span className="ml-4">
+            {bookings.length} reserva{bookings.length !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       {/* Calendar Grid */}
@@ -420,15 +493,19 @@ export function CalendarTab() {
                     {format(date, 'd')}
                   </div>
                   <div className="space-y-1">
-                    {dayBookings.slice(0, 3).map((booking) => (
-                      <button
-                        key={booking.id}
-                        onClick={() => openBookingDetail(booking)}
-                        className={`w-full text-left p-1 rounded text-xs border-l-2 truncate ${getServiceColor(booking.service_name)}`}
-                      >
-                        {booking.booking_time} - {booking.customer_name.split(' ')[0]}
-                      </button>
-                    ))}
+                    {dayBookings.slice(0, 3).map((booking) => {
+                      const addonsCount = getAddonsCount(booking);
+                      return (
+                        <button
+                          key={booking.id}
+                          onClick={() => openBookingDetail(booking)}
+                          className={`w-full text-left p-1 rounded text-xs border-l-2 truncate ${getServiceColor(booking.service_name)}`}
+                        >
+                          {booking.booking_time} - {booking.service_name.split(' ')[0]}
+                          {addonsCount > 0 && ` (+${addonsCount})`}
+                        </button>
+                      );
+                    })}
                     {dayBookings.length > 3 && (
                       <div className="text-xs text-muted-foreground px-1">
                         +{dayBookings.length - 3} más
@@ -471,29 +548,40 @@ export function CalendarTab() {
                         Sin reservas
                       </div>
                     ) : (
-                      dayBookings.map((booking) => (
-                        <button
-                          key={booking.id}
-                          onClick={() => openBookingDetail(booking)}
-                          className={`w-full text-left p-3 rounded-lg border-l-4 hover:shadow-md transition-shadow ${getServiceColor(
-                            booking.service_name
-                          )}`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-semibold text-sm">{booking.booking_time}</span>
-                            {getPaymentBadge(booking)}
-                          </div>
-                          <div className="text-sm font-medium truncate">{booking.customer_name}</div>
-                          <div className="text-xs text-muted-foreground truncate">
-                            {booking.service_name} • {formatPrice(booking.total_cents)}
-                          </div>
-                          {booking.address && (
-                            <div className="text-xs text-muted-foreground truncate mt-1">
-                              📍 {booking.address}
+                      dayBookings.map((booking) => {
+                        const addonsCount = getAddonsCount(booking);
+                        return (
+                          <button
+                            key={booking.id}
+                            onClick={() => openBookingDetail(booking)}
+                            className={`w-full text-left p-3 rounded-lg border-l-4 hover:shadow-md transition-shadow ${getServiceColor(
+                              booking.service_name
+                            )}`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-semibold text-sm">{booking.booking_time}</span>
+                              <div className="flex items-center gap-1">
+                                {addonsCount > 0 && (
+                                  <Badge variant="outline" className="text-xs px-1.5 py-0">
+                                    <Sparkles className="w-3 h-3 mr-0.5" />
+                                    +{addonsCount}
+                                  </Badge>
+                                )}
+                                {getPaymentBadge(booking)}
+                              </div>
                             </div>
-                          )}
-                        </button>
-                      ))
+                            <div className="text-sm font-medium truncate">{booking.customer_name}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {booking.service_name} • {formatPrice(booking.total_cents)}
+                            </div>
+                            {booking.address && (
+                              <div className="text-xs text-muted-foreground truncate mt-1">
+                                📍 {booking.address}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -611,6 +699,36 @@ export function CalendarTab() {
                       )}
                     </div>
                   )}
+                  
+                  {/* Add-ons section */}
+                  {selectedBooking.addons && Array.isArray(selectedBooking.addons) && selectedBooking.addons.length > 0 && (
+                    <div className="pt-2 border-t space-y-1">
+                      <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+                        <Sparkles className="w-3 h-3" />
+                        <span>Servicios adicionales</span>
+                      </div>
+                      {selectedBooking.addons.map((addon, idx) => (
+                        <div key={addon.addon_id || idx} className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">{addon.name}</span>
+                          <span>+{formatPrice(addon.price_cents)}</span>
+                        </div>
+                      ))}
+                      {selectedBooking.addons_total_cents && selectedBooking.addons_total_cents > 0 && (
+                        <div className="flex justify-between text-sm font-medium pt-1">
+                          <span>Subtotal extras</span>
+                          <span>{formatPrice(selectedBooking.addons_total_cents)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* No add-ons indicator */}
+                  {(!selectedBooking.addons || !Array.isArray(selectedBooking.addons) || selectedBooking.addons.length === 0) && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground pt-1">
+                      <span>Sin servicios adicionales</span>
+                    </div>
+                  )}
+                  
                   <div className="flex justify-between font-semibold pt-2 border-t">
                     <span>Total</span>
                     <span>{formatPrice(selectedBooking.total_cents)}</span>
