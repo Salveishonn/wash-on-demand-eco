@@ -144,11 +144,14 @@ async function sendTwilioWhatsApp(
 }
 
 // Build payment instructions email for customer
-function buildPaymentInstructionsEmail(booking: any, paymentSettings: any): { subject: string; html: string } {
+function buildPaymentInstructionsEmail(booking: any, paymentSettings: any, paymentUrl?: string): { subject: string; html: string } {
   const totalCents = booking.service_price_cents + (booking.car_type_extra_cents || 0);
   const totalFormatted = formatPrice(totalCents);
   const bookingRef = `WASHERO-${booking.id.substring(0, 8).toUpperCase()}`;
   const dateFormatted = formatShortDate(booking.booking_date);
+  
+  // Use payment page URL if available, otherwise fall back to MP link
+  const payLink = paymentUrl || paymentSettings.mp_payment_link;
   
   const subject = `Pago pendiente — Reserva Washero ${dateFormatted}`;
   
@@ -208,9 +211,9 @@ function buildPaymentInstructionsEmail(booking: any, paymentSettings: any): { su
         <h3>💳 Cómo Pagar</h3>
         
         <div class="payment-method">
-          <h4>Opción 1: Link de Pago (Recomendado)</h4>
-          <p>Hacé clic en el siguiente botón para pagar con MercadoPago:</p>
-          <a href="${paymentSettings.mp_payment_link}" class="payment-link" target="_blank">Pagar con MercadoPago →</a>
+          <h4>Opción 1: Pagar ahora (Recomendado)</h4>
+          <p>Hacé clic en el siguiente botón para ver las instrucciones de pago:</p>
+          <a href="${payLink}" class="payment-link" target="_blank">Pagar con MercadoPago →</a>
         </div>
         
         <div class="payment-method">

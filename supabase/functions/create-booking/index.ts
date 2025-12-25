@@ -21,8 +21,7 @@ interface CreateBookingRequest {
   userId?: string;
   subscriptionId?: string;
   isSubscriptionBooking?: boolean;
-  paymentMethod?: "mercadopago" | "pay_later";
-  paymentsEnabled?: boolean;
+  paymentMethod?: "transfer" | "pay_later" | "subscription";
   whatsappOptIn?: boolean;
 }
 
@@ -40,7 +39,6 @@ serve(async (req) => {
     
     console.log("[create-booking] Creating booking for:", data.customerName);
     console.log("[create-booking] Payment method:", data.paymentMethod);
-    console.log("[create-booking] Payments enabled:", data.paymentsEnabled);
 
     // Validate required fields
     if (!data.customerName || !data.customerEmail || !data.customerPhone) {
@@ -50,8 +48,12 @@ serve(async (req) => {
       throw new Error("Faltan datos del servicio o fecha");
     }
 
+    const isSubscription = data.isSubscriptionBooking === true && data.subscriptionId;
+    const isTransfer = data.paymentMethod === "transfer";
+    const isPayLater = data.paymentMethod === "pay_later";
+
     // If subscription booking, verify subscription is active
-    if (data.isSubscriptionBooking && data.subscriptionId) {
+    if (isSubscription && data.subscriptionId) {
       const { data: subscription, error: subError } = await supabase
         .from("subscriptions")
         .select("*, subscription_plans(*)")
@@ -80,9 +82,6 @@ serve(async (req) => {
     }
 
     // Determine booking/payment status based on payment method
-    const isPayLater = data.paymentMethod === "pay_later" || data.paymentsEnabled === false;
-    const isSubscription = data.isSubscriptionBooking === true;
-    
     let bookingStatus: string;
     let paymentStatus: string;
     let requiresPayment: boolean;
@@ -93,21 +92,20 @@ serve(async (req) => {
       paymentStatus = "approved";
       requiresPayment = false;
       paymentMethodValue = "subscription";
-    } else if (isPayLater) {
-      bookingStatus = "pending";
-      paymentStatus = "pending";
-      requiresPayment = false; // Will be paid offline
-      paymentMethodValue = "mercadopago_link"; // They'll pay via MP link/transfer
-    } else {
-      // MercadoPago checkout - pending until payment confirmed
+    } else if (isTransfer) {
       bookingStatus = "pending";
       paymentStatus = "pending";
       requiresPayment = true;
-      paymentMethodValue = "mercadopago";
+      paymentMethodValue = "transfer";
+    } else {
+      // Pay later / cash
+      bookingStatus = "pending";
+      paymentStatus = "pending";
+      requiresPayment = false;
+      paymentMethodValue = "pay_later";
     }
 
-    console.log("[create-booking] Status calculation - isPayLater:", isPayLater, "isSubscription:", isSubscription);
-    console.log("[create-booking] bookingStatus:", bookingStatus, "paymentStatus:", paymentStatus, "requiresPayment:", requiresPayment);
+    console.log("[create-booking] Status - booking:", bookingStatus, "payment:", paymentStatus);
 
     // Create the booking
     const { data: booking, error: bookingError } = await supabase
@@ -143,11 +141,52 @@ serve(async (req) => {
 
     console.log("[create-booking] Booking created:", booking.id);
 
-    // Queue admin notifications for subscription or pay-later bookings
-    const shouldNotifyAdmin = isSubscription || isPayLater;
+    // Create payment intent for transfer or pay_later bookings
+    let paymentIntent = null;
+    let paymentUrl = null;
+    
+    if (!isSubscription) {
+      const totalAmount = data.servicePriceCents + (data.carTypeExtraCents || 0);
+      // Convert cents to ARS (divide by 100)
+      const amountArs = Math.round(totalAmount / 100);
+      
+      const { data: intentData, error: intentError } = await supabase
+        .from("payment_intents")
+        .insert({
+          booking_id: booking.id,
+          type: "one_time",
+          amount_ars: amountArs,
+          currency: "ARS",
+          status: "pending",
+          expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(), // 72 hours
+        })
+        .select()
+        .single();
+
+      if (intentError) {
+        console.error("[create-booking] Payment intent error:", intentError);
+        // Non-fatal, continue
+      } else {
+        paymentIntent = intentData;
+        
+        // Update booking with payment_intent_id
+        await supabase
+          .from("bookings")
+          .update({ payment_intent_id: intentData.id })
+          .eq("id", booking.id);
+
+        const baseUrl = "https://washero.online";
+        paymentUrl = `${baseUrl}/pagar/${intentData.id}`;
+        
+        console.log("[create-booking] Payment intent created:", intentData.id);
+      }
+    }
+
+    // Queue admin notifications
+    const shouldNotifyAdmin = isSubscription || !isSubscription; // Always notify
     
     if (shouldNotifyAdmin) {
-      console.log("[create-booking] Queueing admin notifications for", isSubscription ? "subscription" : "pay-later");
+      console.log("[create-booking] Queueing admin notifications");
       
       const queueUrl = `${supabaseUrl}/functions/v1/queue-notifications`;
       
@@ -160,14 +199,15 @@ serve(async (req) => {
         body: JSON.stringify({ 
           bookingId: booking.id,
           isPayLater: isPayLater,
+          isTransfer: isTransfer,
           isSubscription: isSubscription,
           whatsappOptIn: data.whatsappOptIn || false
         }),
       }).catch(err => console.error("[create-booking] Queue error:", err));
     }
 
-    // For pay-later bookings, also send payment instructions to customer
-    if (isPayLater && data.customerEmail) {
+    // For transfer bookings, send payment instructions to customer with payment page link
+    if (isTransfer && data.customerEmail && paymentIntent) {
       console.log("[create-booking] Sending payment instructions to customer:", data.customerEmail);
       
       const sendNotificationsUrl = `${supabaseUrl}/functions/v1/send-notifications`;
@@ -180,7 +220,9 @@ serve(async (req) => {
         },
         body: JSON.stringify({ 
           bookingId: booking.id,
-          messageType: "payment_instructions"
+          messageType: "payment_instructions",
+          paymentIntentId: paymentIntent.id,
+          paymentUrl: paymentUrl
         }),
       }).catch(err => console.error("[create-booking] Payment instructions error:", err));
     }
@@ -189,20 +231,22 @@ serve(async (req) => {
     let message: string;
     if (isSubscription) {
       message = "¡Reserva confirmada con tu suscripción!";
-    } else if (isPayLater) {
+    } else if (isTransfer) {
       message = "¡Reserva recibida! Te enviamos las instrucciones de pago por email.";
     } else {
-      message = "Reserva creada. Procedé al pago con MercadoPago.";
+      message = "¡Reserva recibida! Te contactaremos para coordinar el pago.";
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         booking,
+        paymentIntent,
+        paymentUrl,
         message,
+        isTransfer,
         isPayLater,
         isSubscription,
-        requiresOnlinePayment: requiresPayment
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

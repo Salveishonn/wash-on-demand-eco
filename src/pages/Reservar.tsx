@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, Send, Sparkles, AlertCircle, MessageCircle } from "lucide-react";
+import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, Send, Sparkles, AlertCircle, MessageCircle, CreditCard, Wallet, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { KipperOptIn } from "@/components/kipper/KipperOptIn";
@@ -35,7 +35,7 @@ interface SubscriptionInfo {
   periodEnd: string;
 }
 
-type PaymentMethod = "online" | "pay_later" | "subscription";
+type PaymentMethod = "transfer" | "pay_later" | "subscription";
 
 const services: Service[] = [
   { id: "exterior", name: "Lavado Exterior", price: "$25.000", priceCents: 2500000, time: "45 min" },
@@ -177,11 +177,13 @@ const Reservar = () => {
         throw new Error("Seleccioná un servicio");
       }
 
-      // ALL payments now go through email-based payment instructions flow
-      // MercadoPago API is NOT used - customer receives email with MP link/alias
-      console.log("[Reservar] Creating booking with email payment instructions...");
+      const isSubscriptionBooking = paymentMethod === "subscription" && subscriptionInfo;
+      const isTransfer = paymentMethod === "transfer";
+      const isPayLater = paymentMethod === "pay_later";
 
-      // Create booking via edge function - always as pay_later (email instructions)
+      console.log("[Reservar] Creating booking - method:", paymentMethod);
+
+      // Create booking via edge function
       const { data: bookingResponse, error: bookingError } = await supabase.functions.invoke(
         "create-booking",
         {
@@ -197,8 +199,9 @@ const Reservar = () => {
             bookingTime: formData.time,
             address: formData.address,
             notes: formData.notes,
-            paymentMethod: "pay_later", // Always email-based payment
-            paymentsEnabled: false, // Disable MercadoPago API
+            paymentMethod: isSubscriptionBooking ? "subscription" : (isTransfer ? "transfer" : "pay_later"),
+            isSubscriptionBooking: !!isSubscriptionBooking,
+            subscriptionId: isSubscriptionBooking ? subscriptionInfo.id : undefined,
             whatsappOptIn: whatsappOptIn,
           },
         }
@@ -230,8 +233,9 @@ const Reservar = () => {
         }
       }
 
-      // Go to confirmation page - payment instructions sent via email
-      navigate(`/reserva-confirmada?booking_id=${bookingResponse.booking.id}&payment_method=pay_later`);
+      // Navigate based on payment method
+      const navPaymentMethod = isSubscriptionBooking ? "subscription" : (isTransfer ? "transfer" : "pay_later");
+      navigate(`/reserva-confirmada?booking_id=${bookingResponse.booking.id}&payment_method=${navPaymentMethod}`);
 
     } catch (error: any) {
       console.error("[Reservar] Error:", error);
@@ -543,6 +547,92 @@ const Reservar = () => {
                   checked={kipperOptIn} 
                   onCheckedChange={setKipperOptIn} 
                 />
+
+                {/* Payment Method Selection */}
+                <div className="mt-6">
+                  <h3 className="font-display text-xl font-bold text-foreground mb-4">
+                    Método de Pago
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    {/* Option: Pay with Transfer */}
+                    {(!subscriptionInfo || !subscriptionInfo.washesRemaining) && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("transfer")}
+                        className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-start gap-4 ${
+                          paymentMethod === "transfer"
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-[#009EE3]/10 flex items-center justify-center shrink-0">
+                          <CreditCard className="w-5 h-5 text-[#009EE3]" />
+                        </div>
+                        <div>
+                          <span className="font-semibold text-foreground block">
+                            Pagar ahora (Transferencia MercadoPago)
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            Te enviamos un link de pago por email para transferir
+                          </span>
+                        </div>
+                      </button>
+                    )}
+
+                    {/* Option: Pay Later */}
+                    {(!subscriptionInfo || !subscriptionInfo.washesRemaining) && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("pay_later")}
+                        className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-start gap-4 ${
+                          paymentMethod === "pay_later"
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                          <Wallet className="w-5 h-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <span className="font-semibold text-foreground block">
+                            Pagar después / Efectivo
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            Coordinamos el pago por WhatsApp o pagás en efectivo
+                          </span>
+                        </div>
+                      </button>
+                    )}
+
+                    {/* Option: Subscription */}
+                    {subscriptionInfo && subscriptionInfo.washesRemaining > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("subscription")}
+                        className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-start gap-4 ${
+                          paymentMethod === "subscription"
+                            ? "border-purple-500 bg-purple-50"
+                            : "border-border hover:border-purple-300"
+                        }`}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
+                          <RefreshCw className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <span className="font-semibold text-foreground block">
+                            Usar mi suscripción
+                          </span>
+                          <span className="text-sm text-purple-600">
+                            {subscriptionInfo.washesRemaining} lavado(s) disponible(s) este mes
+                          </span>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Booking Summary */}
                 <div className="p-6 rounded-xl bg-secondary mt-4">
                   <h3 className="font-display font-bold text-foreground mb-4">
                     Resumen de tu Reserva
@@ -577,30 +667,35 @@ const Reservar = () => {
                     <div className="border-t border-border pt-3 mt-3 flex justify-between items-center">
                       <span className="font-semibold text-lg">Total</span>
                       <span className="font-display font-black text-primary text-2xl">
-                        {formatPrice(getTotalPrice())}
+                        {paymentMethod === "subscription" ? "Incluido" : formatPrice(getTotalPrice())}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Payment Info - Email-based instructions */}
-                <div className="mt-8 p-6 rounded-xl bg-primary/5 border-2 border-primary/20">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
-                      <Send className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-display font-bold text-foreground mb-2">
-                        Instrucciones de pago por email
-                      </h3>
+                {/* Payment Method Info */}
+                {paymentMethod === "transfer" && (
+                  <div className="mt-4 p-4 rounded-xl bg-[#009EE3]/5 border border-[#009EE3]/20">
+                    <div className="flex items-start gap-3">
+                      <CreditCard className="w-5 h-5 text-[#009EE3] mt-0.5" />
                       <p className="text-sm text-muted-foreground">
-                        Te enviaremos un email con el monto exacto y las instrucciones para pagar 
-                        por MercadoPago (transferencia o link de pago). 
-                        Tu reserva se confirma cuando recibimos el comprobante.
+                        Te enviaremos un email con el monto exacto y el link de pago de MercadoPago. 
+                        Tu reserva se confirma cuando recibimos el pago.
                       </p>
                     </div>
                   </div>
-                </div>
+                )}
+                {paymentMethod === "pay_later" && (
+                  <div className="mt-4 p-4 rounded-xl bg-orange-50 border border-orange-200">
+                    <div className="flex items-start gap-3">
+                      <Wallet className="w-5 h-5 text-orange-600 mt-0.5" />
+                      <p className="text-sm text-orange-700">
+                        Te contactamos por WhatsApp para coordinar el pago antes del servicio.
+                        Aceptamos efectivo o transferencia.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
 
