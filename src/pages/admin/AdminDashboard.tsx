@@ -114,6 +114,7 @@ export default function AdminDashboard() {
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [isSendingTestExternal, setIsSendingTestExternal] = useState(false);
   const [isTestingMP, setIsTestingMP] = useState(false);
+  const [isSendingPaymentInstructions, setIsSendingPaymentInstructions] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
@@ -405,6 +406,33 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
       });
     } finally {
       setIsTestingMP(false);
+    }
+  };
+
+  const handleSendPaymentInstructions = async (bookingId: string) => {
+    setIsSendingPaymentInstructions(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-notifications', {
+        body: { bookingId, messageType: 'payment_instructions' },
+      });
+      if (error) throw error;
+      const success = data?.results?.customerEmail?.success;
+      toast({
+        title: success ? '✅ Instrucciones enviadas' : '❌ Error',
+        description: success 
+          ? `Email enviado a ${data?.results?.customerEmail?.to || 'cliente'}`
+          : data?.results?.customerEmail?.error || 'No se pudo enviar',
+        variant: success ? 'default' : 'destructive',
+      });
+      fetchData();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'No se pudieron enviar las instrucciones',
+      });
+    } finally {
+      setIsSendingPaymentInstructions(false);
     }
   };
 
@@ -1105,7 +1133,22 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             </div>
           )}
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-0 flex-wrap">
+            {selectedBooking && selectedBooking.payment_status === 'pending' && selectedBooking.status !== 'cancelled' && !selectedBooking.is_subscription_booking && (
+              <Button
+                onClick={() => handleSendPaymentInstructions(selectedBooking.id)}
+                disabled={isSendingPaymentInstructions}
+                variant="outline"
+                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+              >
+                {isSendingPaymentInstructions ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Mail className="w-4 h-4 mr-2" />
+                )}
+                Enviar Instrucciones de Pago
+              </Button>
+            )}
             {selectedBooking && selectedBooking.payment_status === 'pending' && selectedBooking.status !== 'cancelled' && (
               <Button
                 onClick={() => handleMarkAsPaid(selectedBooking.id)}
