@@ -50,6 +50,12 @@ interface AddressAutocompleteProps {
   className?: string;
 }
 
+// Helper to ensure we always have a string
+const safeString = (v: unknown): string => {
+  if (typeof v === 'string') return v;
+  return '';
+};
+
 export function AddressAutocomplete({
   value,
   onChange,
@@ -62,6 +68,16 @@ export function AddressAutocomplete({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
+  // Local input state to prevent undefined issues
+  const [localValue, setLocalValue] = useState<string>(safeString(value));
+
+  // Sync local value with prop value (but only if it's a valid string)
+  useEffect(() => {
+    const safe = safeString(value);
+    if (safe !== localValue) {
+      setLocalValue(safe);
+    }
+  }, [value]);
 
   // Fetch API key from edge function
   useEffect(() => {
@@ -113,11 +129,15 @@ export function AddressAutocomplete({
         const place = autocompleteRef.current?.getPlace();
         console.log('[AddressAutocomplete] Place selected:', place);
         if (place) {
-          const address = place.formatted_address || '';
-          const lat = place.geometry?.location?.lat();
-          const lng = place.geometry?.location?.lng();
-          const placeId = place.place_id;
-          onChange(address, lat, lng, placeId);
+          // ALWAYS use safeString to prevent undefined
+          const address = safeString(place.formatted_address);
+          if (address) {
+            const lat = place.geometry?.location?.lat();
+            const lng = place.geometry?.location?.lng();
+            const placeId = place.place_id || '';
+            setLocalValue(address);
+            onChange(address, lat, lng, placeId);
+          }
         }
       });
 
@@ -213,8 +233,19 @@ export function AddressAutocomplete({
   }, [apiKey, initAutocomplete]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Allow free text input - just update the value without coordinates
-    onChange(e.target.value);
+    const text = safeString(e.target.value);
+    setLocalValue(text);
+    // When user types manually, pass only the address (clear any previous place data)
+    onChange(text, undefined, undefined, undefined);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Prevent Enter from submitting the form or causing any issues
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      // Keep the current typed value - do nothing else
+    }
   };
 
   return (
@@ -224,8 +255,9 @@ export function AddressAutocomplete({
         <Input
           ref={inputRef}
           type="text"
-          value={value}
+          value={localValue}
           onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className={`pl-12 h-14 text-lg ${className}`}
           autoComplete="off"
