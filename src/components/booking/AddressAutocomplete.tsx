@@ -68,14 +68,19 @@ export function AddressAutocomplete({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
-  // Local input state to prevent undefined issues
-  const [localValue, setLocalValue] = useState<string>(safeString(value));
+  
+  // Single source of truth for input - initialize once from prop
+  const [inputValue, setInputValue] = useState<string>(() => safeString(value));
+  // Track if we've initialized from external value
+  const initializedRef = useRef(false);
 
-  // Sync local value with prop value (but only if it's a valid string)
+  // Only sync from props on MOUNT or when going from empty to non-empty (reset scenario)
   useEffect(() => {
-    const safe = safeString(value);
-    if (safe !== localValue) {
-      setLocalValue(safe);
+    const propValue = safeString(value);
+    // Only set if: not yet initialized AND prop has a value, OR input is empty and prop has value
+    if (!initializedRef.current && propValue) {
+      setInputValue(propValue);
+      initializedRef.current = true;
     }
   }, [value]);
 
@@ -135,7 +140,7 @@ export function AddressAutocomplete({
             const lat = place.geometry?.location?.lat();
             const lng = place.geometry?.location?.lng();
             const placeId = place.place_id || '';
-            setLocalValue(address);
+            setInputValue(address);
             onChange(address, lat, lng, placeId);
           }
         }
@@ -234,7 +239,7 @@ export function AddressAutocomplete({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = safeString(e.target.value);
-    setLocalValue(text);
+    setInputValue(text);
     // When user types manually, pass only the address (clear any previous place data)
     onChange(text, undefined, undefined, undefined);
   };
@@ -255,7 +260,7 @@ export function AddressAutocomplete({
         <Input
           ref={inputRef}
           type="text"
-          value={localValue}
+          value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
