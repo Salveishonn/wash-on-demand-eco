@@ -95,6 +95,9 @@ const Reservar = () => {
     date: "",
     time: "",
     address: "",
+    addressPlaceId: "",
+    addressLat: null as number | null,
+    addressLng: null as number | null,
     name: "",
     email: "",
     phone: "",
@@ -114,6 +117,32 @@ const Reservar = () => {
         setPaymentMethod("pay_later");
       }
     }
+  };
+
+  const handleAddressTextChange = (text: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      address: text,
+      // clear place data when user types freely
+      addressPlaceId: "",
+      addressLat: null,
+      addressLng: null,
+    }));
+  };
+
+  const handleAddressSelect = (selection: {
+    address: string;
+    placeId?: string;
+    lat?: number;
+    lng?: number;
+  }) => {
+    setFormData((prev) => ({
+      ...prev,
+      address: selection.address,
+      addressPlaceId: selection.placeId ?? "",
+      addressLat: typeof selection.lat === "number" ? selection.lat : null,
+      addressLng: typeof selection.lng === "number" ? selection.lng : null,
+    }));
   };
 
   const getSelectedService = () => services.find(s => s.id === formData.service);
@@ -484,7 +513,8 @@ const Reservar = () => {
                   </h2>
                   <AddressAutocomplete
                     initialValue={formData.address}
-                    onChange={(address) => handleInputChange("address", address ?? "")}
+                    onTextChange={handleAddressTextChange}
+                    onSelect={handleAddressSelect}
                     placeholder="Ingresá tu dirección"
                   />
                   <p className="text-sm text-muted-foreground mt-2">
