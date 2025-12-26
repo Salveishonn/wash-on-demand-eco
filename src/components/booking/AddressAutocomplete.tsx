@@ -38,8 +38,6 @@ interface GoogleAPI {
 declare global {
   interface Window {
     google?: GoogleAPI;
-    googleMapsLoading?: boolean;
-    googleMapsCallbacks?: (() => void)[];
   }
 }
 
@@ -56,6 +54,54 @@ const safeString = (v: unknown): string => {
   return '';
 };
 
+const DEBUG = import.meta.env.DEV;
+
+// Singleton Google Maps script loader (prevents re-inject + re-init loops)
+let googleMapsScriptPromise: Promise<void> | null = null;
+
+const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
+  if (window.google?.maps?.places) return Promise.resolve();
+
+  if (googleMapsScriptPromise) return googleMapsScriptPromise;
+
+  googleMapsScriptPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[data-google-maps="true"]');
+    if (existing) {
+      // Script tag exists; wait until the API becomes available.
+      const startedAt = Date.now();
+      const interval = window.setInterval(() => {
+        if (window.google?.maps?.places) {
+          window.clearInterval(interval);
+          resolve();
+        } else if (Date.now() - startedAt > 15000) {
+          window.clearInterval(interval);
+          reject(new Error('Timeout esperando Google Maps'));
+        }
+      }, 100);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.dataset.googleMaps = 'true';
+    script.async = true;
+    script.defer = true;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&language=es&region=AR`;
+
+    script.onload = () => {
+      if (window.google?.maps?.places) resolve();
+      else reject(new Error('Google Maps cargó pero Places no está disponible'));
+    };
+
+    script.onerror = (e) => {
+      reject(new Error(`No se pudo cargar Google Maps: ${String(e)}`));
+    };
+
+    document.head.appendChild(script);
+  });
+
+  return googleMapsScriptPromise;
+};
+
 export function AddressAutocomplete({
   value,
   onChange,
@@ -64,25 +110,35 @@ export function AddressAutocomplete({
 }: AddressAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<GoogleAutocomplete | null>(null);
+
+  // Keep latest onChange without re-triggering init effects
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  const autocompleteInitializedRef = useRef(false);
+
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
-  
-  // Single source of truth for input - initialize once from prop
-  const [inputValue, setInputValue] = useState<string>(() => safeString(value));
-  // Track if we've initialized from external value
-  const initializedRef = useRef(false);
 
-  // Only sync from props on MOUNT or when going from empty to non-empty (reset scenario)
-  useEffect(() => {
-    const propValue = safeString(value);
-    // Only set if: not yet initialized AND prop has a value, OR input is empty and prop has value
-    if (!initializedRef.current && propValue) {
-      setInputValue(propValue);
-      initializedRef.current = true;
-    }
-  }, [value]);
+  // Single source of truth for input (initialized only once from prop)
+  const [inputValue, setInputValue] = useState<string>(() => safeString(value));
+
+  if (DEBUG) {
+    console.log('[AddressAutocomplete render]', {
+      inputValue,
+      valueProp: value,
+      hasGoogle: !!window.google,
+      hasMaps: !!window.google?.maps,
+      hasPlaces: !!window.google?.maps?.places,
+      isLoading,
+      isLoaded,
+      error,
+    });
+  }
 
   // Fetch API key from edge function
   useEffect(() => {
@@ -116,14 +172,26 @@ export function AddressAutocomplete({
     fetchApiKey();
   }, []);
 
-  const initAutocomplete = useCallback(() => {
+  const initAutocompleteOnce = useCallback(() => {
+    if (autocompleteInitializedRef.current) {
+      if (DEBUG) console.log('[AddressAutocomplete] places init: alreadyInit=true');
+      return;
+    }
+
     if (!inputRef.current || !window.google?.maps?.places) {
-      console.warn('[AddressAutocomplete] Cannot init - missing input or Google Maps');
+      if (DEBUG) {
+        console.log('[AddressAutocomplete] places init: missing deps', {
+          hasInput: !!inputRef.current,
+          hasGoogle: !!window.google,
+          hasPlaces: !!window.google?.maps?.places,
+        });
+      }
       return;
     }
 
     try {
-      console.log('[AddressAutocomplete] Initializing autocomplete...');
+      console.log('[AddressAutocomplete] Initializing places autocomplete...');
+
       autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
         componentRestrictions: { country: 'ar' },
         types: ['geocode', 'address'],
@@ -132,116 +200,70 @@ export function AddressAutocomplete({
 
       autocompleteRef.current.addListener('place_changed', () => {
         const place = autocompleteRef.current?.getPlace();
-        console.log('[AddressAutocomplete] Place selected:', place);
-        if (place) {
-          // ALWAYS use safeString to prevent undefined
-          const address = safeString(place.formatted_address);
-          if (address) {
-            const lat = place.geometry?.location?.lat();
-            const lng = place.geometry?.location?.lng();
-            const placeId = place.place_id || '';
-            setInputValue(address);
-            onChange(address, lat, lng, placeId);
-          }
-        }
+        if (DEBUG) console.log('[AddressAutocomplete] place_changed', place);
+
+        const address = safeString(place?.formatted_address);
+        if (!address) return;
+
+        const lat = place?.geometry?.location?.lat();
+        const lng = place?.geometry?.location?.lng();
+        const placeId = safeString(place?.place_id);
+
+        setInputValue(address);
+        onChangeRef.current(address, lat, lng, placeId || undefined);
       });
 
+      autocompleteInitializedRef.current = true;
       setIsLoaded(true);
       setIsLoading(false);
       setError(null);
-      console.log('[AddressAutocomplete] Autocomplete initialized successfully');
+
+      console.log('[AddressAutocomplete] Places initialized OK');
     } catch (err) {
-      console.error('[AddressAutocomplete] Error initializing:', err);
+      console.error('[AddressAutocomplete] Error initializing Places:', err);
       setError('Error al inicializar autocompletado');
       setIsLoading(false);
     }
-  }, [onChange]);
+  }, []);
 
-  // Load Google Maps script when API key is available
+  // Load Google Maps script ONCE and init Places ONCE (never depends on inputValue / onChange)
   useEffect(() => {
     if (!apiKey) return;
 
-    console.log('[AddressAutocomplete] API key available, loading script...');
+    setIsLoading(true);
 
-    // Check if Google Maps is already loaded
-    if (window.google?.maps?.places) {
-      console.log('[AddressAutocomplete] Google Maps already loaded');
-      initAutocomplete();
-      return;
-    }
+    loadGoogleMapsScript(apiKey)
+      .then(() => {
+        if (DEBUG) console.log('[AddressAutocomplete] script loaded', {
+          hasMaps: !!window.google?.maps,
+          hasPlaces: !!window.google?.maps?.places,
+        });
+        initAutocompleteOnce();
+      })
+      .catch((err) => {
+        console.error('[AddressAutocomplete] Failed to load Google Maps:', err);
+        setError('Error al cargar Google Maps');
+        setIsLoading(false);
+      });
+  }, [apiKey, initAutocompleteOnce]);
 
-    // Check if script is already loading
-    if (window.googleMapsLoading) {
-      console.log('[AddressAutocomplete] Script already loading, waiting...');
-      if (!window.googleMapsCallbacks) {
-        window.googleMapsCallbacks = [];
-      }
-      window.googleMapsCallbacks.push(initAutocomplete);
-      return;
-    }
-
-    // Check if script is already in DOM
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
-    if (existingScript) {
-      console.log('[AddressAutocomplete] Script in DOM, waiting for load...');
-      const checkLoaded = setInterval(() => {
-        if (window.google?.maps?.places) {
-          clearInterval(checkLoaded);
-          initAutocomplete();
-        }
-      }, 100);
-      
-      setTimeout(() => {
-        clearInterval(checkLoaded);
-        if (!window.google?.maps?.places) {
-          console.error('[AddressAutocomplete] Timeout waiting for Google Maps');
-          setError('Google Maps no pudo cargarse');
-          setIsLoading(false);
-        }
-      }, 10000);
-      return;
-    }
-
-    // Load Google Maps script
-    window.googleMapsLoading = true;
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&language=es&region=AR`;
-    script.async = true;
-    script.defer = true;
-    
-    script.onload = () => {
-      console.log('[AddressAutocomplete] Google Maps script loaded');
-      window.googleMapsLoading = false;
-      initAutocomplete();
-      
-      // Call any waiting callbacks
-      if (window.googleMapsCallbacks) {
-        window.googleMapsCallbacks.forEach(cb => cb());
-        window.googleMapsCallbacks = [];
-      }
-    };
-    
-    script.onerror = (e) => {
-      console.error('[AddressAutocomplete] Failed to load Google Maps script:', e);
-      window.googleMapsLoading = false;
-      setError('Error al cargar Google Maps');
-      setIsLoading(false);
-    };
-
-    document.head.appendChild(script);
-
+  // Cleanup listeners on unmount
+  useEffect(() => {
     return () => {
       if (autocompleteRef.current) {
         window.google?.maps?.event?.clearInstanceListeners(autocompleteRef.current);
       }
     };
-  }, [apiKey, initAutocomplete]);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = safeString(e.target.value);
+    if (DEBUG) console.log('[AddressAutocomplete onChange]', text);
+
     setInputValue(text);
+
     // When user types manually, pass only the address (clear any previous place data)
-    onChange(text, undefined, undefined, undefined);
+    onChangeRef.current(text, undefined, undefined, undefined);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
