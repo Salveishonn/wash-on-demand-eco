@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Clock, MapPin, Car, CheckCircle, ChevronRight, Loader2, Send, Sparkles, AlertCircle, MessageCircle, CreditCard, Wallet, RefreshCw } from "lucide-react";
+import { Calendar, Clock, Car, CheckCircle, ChevronRight, Loader2, Send, Sparkles, AlertCircle, MessageCircle, CreditCard, Wallet, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { KipperOptIn } from "@/components/kipper/KipperOptIn";
 import { AddonsSelector } from "@/components/booking/AddonsSelector";
 import { useServiceAddons } from "@/hooks/useServiceAddons";
+import { AddressAutocomplete } from "@/components/booking/AddressAutocomplete";
 
 interface Service {
   id: string;
@@ -481,16 +482,11 @@ const Reservar = () => {
                   <h2 className="font-display text-2xl font-bold text-foreground mb-6">
                     Ubicación
                   </h2>
-                  <div className="relative">
-                    <MapPin className="absolute left-4 top-4 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder="Ingresá tu dirección"
-                      value={formData.address}
-                      onChange={(e) => handleInputChange("address", e.target.value)}
-                      className="pl-12 h-14 text-lg"
-                    />
-                  </div>
+                  <AddressAutocomplete
+                    value={formData.address}
+                    onChange={(address) => handleInputChange("address", address)}
+                    placeholder="Ingresá tu dirección"
+                  />
                   <p className="text-sm text-muted-foreground mt-2">
                     Casa, oficina o cualquier lugar con acceso al vehículo
                   </p>

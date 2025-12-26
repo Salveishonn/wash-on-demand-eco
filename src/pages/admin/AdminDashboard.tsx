@@ -26,6 +26,7 @@ import {
 import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
 import { SubscriptionsTab } from '@/components/admin/SubscriptionsTab';
 import { CalendarTab } from '@/components/admin/CalendarTab';
+import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -1092,29 +1093,19 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
               {/* Customer Info */}
               <div className="p-4 rounded-lg bg-muted/50">
                 <h4 className="font-semibold mb-3">Cliente</h4>
-                <div className="space-y-2 text-sm">
+                <div className="space-y-3 text-sm">
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-muted-foreground" />
                     <span>{selectedBooking.customer_name}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-muted-foreground" />
-                    <a href={`tel:${selectedBooking.customer_phone}`} className="text-primary hover:underline">
-                      {selectedBooking.customer_phone}
-                    </a>
-                  </div>
+                  <PhoneAction phone={selectedBooking.customer_phone} />
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-muted-foreground" />
                     <a href={`mailto:${selectedBooking.customer_email}`} className="text-primary hover:underline">
                       {selectedBooking.customer_email}
                     </a>
                   </div>
-                  {selectedBooking.address && (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                      <span>{selectedBooking.address}</span>
-                    </div>
-                  )}
+                  <AddressAction address={selectedBooking.address} />
                 </div>
               </div>
 

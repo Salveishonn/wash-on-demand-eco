@@ -7,14 +7,10 @@ import {
   Filter,
   Search,
   X,
-  Phone,
-  Mail,
-  MapPin,
   Clock,
   CreditCard,
   Users,
   Loader2,
-  Copy,
   CheckCircle,
   RefreshCw,
   Sparkles
@@ -38,6 +34,7 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import {
   addDays,
   startOfWeek,
@@ -633,56 +630,24 @@ export function CalendarTab() {
               <div className="space-y-3">
                 <h4 className="font-medium text-sm text-muted-foreground uppercase">Cliente</h4>
                 
-                <div className="flex items-center justify-between py-2 border-b">
+                <div className="flex items-center py-2 border-b">
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-muted-foreground" />
                     <span>{selectedBooking.customer_name}</span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-muted-foreground" />
-                    <span>{selectedBooking.customer_phone}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => copyToClipboard(selectedBooking.customer_phone, 'Teléfono')}
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
+                <div className="py-2 border-b">
+                  <PhoneAction phone={selectedBooking.customer_phone} />
                 </div>
 
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
-                    <span className="truncate">{selectedBooking.customer_email}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => copyToClipboard(selectedBooking.customer_email, 'Email')}
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
+                <div className="flex items-center py-2 border-b">
+                  <span className="truncate text-sm">{selectedBooking.customer_email}</span>
                 </div>
 
-                {selectedBooking.address && (
-                  <div className="flex items-center justify-between py-2 border-b">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                      <span>{selectedBooking.address}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => copyToClipboard(selectedBooking.address!, 'Dirección')}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                )}
+                <div className="py-2 border-b">
+                  <AddressAction address={selectedBooking.address} />
+                </div>
               </div>
 
               {/* Service Details */}
