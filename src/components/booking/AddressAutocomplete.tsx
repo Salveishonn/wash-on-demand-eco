@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MapPin, Loader2, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
 
 // Minimal Google Maps types
 interface GooglePlaceResult {
@@ -131,26 +132,40 @@ export function AddressAutocomplete({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load Maps (singleton) + init Places ONCE
+  // Fetch API key from edge function, then load Maps + init Places ONCE
   useEffect(() => {
-    const apiKey = safeString(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
-
-    if (!apiKey) {
-      setError("Falta configurar Google Maps");
-      setIsLoading(false);
-      setIsLoaded(false);
-      return;
-    }
-
     let cancelled = false;
 
-    setIsLoading(true);
-    setError(null);
+    const init = async () => {
+      setIsLoading(true);
+      setError(null);
 
-    loadGoogleMapsOnce(apiKey)
-      .then(() => {
+      // Log current origin so user can whitelist in Google Console
+      console.log("[AddressAutocomplete] Current origin:", window.location.origin);
+
+      try {
+        // Fetch API key from edge function
+        const { data, error: fetchErr } = await supabase.functions.invoke("get-maps-api-key");
+
+        if (fetchErr) {
+          console.error("[AddressAutocomplete] Edge function error:", fetchErr);
+          throw new Error("No se pudo obtener la API key");
+        }
+
+        const apiKey = safeString(data?.apiKey);
+        if (!apiKey) {
+          console.error("[AddressAutocomplete] API key missing in response:", data);
+          throw new Error("Google Maps API key no configurada");
+        }
+
         if (cancelled) return;
 
+        // Load Google Maps script
+        await loadGoogleMapsOnce(apiKey);
+
+        if (cancelled) return;
+
+        // If already initialized (e.g., HMR), skip
         if (initializedRef.current) {
           setIsLoaded(true);
           setIsLoading(false);
@@ -158,10 +173,7 @@ export function AddressAutocomplete({
         }
 
         if (!inputRef.current || !window.google?.maps?.places) {
-          setError("Google Maps no pudo inicializarse");
-          setIsLoading(false);
-          setIsLoaded(false);
-          return;
+          throw new Error("Google Maps no pudo inicializarse");
         }
 
         autocompleteRef.current = new window.google.maps.places.Autocomplete(
@@ -194,14 +206,16 @@ export function AddressAutocomplete({
         initializedRef.current = true;
         setIsLoaded(true);
         setIsLoading(false);
-      })
-      .catch((err: unknown) => {
-        console.error("[AddressAutocomplete] Google Maps load error:", err);
+      } catch (err: unknown) {
+        console.error("[AddressAutocomplete] Init error:", err);
         if (cancelled) return;
-        setError("Error al cargar Google Maps");
+        setError(err instanceof Error ? err.message : "Error al cargar Google Maps");
         setIsLoading(false);
         setIsLoaded(false);
-      });
+      }
+    };
+
+    init();
 
     return () => {
       cancelled = true;
