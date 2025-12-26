@@ -42,7 +42,9 @@ declare global {
 }
 
 interface AddressAutocompleteProps {
-  value: string;
+  /** Initial value used ONLY on mount (or remount when the step is shown again). */
+  initialValue?: string;
+  /** Fires on manual typing (string only). */
   onChange: (address: string, lat?: number, lng?: number, placeId?: string) => void;
   placeholder?: string;
   className?: string;
@@ -103,7 +105,7 @@ const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
 };
 
 export function AddressAutocomplete({
-  value,
+  initialValue,
   onChange,
   placeholder = 'Ingresá la dirección...',
   className = '',
@@ -124,21 +126,162 @@ export function AddressAutocomplete({
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
 
-  // Single source of truth for input (initialized only once from prop)
-  const [inputValue, setInputValue] = useState<string>(() => safeString(value));
+  // SINGLE source of truth for input. Never sync from props while typing.
+  const [inputValue, setInputValue] = useState<string>(() => safeString(initialValue));
 
-  if (DEBUG) {
-    console.log('[AddressAutocomplete render]', {
-      inputValue,
-      valueProp: value,
-      hasGoogle: !!window.google,
-      hasMaps: !!window.google?.maps,
-      hasPlaces: !!window.google?.maps?.places,
-      isLoading,
-      isLoaded,
-      error,
-    });
-  }
+  // If the step remounts and initialValue exists (going back), hydrate once.
+  useEffect(() => {
+    const next = safeString(initialValue);
+    if (next && !inputValue) setInputValue(next);
+  }, [initialValue]);
+
+  // Fetch API key from backend function
+  useEffect(() => {
+    const fetchApiKey = async () => {
+      try {
+        console.log('[AddressAutocomplete] Fetching API key...');
+        const { data, error } = await supabase.functions.invoke('get-maps-api-key');
+
+        if (error) {
+          console.error('[AddressAutocomplete] Error fetching API key:', error);
+          setError('Error al cargar Google Maps');
+          setIsLoading(false);
+          return;
+        }
+
+        if (data?.apiKey) {
+          setApiKey(data.apiKey);
+        } else {
+          setError('Google Maps no configurado');
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('[AddressAutocomplete] Failed to fetch API key:', err);
+        setError('Error al cargar Google Maps');
+        setIsLoading(false);
+      }
+    };
+
+    fetchApiKey();
+  }, []);
+
+  const initAutocompleteOnce = useCallback(() => {
+    if (autocompleteInitializedRef.current) return;
+    if (!inputRef.current || !window.google?.maps?.places) return;
+
+    try {
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+        componentRestrictions: { country: 'ar' },
+        types: ['geocode', 'address'],
+        fields: ['formatted_address', 'geometry', 'place_id'],
+      });
+
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current?.getPlace();
+        const address = safeString(place?.formatted_address);
+        if (!address) return;
+
+        const lat = place?.geometry?.location?.lat();
+        const lng = place?.geometry?.location?.lng();
+        const placeId = safeString(place?.place_id);
+
+        setInputValue(address);
+        onChangeRef.current(address, lat, lng, placeId || undefined);
+      });
+
+      autocompleteInitializedRef.current = true;
+      setIsLoaded(true);
+      setIsLoading(false);
+      setError(null);
+    } catch (err) {
+      console.error('[AddressAutocomplete] Error initializing Places:', err);
+      setError('Error al inicializar autocompletado');
+      setIsLoading(false);
+    }
+  }, []);
+
+  // If the step remounts and initialValue exists (going back), hydrate once.
+  useEffect(() => {
+    const next = safeString(initialValue);
+    if (next && !inputValue) setInputValue(next);
+  }, [initialValue]);
+
+  // Fetch API key from edge function
+  useEffect(() => {
+    const fetchApiKey = async () => {
+      try {
+        console.log('[AddressAutocomplete] Fetching API key...');
+        const { data, error } = await supabase.functions.invoke('get-maps-api-key');
+
+        if (error) {
+          console.error('[AddressAutocomplete] Error fetching API key:', error);
+          setError('Error al cargar Google Maps');
+          setIsLoading(false);
+          return;
+        }
+
+        if (data?.apiKey) {
+          console.log('[AddressAutocomplete] API key received');
+          setApiKey(data.apiKey);
+        } else {
+          console.warn('[AddressAutocomplete] No API key in response');
+          setError('Google Maps no configurado');
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('[AddressAutocomplete] Failed to fetch API key:', err);
+        setError('Error al cargar Google Maps');
+        setIsLoading(false);
+      }
+    };
+
+    fetchApiKey();
+  }, []);
+
+  const initAutocompleteOnce = useCallback(() => {
+    if (autocompleteInitializedRef.current) {
+      return;
+    }
+
+    if (!inputRef.current || !window.google?.maps?.places) {
+      return;
+    }
+
+    try {
+      console.log('[AddressAutocomplete] Initializing places autocomplete...');
+
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+        componentRestrictions: { country: 'ar' },
+        types: ['geocode', 'address'],
+        fields: ['formatted_address', 'geometry', 'place_id'],
+      });
+
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current?.getPlace();
+
+        const address = safeString(place?.formatted_address);
+        if (!address) return;
+
+        const lat = place?.geometry?.location?.lat();
+        const lng = place?.geometry?.location?.lng();
+        const placeId = safeString(place?.place_id);
+
+        setInputValue(address);
+        onChangeRef.current(address, lat, lng, placeId || undefined);
+      });
+
+      autocompleteInitializedRef.current = true;
+      setIsLoaded(true);
+      setIsLoading(false);
+      setError(null);
+
+      console.log('[AddressAutocomplete] Places initialized OK');
+    } catch (err) {
+      console.error('[AddressAutocomplete] Error initializing Places:', err);
+      setError('Error al inicializar autocompletado');
+      setIsLoading(false);
+    }
+  }, []);
 
   // Fetch API key from edge function
   useEffect(() => {
