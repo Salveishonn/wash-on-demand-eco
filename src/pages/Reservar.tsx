@@ -483,7 +483,7 @@ const Reservar = () => {
                     Ubicación
                   </h2>
                   <AddressAutocomplete
-                    value={formData.address}
+                    initialValue={formData.address}
                     onChange={(address) => handleInputChange("address", address ?? "")}
                     placeholder="Ingresá tu dirección"
                   />
