@@ -82,3 +82,6 @@ verify_jwt = false
 
 [functions.admin-send-subscription-payment-email]
 verify_jwt = false
+
+[functions.get-maps-api-key]
+verify_jwt = false
