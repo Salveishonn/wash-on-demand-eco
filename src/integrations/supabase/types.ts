@@ -314,6 +314,60 @@ export type Database = {
           },
         ]
       }
+      outgoing_messages: {
+        Row: {
+          booking_id: string
+          channel: string
+          created_at: string
+          customer_phone: string
+          error: string | null
+          id: string
+          message: string
+          provider_message_id: string | null
+          status: string
+          type: string
+        }
+        Insert: {
+          booking_id: string
+          channel?: string
+          created_at?: string
+          customer_phone: string
+          error?: string | null
+          id?: string
+          message: string
+          provider_message_id?: string | null
+          status?: string
+          type: string
+        }
+        Update: {
+          booking_id?: string
+          channel?: string
+          created_at?: string
+          customer_phone?: string
+          error?: string | null
+          id?: string
+          message?: string
+          provider_message_id?: string | null
+          status?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outgoing_messages_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outgoing_messages_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_bookings_v"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_intents: {
         Row: {
           amount_ars: number

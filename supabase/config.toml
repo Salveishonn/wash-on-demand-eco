@@ -91,3 +91,6 @@ verify_jwt = false
 
 [functions.get-availability-month]
 verify_jwt = false
+
+[functions.admin-send-customer-notification]
+verify_jwt = false
