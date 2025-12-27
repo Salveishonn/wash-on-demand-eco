@@ -171,6 +171,19 @@ serve(async (req) => {
         hint: bookingError.hint,
       });
       
+      // Check for duplicate slot error (Postgres unique constraint violation)
+      if (bookingError.code === "23505") {
+        console.log("[create-booking] Slot already booked - duplicate detected");
+        return new Response(
+          JSON.stringify({ 
+            error: "Ese horario ya fue reservado. Elegí otro.",
+            slotTaken: true,
+            code: "SLOT_TAKEN"
+          }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
       // Log error to database for debugging (fire and forget)
       try {
         await supabase.from("webhook_logs").insert({

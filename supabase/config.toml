@@ -85,3 +85,9 @@ verify_jwt = false
 
 [functions.get-maps-api-key]
 verify_jwt = false
+
+[functions.get-available-slots]
+verify_jwt = false
+
+[functions.get-availability-month]
+verify_jwt = false
