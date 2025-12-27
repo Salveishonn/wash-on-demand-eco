@@ -67,9 +67,7 @@ export function AddressAutocomplete({
       const msg = String(ev.message || "");
       if (!msg.includes("Google Maps JavaScript API error")) return;
 
-      const cleaned = msg
-        .replace("Google Maps JavaScript API error:", "")
-        .trim();
+      const cleaned = msg.replace("Google Maps JavaScript API error:", "").trim();
 
       console.error("[Autocomplete] Maps JS error captured:", cleaned);
       setErrorMsg(cleaned || msg);
@@ -124,7 +122,7 @@ export function AddressAutocomplete({
 
         // 2) Load Google Maps script (singleton)
         const loadResult = await loadGoogleMaps(apiKey);
-        
+
         if (!loadResult.success) {
           throw new Error(loadResult.error || "Failed to load Google Maps");
         }
@@ -148,7 +146,7 @@ export function AddressAutocomplete({
         }
 
         console.log("[Autocomplete] Attaching Autocomplete to input...");
-        
+
         autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
           componentRestrictions: { country: "ar" },
           types: ["address"],
@@ -178,7 +176,6 @@ export function AddressAutocomplete({
 
         console.log("[Autocomplete] Autocomplete: ready");
         setAutocompleteStatus("ready");
-        
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
         console.error("[Autocomplete] Init failed:", msg);
@@ -216,8 +213,8 @@ export function AddressAutocomplete({
         setPlacesStatus("missing");
         setAutocompleteStatus("failed");
         setErrorMsg(
-          existingError || 
-          "TIMEOUT: Google Maps no cargó. Revisá: API key, billing, HTTP referrers, CSP, o bloqueo de red."
+          existingError ||
+            "TIMEOUT: Google Maps no cargó. Revisá: API key, billing, HTTP referrers, CSP, o bloqueo de red.",
         );
       }
     }, 13000);
@@ -280,4 +277,3 @@ export function AddressAutocomplete({
     </div>
   );
 }
-
