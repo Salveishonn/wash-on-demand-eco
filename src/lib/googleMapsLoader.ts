@@ -51,10 +51,12 @@ export async function loadGoogleMaps(apiKey: string): Promise<MapsLoadResult> {
   console.log("[GoogleMaps] Origin:", window.location.origin);
 
   window.__gmapsPromise = new Promise<void>((resolve, reject) => {
-    // Check for existing script
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[src*="maps.googleapis.com"]'
-    );
+    // Check for existing script (prefer by id)
+    const existing =
+      document.querySelector<HTMLScriptElement>("#google-maps") ||
+      document.querySelector<HTMLScriptElement>(
+        'script[src*="maps.googleapis.com/maps/api/js"]'
+      );
 
     if (existing) {
       console.log("[GoogleMaps] Script tag exists, polling for API...");
@@ -76,6 +78,7 @@ export async function loadGoogleMaps(apiKey: string): Promise<MapsLoadResult> {
 
     // Create and inject script
     const script = document.createElement("script");
+    script.id = "google-maps";
     script.async = true;
     script.defer = true;
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&language=es&region=AR`;
