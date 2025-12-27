@@ -94,3 +94,9 @@ verify_jwt = false
 
 [functions.admin-send-customer-notification]
 verify_jwt = false
+
+[functions.admin-whatsapp-send]
+verify_jwt = false
+
+[functions.twilio-whatsapp-webhook]
+verify_jwt = false

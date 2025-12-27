@@ -27,6 +27,7 @@ import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
 import { SubscriptionsTab } from '@/components/admin/SubscriptionsTab';
 import { CalendarTab } from '@/components/admin/CalendarTab';
 import { FinanzasTab } from '@/components/admin/FinanzasTab';
+import { MessagesTab } from '@/components/admin/MessagesTab';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -77,7 +78,7 @@ interface NotificationLog {
   created_at: string;
 }
 
-type TabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas';
+type TabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'mensajes';
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 const formatPrice = (cents: number) => {
@@ -782,6 +783,14 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             <DollarSign className="w-4 h-4 mr-2" />
             Finanzas
           </Button>
+          <Button
+            variant={activeTab === 'mensajes' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('mensajes')}
+            className={activeTab === 'mensajes' ? 'bg-green-600 hover:bg-green-700' : ''}
+          >
+            <MessageCircle className="w-4 h-4 mr-2" />
+            Mensajes
+          </Button>
         </div>
 
         {/* Bookings Tab */}
@@ -1158,6 +1167,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             onRefresh={fetchData} 
           />
         )}
+
+        {/* Mensajes Tab */}
+        {activeTab === 'mensajes' && <MessagesTab />}
       </div>
 
       {/* Booking Detail Dialog */}
