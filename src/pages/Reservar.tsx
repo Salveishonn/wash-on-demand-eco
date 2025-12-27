@@ -309,9 +309,9 @@ const Reservar = () => {
   const canProceed = () => {
     switch (step) {
       case 1:
-        return formData.service && formData.carType;
+        return formData.service && formData.carType && formData.address;
       case 2:
-        return formData.date && formData.time && formData.address;
+        return formData.date && formData.time;
       case 3:
         return formData.name && formData.email && formData.phone;
       default:
@@ -459,6 +459,22 @@ const Reservar = () => {
                     isSelected={isSelected}
                   />
                 )}
+
+                {/* Ubicación - moved to Step 1 */}
+                <div>
+                  <h2 className="font-display text-2xl font-bold text-foreground mb-6">
+                    Ubicación
+                  </h2>
+                  <AddressAutocomplete
+                    initialValue={formData.address}
+                    onTextChange={handleAddressTextChange}
+                    onSelect={handleAddressSelect}
+                    placeholder="Ingresá tu dirección"
+                  />
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Casa, oficina o cualquier lugar con acceso al vehículo
+                  </p>
+                </div>
               </motion.div>
             )}
 
@@ -507,20 +523,6 @@ const Reservar = () => {
                   </div>
                 </div>
 
-                <div>
-                  <h2 className="font-display text-2xl font-bold text-foreground mb-6">
-                    Ubicación
-                  </h2>
-                  <AddressAutocomplete
-                    initialValue={formData.address}
-                    onTextChange={handleAddressTextChange}
-                    onSelect={handleAddressSelect}
-                    placeholder="Ingresá tu dirección"
-                  />
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Casa, oficina o cualquier lugar con acceso al vehículo
-                  </p>
-                </div>
               </motion.div>
             )}
 
