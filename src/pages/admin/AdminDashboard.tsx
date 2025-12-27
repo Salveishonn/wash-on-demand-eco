@@ -26,6 +26,7 @@ import {
 import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
 import { SubscriptionsTab } from '@/components/admin/SubscriptionsTab';
 import { CalendarTab } from '@/components/admin/CalendarTab';
+import { FinanzasTab } from '@/components/admin/FinanzasTab';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -75,7 +76,7 @@ interface NotificationLog {
   created_at: string;
 }
 
-type TabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario';
+type TabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas';
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 const formatPrice = (cents: number) => {
@@ -728,6 +729,14 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             <Calendar className="w-4 h-4 mr-2" />
             Calendario
           </Button>
+          <Button
+            variant={activeTab === 'finanzas' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('finanzas')}
+            className={activeTab === 'finanzas' ? 'bg-green-600 hover:bg-green-700' : ''}
+          >
+            <DollarSign className="w-4 h-4 mr-2" />
+            Finanzas
+          </Button>
         </div>
 
         {/* Bookings Tab */}
@@ -1076,6 +1085,15 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* Calendario Tab */}
         {activeTab === 'calendario' && <CalendarTab />}
+
+        {/* Finanzas Tab */}
+        {activeTab === 'finanzas' && (
+          <FinanzasTab 
+            bookings={bookings} 
+            isLoading={isLoading} 
+            onRefresh={fetchData} 
+          />
+        )}
       </div>
 
       {/* Booking Detail Dialog */}
