@@ -63,6 +63,7 @@ interface AddressAutocompleteProps {
 }
 
 const safeString = (v: unknown): string => (typeof v === "string" ? v : "");
+const DEBUG = import.meta.env.DEV;
 
 const loadGoogleMapsOnce = (apiKey: string): Promise<void> => {
   if (window.google?.maps?.places) return Promise.resolve();
@@ -120,6 +121,18 @@ export function AddressAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<GoogleAutocomplete | null>(null);
   const initializedRef = useRef(false);
+  const debugLoggedRef = useRef(false);
+
+  const onSelectRef = useRef(onSelect);
+  const onTextChangeRef = useRef(onTextChange);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    onTextChangeRef.current = onTextChange;
+  }, [onTextChange]);
 
   const [inputValue, setInputValue] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -140,8 +153,10 @@ export function AddressAutocomplete({
       setIsLoading(true);
       setError(null);
 
-      // Log current origin so user can whitelist in Google Console
-      console.log("[AddressAutocomplete] Current origin:", window.location.origin);
+      if (DEBUG && !debugLoggedRef.current) {
+        debugLoggedRef.current = true;
+        console.log("[Origin]", window.location.origin);
+      }
 
       try {
         // Fetch API key from edge function
@@ -165,6 +180,15 @@ export function AddressAutocomplete({
 
         if (cancelled) return;
 
+        if (DEBUG) {
+          console.log("[Maps] loaded:", !!window.google?.maps);
+          console.log("[Places] available:", !!window.google?.maps?.places);
+        }
+
+        if (!window.google?.maps?.places) {
+          throw new Error("Google Places no está disponible (ver consola)");
+        }
+
         // If already initialized (e.g., HMR), skip
         if (initializedRef.current) {
           setIsLoaded(true);
@@ -172,18 +196,15 @@ export function AddressAutocomplete({
           return;
         }
 
-        if (!inputRef.current || !window.google?.maps?.places) {
-          throw new Error("Google Maps no pudo inicializarse");
+        if (!inputRef.current) {
+          throw new Error("Input no disponible para inicializar Places");
         }
 
-        autocompleteRef.current = new window.google.maps.places.Autocomplete(
-          inputRef.current,
-          {
-            componentRestrictions: { country: "ar" },
-            types: ["geocode", "address"],
-            fields: ["formatted_address", "geometry", "place_id"],
-          }
-        );
+        autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+          componentRestrictions: { country: "ar" },
+          types: ["geocode", "address"],
+          fields: ["formatted_address", "geometry", "place_id"],
+        });
 
         autocompleteRef.current.addListener("place_changed", () => {
           const place = autocompleteRef.current?.getPlace();
@@ -195,7 +216,7 @@ export function AddressAutocomplete({
           const placeId = safeString(place?.place_id);
 
           setInputValue(address);
-          onSelect?.({
+          onSelectRef.current?.({
             address,
             placeId: placeId || undefined,
             lat,
@@ -219,16 +240,19 @@ export function AddressAutocomplete({
 
     return () => {
       cancelled = true;
+      // Only cleanup on unmount (effect runs once)
       if (autocompleteRef.current) {
         window.google?.maps?.event?.clearInstanceListeners(autocompleteRef.current);
       }
     };
-  }, [onSelect]);
+    // run ONCE on mount; do not depend on parent callbacks
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = safeString(e.target.value);
     setInputValue(text);
-    onTextChange?.(text);
+    onTextChangeRef.current?.(text);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
