@@ -73,6 +73,9 @@ serve(async (req) => {
       });
     }
 
+    // Parse filters from request body
+    const filters: CalendarFilters = await req.json();
+
     // Build query from the view
     let query = supabase
       .from("calendar_bookings_v")
