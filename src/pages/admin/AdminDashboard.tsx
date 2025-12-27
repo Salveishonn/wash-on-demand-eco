@@ -42,6 +42,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PAYMENTS_ENABLED } from '@/config/payments';
+import { sendCustomerNotification } from '@/lib/notifications/sendCustomerNotification';
 
 interface Booking {
   id: string;
@@ -121,6 +122,50 @@ export default function AdminDashboard() {
   const [isSendingPaymentInstructions, setIsSendingPaymentInstructions] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [sendingOnMyWayId, setSendingOnMyWayId] = useState<string | null>(null);
+  const [notifiedBookings, setNotifiedBookings] = useState<Set<string>>(new Set());
+
+  const handleSendOnMyWay = async (booking: Booking) => {
+    const confirmMsg = `¿Enviar mensaje "Estamos en camino" a ${booking.customer_phone}?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setSendingOnMyWayId(booking.id);
+    try {
+      const result = await sendCustomerNotification(booking.id, 'ON_MY_WAY');
+      
+      if (result.ok) {
+        toast({
+          title: 'Mensaje encolado ✅',
+          description: result.sent 
+            ? 'WhatsApp enviado correctamente' 
+            : 'Mensaje guardado para envío posterior',
+        });
+        // Mark as notified for 10 minutes
+        setNotifiedBookings(prev => new Set(prev).add(booking.id));
+        setTimeout(() => {
+          setNotifiedBookings(prev => {
+            const next = new Set(prev);
+            next.delete(booking.id);
+            return next;
+          });
+        }, 10 * 60 * 1000);
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: result.error || 'No se pudo enviar la notificación',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Error enviando notificación',
+      });
+    } finally {
+      setSendingOnMyWayId(null);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -908,6 +953,25 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                                   title="Cancelar reserva"
                                 >
                                   <XCircle className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {/* En camino: for confirmed bookings */}
+                              {booking.status === 'confirmed' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleSendOnMyWay(booking)}
+                                  disabled={sendingOnMyWayId === booking.id}
+                                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                  title="Enviar 'En camino'"
+                                >
+                                  {sendingOnMyWayId === booking.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : notifiedBookings.has(booking.id) ? (
+                                    <CheckCircle className="w-4 h-4 text-green-600" />
+                                  ) : (
+                                    <Send className="w-4 h-4" />
+                                  )}
                                 </Button>
                               )}
                             </div>

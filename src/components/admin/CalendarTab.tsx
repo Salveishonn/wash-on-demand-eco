@@ -19,7 +19,8 @@ import {
   Car,
   Eye,
   XCircle,
-  DollarSign
+  DollarSign,
+  Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +42,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
+import { sendCustomerNotification } from '@/lib/notifications/sendCustomerNotification';
 import {
   addDays,
   startOfWeek,
@@ -145,6 +147,10 @@ export function CalendarTab() {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [isDayDrawerOpen, setIsDayDrawerOpen] = useState(false);
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
+  
+  // On my way notification state
+  const [sendingOnMyWayId, setSendingOnMyWayId] = useState<string | null>(null);
+  const [notifiedBookings, setNotifiedBookings] = useState<Set<string>>(new Set());
 
   // Calculate date range based on view mode
   const dateRange = useMemo(() => {
@@ -436,6 +442,49 @@ export function CalendarTab() {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {
       setUpdatingBookingId(null);
+    }
+  };
+
+  // Send "On my way" notification
+  const handleSendOnMyWay = async (booking: CalendarBooking) => {
+    const confirmMsg = `¿Enviar mensaje "Estamos en camino" a ${booking.customer_phone}?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setSendingOnMyWayId(booking.id);
+    try {
+      const result = await sendCustomerNotification(booking.id, 'ON_MY_WAY');
+      
+      if (result.ok) {
+        toast({
+          title: 'Mensaje encolado ✅',
+          description: result.sent 
+            ? 'WhatsApp enviado correctamente' 
+            : 'Mensaje guardado para envío posterior',
+        });
+        // Mark as notified for 10 minutes
+        setNotifiedBookings(prev => new Set(prev).add(booking.id));
+        setTimeout(() => {
+          setNotifiedBookings(prev => {
+            const next = new Set(prev);
+            next.delete(booking.id);
+            return next;
+          });
+        }, 10 * 60 * 1000);
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: result.error || 'No se pudo enviar la notificación',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Error enviando notificación',
+      });
+    } finally {
+      setSendingOnMyWayId(null);
     }
   };
 
@@ -997,6 +1046,26 @@ export function CalendarTab() {
                         >
                           {isUpdatingThis ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <XCircle className="w-3 h-3 mr-1" />}
                           Cancelar
+                        </Button>
+                      )}
+
+                      {/* En camino: for confirmed bookings */}
+                      {booking.booking_status === 'confirmed' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSendOnMyWay(booking)}
+                          disabled={sendingOnMyWayId === booking.id}
+                          className="text-amber-600 border-amber-300 hover:bg-amber-50"
+                        >
+                          {sendingOnMyWayId === booking.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                          ) : notifiedBookings.has(booking.id) ? (
+                            <CheckCircle className="w-3 h-3 mr-1 text-green-600" />
+                          ) : (
+                            <Send className="w-3 h-3 mr-1" />
+                          )}
+                          {notifiedBookings.has(booking.id) ? 'Notificado' : 'En camino'}
                         </Button>
                       )}
 
