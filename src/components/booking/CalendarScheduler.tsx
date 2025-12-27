@@ -14,7 +14,7 @@ interface DayAvailability {
 }
 
 interface CalendarSchedulerProps {
-  onBookingComplete: (bookingId: string, paymentMethod: string) => void;
+  onBookingComplete?: (bookingId: string, paymentMethod: string) => void;
 }
 
 const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
