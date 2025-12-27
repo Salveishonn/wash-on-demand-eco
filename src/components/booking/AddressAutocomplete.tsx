@@ -1,50 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { MapPin, Loader2, AlertCircle } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { MapPin, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { loadGoogleMaps, isMapsReady } from "@/lib/googleMapsLoader";
 
-// Minimal Google Maps types
-interface GooglePlaceResult {
-  formatted_address?: string;
-  place_id?: string;
-  geometry?: {
-    location?: {
-      lat(): number;
-      lng(): number;
-    };
-  };
-}
-
-interface GoogleAutocomplete {
-  addListener(event: string, handler: () => void): void;
-  getPlace(): GooglePlaceResult;
-}
-
-interface GoogleMapsPlaces {
-  Autocomplete: new (input: HTMLInputElement, options: object) => GoogleAutocomplete;
-}
-
-interface GoogleMapsEvent {
-  clearInstanceListeners(instance: object): void;
-}
-
-interface GoogleMaps {
-  places?: GoogleMapsPlaces;
-  event?: GoogleMapsEvent;
-}
-
-interface GoogleAPI {
-  maps?: GoogleMaps;
-}
-
-declare global {
-  interface Window {
-    google?: GoogleAPI;
-    __gmapsPromise?: Promise<void>;
-  }
-}
-
-type PlaceSelection = {
+export type PlaceSelection = {
   address: string;
   placeId?: string;
   lat?: number;
@@ -52,187 +12,128 @@ type PlaceSelection = {
 };
 
 interface AddressAutocompleteProps {
-  /** Used only on mount/remount to prefill the input. Never synced while typing. */
   initialValue?: string;
-  /** Fires on manual typing (string only). */
   onTextChange?: (text: string) => void;
-  /** Fires only when a Google suggestion is selected. */
   onSelect?: (selection: PlaceSelection) => void;
   placeholder?: string;
   className?: string;
 }
 
-const safeString = (v: unknown): string => (typeof v === "string" ? v : "");
-const DEBUG = import.meta.env.DEV;
-
-const loadGoogleMapsOnce = (apiKey: string): Promise<void> => {
-  if (window.google?.maps?.places) return Promise.resolve();
-  if (window.__gmapsPromise) return window.__gmapsPromise;
-
-  window.__gmapsPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[data-google-maps="true"]'
-    );
-
-    if (existing) {
-      const startedAt = Date.now();
-      const interval = window.setInterval(() => {
-        if (window.google?.maps?.places) {
-          window.clearInterval(interval);
-          resolve();
-        } else if (Date.now() - startedAt > 15000) {
-          window.clearInterval(interval);
-          reject(new Error("Timeout esperando Google Maps"));
-        }
-      }, 100);
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.dataset.googleMaps = "true";
-    script.async = true;
-    script.defer = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
-      apiKey
-    )}&libraries=places&language=es&region=AR`;
-
-    script.onload = () => {
-      if (window.google?.maps?.places) resolve();
-      else reject(new Error("Google Maps cargó pero Places no está disponible"));
-    };
-
-    script.onerror = () => {
-      reject(new Error("No se pudo cargar Google Maps"));
-    };
-
-    document.head.appendChild(script);
-  });
-
-  return window.__gmapsPromise;
-};
+type LoadStatus = "idle" | "loading" | "ready" | "error";
 
 export function AddressAutocomplete({
-  initialValue,
+  initialValue = "",
   onTextChange,
   onSelect,
   placeholder = "Ingresá la dirección...",
   className = "",
 }: AddressAutocompleteProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<GoogleAutocomplete | null>(null);
-  const initializedRef = useRef(false);
-  const debugLoggedRef = useRef(false);
+  // Local input state - NEVER synced from props after mount
+  const [inputValue, setInputValue] = useState<string>(initialValue);
+  const [status, setStatus] = useState<LoadStatus>("idle");
+  const [errorMsg, setErrorMsg] = useState<string>("");
 
+  // Refs
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const initAttemptedRef = useRef(false);
+
+  // Stable callback refs to avoid re-init on prop changes
   const onSelectRef = useRef(onSelect);
   const onTextChangeRef = useRef(onTextChange);
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  useEffect(() => { onTextChangeRef.current = onTextChange; }, [onTextChange]);
 
+  // Initialize Google Maps + Autocomplete ONCE on mount
   useEffect(() => {
-    onSelectRef.current = onSelect;
-  }, [onSelect]);
+    if (initAttemptedRef.current) return;
+    initAttemptedRef.current = true;
 
-  useEffect(() => {
-    onTextChangeRef.current = onTextChange;
-  }, [onTextChange]);
-
-  const [inputValue, setInputValue] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isLoaded, setIsLoaded] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Initialize value ONCE on mount/remount (never sync while typing)
-  useEffect(() => {
-    setInputValue(safeString(initialValue));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Fetch API key from edge function, then load Maps + init Places ONCE
-  useEffect(() => {
     let cancelled = false;
 
     const init = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      if (DEBUG && !debugLoggedRef.current) {
-        debugLoggedRef.current = true;
-        console.log("[Origin]", window.location.origin);
-      }
+      setStatus("loading");
+      setErrorMsg("");
 
       try {
-        // Fetch API key from edge function
+        // 1. Fetch API key from edge function
+        console.log("[Autocomplete] Fetching API key...");
         const { data, error: fetchErr } = await supabase.functions.invoke("get-maps-api-key");
 
         if (fetchErr) {
-          console.error("[AddressAutocomplete] Edge function error:", fetchErr);
-          throw new Error("No se pudo obtener la API key");
+          throw new Error(`Edge function error: ${fetchErr.message}`);
         }
 
-        const apiKey = safeString(data?.apiKey);
+        const apiKey = typeof data?.apiKey === "string" ? data.apiKey : "";
         if (!apiKey) {
-          console.error("[AddressAutocomplete] API key missing in response:", data);
-          throw new Error("Google Maps API key no configurada");
+          throw new Error("API key not configured (empty response)");
         }
 
         if (cancelled) return;
 
-        // Load Google Maps script
-        await loadGoogleMapsOnce(apiKey);
+        // 2. Load Google Maps script
+        console.log("[Autocomplete] Loading Google Maps...");
+        const result = await loadGoogleMaps(apiKey);
+
+        if (!result.success) {
+          throw new Error(result.error || "Failed to load Google Maps");
+        }
 
         if (cancelled) return;
 
-        if (DEBUG) {
-          console.log("[Maps] loaded:", !!window.google?.maps);
-          console.log("[Places] available:", !!window.google?.maps?.places);
-        }
-
-        if (!window.google?.maps?.places) {
-          throw new Error("Google Places no está disponible (ver consola)");
-        }
-
-        // If already initialized (e.g., HMR), skip
-        if (initializedRef.current) {
-          setIsLoaded(true);
-          setIsLoading(false);
-          return;
-        }
-
+        // 3. Wait for input ref
         if (!inputRef.current) {
-          throw new Error("Input no disponible para inicializar Places");
+          throw new Error("Input element not available");
         }
 
-        autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+        // 4. Check Places API
+        if (!isMapsReady()) {
+          throw new Error("Places API not available after load");
+        }
+
+        // 5. Create Autocomplete instance
+        console.log("[Autocomplete] Attaching to input...");
+        autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
           componentRestrictions: { country: "ar" },
           types: ["geocode", "address"],
           fields: ["formatted_address", "geometry", "place_id"],
         });
 
+        // 6. Listen for place selection
         autocompleteRef.current.addListener("place_changed", () => {
           const place = autocompleteRef.current?.getPlace();
-          const address = safeString(place?.formatted_address);
+          if (!place) return;
+
+          const address = place.formatted_address || "";
           if (!address) return;
 
-          const lat = place?.geometry?.location?.lat();
-          const lng = place?.geometry?.location?.lng();
-          const placeId = safeString(place?.place_id);
+          const lat = place.geometry?.location?.lat();
+          const lng = place.geometry?.location?.lng();
+          const placeId = place.place_id;
 
+          console.log("[Autocomplete] Place selected:", { address, placeId, lat, lng });
+
+          // Update local state
           setInputValue(address);
+
+          // Notify parent
           onSelectRef.current?.({
             address,
-            placeId: placeId || undefined,
+            placeId,
             lat,
             lng,
           });
         });
 
-        initializedRef.current = true;
-        setIsLoaded(true);
-        setIsLoading(false);
-      } catch (err: unknown) {
-        console.error("[AddressAutocomplete] Init error:", err);
+        console.log("[Autocomplete] Ready!");
+        setStatus("ready");
+
+      } catch (err) {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Error al cargar Google Maps");
-        setIsLoading(false);
-        setIsLoaded(false);
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        console.error("[Autocomplete] Init failed:", msg);
+        setErrorMsg(msg);
+        setStatus("error");
       }
     };
 
@@ -240,27 +141,27 @@ export function AddressAutocomplete({
 
     return () => {
       cancelled = true;
-      // Only cleanup on unmount (effect runs once)
+      // Cleanup listeners on unmount
       if (autocompleteRef.current) {
-        window.google?.maps?.event?.clearInstanceListeners(autocompleteRef.current);
+        google.maps.event?.clearInstanceListeners(autocompleteRef.current);
       }
     };
-    // run ONCE on mount; do not depend on parent callbacks
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const text = safeString(e.target.value);
-    setInputValue(text);
-    onTextChangeRef.current?.(text);
-  };
+  // Handle manual typing
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
+    onTextChangeRef.current?.(value);
+  }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Prevent Enter from submitting form (Google dropdown uses Enter)
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
     }
-  };
+  }, []);
 
   return (
     <div className="space-y-2">
@@ -273,23 +174,37 @@ export function AddressAutocomplete({
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={`pl-12 h-14 text-lg ${className}`}
+          className={`pl-12 pr-12 h-14 text-lg ${className}`}
           autoComplete="off"
         />
-        {isLoading && (
-          <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
-        )}
-        {isLoaded && !isLoading && (
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-primary">
-            ✓
-          </span>
-        )}
+        
+        {/* Status indicators */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+          {status === "loading" && (
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+          )}
+          {status === "ready" && (
+            <CheckCircle2 className="w-4 h-4 text-primary" />
+          )}
+          {status === "error" && (
+            <AlertCircle className="w-4 h-4 text-destructive" />
+          )}
+        </div>
       </div>
 
-      {error && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <AlertCircle className="w-3 h-3" />
-          <span>{error} — podés escribir la dirección manualmente</span>
+      {/* Status text for debugging */}
+      {status === "loading" && (
+        <p className="text-xs text-muted-foreground">
+          Cargando Google Maps...
+        </p>
+      )}
+
+      {status === "error" && (
+        <div className="flex items-start gap-2 text-xs text-muted-foreground">
+          <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+          <span>
+            Google Maps no disponible ({errorMsg}). Podés escribir la dirección manualmente.
+          </span>
         </div>
       )}
     </div>
