@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { MapPin, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { loadGoogleMaps, isMapsReady } from "@/lib/googleMapsLoader";
+import { loadGoogleMaps, isMapsReady, getMapsError } from "@/lib/googleMapsLoader";
 
 export type PlaceSelection = {
   address: string;
@@ -19,9 +19,9 @@ interface AddressAutocompleteProps {
   className?: string;
 }
 
-type MapsScriptStatus = "idle" | "loading" | "loaded" | "failed";
-type PlacesStatus = "unknown" | "available" | "missing";
-type AutocompleteStatus = "idle" | "attached" | "failed";
+type MapsScriptStatus = "idle" | "loading" | "ready" | "error";
+type PlacesStatus = "unknown" | "ready" | "missing";
+type AutocompleteStatus = "idle" | "ready" | "failed";
 
 export function AddressAutocomplete({
   initialValue = "",
@@ -73,7 +73,7 @@ export function AddressAutocomplete({
 
       console.error("[Autocomplete] Maps JS error captured:", cleaned);
       setErrorMsg(cleaned || msg);
-      setMapsScriptStatus("failed");
+      setMapsScriptStatus("error");
       setPlacesStatus("missing");
       setAutocompleteStatus("failed");
     };
@@ -83,7 +83,7 @@ export function AddressAutocomplete({
     (window as any).gm_authFailure = () => {
       console.error("[Autocomplete] gm_authFailure called");
       setErrorMsg((prev) => prev || "gm_authFailure (posible InvalidKey/Billing/Referer)");
-      setMapsScriptStatus("failed");
+      setMapsScriptStatus("error");
       setPlacesStatus("missing");
       setAutocompleteStatus("failed");
       if (typeof prevAuthFailure === "function") prevAuthFailure();
@@ -102,8 +102,6 @@ export function AddressAutocomplete({
     if (initAttemptedRef.current) return;
     initAttemptedRef.current = true;
 
-    let cancelled = false;
-
     const init = async () => {
       try {
         setErrorMsg("");
@@ -111,42 +109,46 @@ export function AddressAutocomplete({
         setPlacesStatus("unknown");
         setAutocompleteStatus("idle");
 
-        console.log("[Maps] Origin", window.location.origin);
-        console.log("[Maps] loaded:", !!window.google?.maps);
-        console.log("[Places] available:", !!window.google?.maps?.places);
+        console.log("[Autocomplete] Starting initialization...");
+        console.log("[Autocomplete] Origin:", window.location.origin);
 
         // 1) Fetch API key from backend function
         console.log("[Autocomplete] Fetching API key...");
         const { data, error: fetchErr } = await supabase.functions.invoke("get-maps-api-key");
-        if (fetchErr) throw new Error(fetchErr.message);
+        if (fetchErr) throw new Error(`API key fetch failed: ${fetchErr.message}`);
 
         const apiKey = typeof data?.apiKey === "string" ? data.apiKey : "";
         if (!apiKey) throw new Error("API key not configured (empty response)");
-        if (cancelled) return;
+
+        console.log("[Autocomplete] API key obtained, loading Maps...");
 
         // 2) Load Google Maps script (singleton)
-        const load = await loadGoogleMaps(apiKey);
-        if (!load.success) throw new Error(load.error || "Failed to load Google Maps");
-        if (cancelled) return;
-
-        console.log("[Maps] script: loaded");
-        setMapsScriptStatus("loaded");
-
-        // 3) Only init when input exists
-        if (!inputRef.current) throw new Error("Input element not available");
-
-        // 4) Verify Places
-        if (!isMapsReady()) {
-          console.log("[Places] missing after load");
-          setPlacesStatus("missing");
-          throw new Error("Places API not available after load");
+        const loadResult = await loadGoogleMaps(apiKey);
+        
+        if (!loadResult.success) {
+          throw new Error(loadResult.error || "Failed to load Google Maps");
         }
 
-        console.log("[Places] available");
-        setPlacesStatus("available");
+        console.log("[Autocomplete] Maps script: ready");
+        setMapsScriptStatus("ready");
 
-        // 5) Attach Autocomplete
-        console.log("[Autocomplete] Attaching...");
+        // 3) Verify Places is available
+        if (!isMapsReady()) {
+          const existingError = getMapsError();
+          setPlacesStatus("missing");
+          throw new Error(existingError || "Places API not available after load");
+        }
+
+        console.log("[Autocomplete] Places: ready");
+        setPlacesStatus("ready");
+
+        // 4) Attach Autocomplete only when input exists
+        if (!inputRef.current) {
+          throw new Error("Input element not available");
+        }
+
+        console.log("[Autocomplete] Attaching Autocomplete to input...");
+        
         autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
           componentRestrictions: { country: "ar" },
           types: ["address"],
@@ -164,7 +166,7 @@ export function AddressAutocomplete({
 
           if (!address) return;
 
-          console.log("[Autocomplete] Place selected", { address, placeId, lat, lng });
+          console.log("[Autocomplete] Place selected:", { address, placeId, lat, lng });
           setInputValue(address);
           onSelectRef.current?.({
             address,
@@ -174,15 +176,19 @@ export function AddressAutocomplete({
           });
         });
 
-        console.log("[Autocomplete] Autocomplete: attached");
-        setAutocompleteStatus("attached");
+        console.log("[Autocomplete] Autocomplete: ready");
+        setAutocompleteStatus("ready");
+        
       } catch (err) {
-        if (cancelled) return;
         const msg = err instanceof Error ? err.message : "Unknown error";
         console.error("[Autocomplete] Init failed:", msg);
 
-        setErrorMsg((prev) => prev || msg);
-        setMapsScriptStatus("failed");
+        // Check if there's a stored error from the loader
+        const storedError = getMapsError();
+        const finalError = storedError || msg;
+
+        setErrorMsg(finalError);
+        if (mapsScriptStatus !== "ready") setMapsScriptStatus("error");
         setPlacesStatus("missing");
         setAutocompleteStatus("failed");
       }
@@ -190,14 +196,34 @@ export function AddressAutocomplete({
 
     init();
 
+    // Cleanup: only remove listeners, NEVER remove the script tag
     return () => {
-      cancelled = true;
       if (autocompleteRef.current && window.google?.maps?.event) {
         window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
       }
       autocompleteRef.current = null;
     };
   }, []);
+
+  // Timeout check - show timeout message if still loading after 13s
+  useEffect(() => {
+    if (mapsScriptStatus !== "loading") return;
+
+    const timeoutId = setTimeout(() => {
+      if (mapsScriptStatus === "loading") {
+        const existingError = getMapsError();
+        setMapsScriptStatus("error");
+        setPlacesStatus("missing");
+        setAutocompleteStatus("failed");
+        setErrorMsg(
+          existingError || 
+          "TIMEOUT: Google Maps no cargó. Revisá: API key, billing, HTTP referrers, CSP, o bloqueo de red."
+        );
+      }
+    }, 13000);
+
+    return () => clearTimeout(timeoutId);
+  }, [mapsScriptStatus]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const next = String(e.target.value ?? "");
@@ -213,8 +239,8 @@ export function AddressAutocomplete({
   }, []);
 
   const isLoading = mapsScriptStatus === "loading";
-  const isReady = mapsScriptStatus === "loaded" && placesStatus === "available" && autocompleteStatus === "attached";
-  const isError = mapsScriptStatus === "failed" || placesStatus === "missing" || autocompleteStatus === "failed";
+  const isReady = mapsScriptStatus === "ready" && placesStatus === "ready" && autocompleteStatus === "ready";
+  const isError = mapsScriptStatus === "error" || placesStatus === "missing" || autocompleteStatus === "failed";
 
   return (
     <div className="space-y-2">
@@ -244,10 +270,10 @@ export function AddressAutocomplete({
       </p>
 
       {isError && (
-        <div className="flex items-start gap-2 text-xs text-muted-foreground">
+        <div className="flex items-start gap-2 text-xs text-destructive">
           <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
           <span>
-            Google Maps no está disponible (razón: {errorMsg || "desconocida"}). Podés escribir la dirección manualmente.
+            Google Maps no disponible (razón: {errorMsg || "desconocida"}). Podés escribir la dirección manualmente.
           </span>
         </div>
       )}
