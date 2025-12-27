@@ -797,6 +797,93 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_conversations: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone_e164: string
+          id: string
+          is_open: boolean
+          last_admin_seen_at: string | null
+          last_message_at: string
+          last_message_preview: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone_e164: string
+          id?: string
+          is_open?: boolean
+          last_admin_seen_at?: string | null
+          last_message_at?: string
+          last_message_preview?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone_e164?: string
+          id?: string
+          is_open?: boolean
+          last_admin_seen_at?: string | null
+          last_message_at?: string
+          last_message_preview?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_messages: {
+        Row: {
+          body: string
+          conversation_id: string
+          created_at: string
+          created_by: string | null
+          direction: string
+          error: string | null
+          id: string
+          status: string
+          twilio_message_sid: string | null
+        }
+        Insert: {
+          body: string
+          conversation_id: string
+          created_at?: string
+          created_by?: string | null
+          direction: string
+          error?: string | null
+          id?: string
+          status?: string
+          twilio_message_sid?: string | null
+        }
+        Update: {
+          body?: string
+          conversation_id?: string
+          created_at?: string
+          created_by?: string | null
+          direction?: string
+          error?: string | null
+          id?: string
+          status?: string
+          twilio_message_sid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversations_v"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       calendar_bookings_v: {
@@ -881,6 +968,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      whatsapp_conversations_v: {
+        Row: {
+          created_at: string | null
+          customer_name: string | null
+          customer_phone_e164: string | null
+          id: string | null
+          is_open: boolean | null
+          last_admin_seen_at: string | null
+          last_message_at: string | null
+          last_message_preview: string | null
+          unread_count: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_name?: string | null
+          customer_phone_e164?: string | null
+          id?: string | null
+          is_open?: boolean | null
+          last_admin_seen_at?: string | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          unread_count?: never
+        }
+        Update: {
+          created_at?: string | null
+          customer_name?: string | null
+          customer_phone_e164?: string | null
+          id?: string | null
+          is_open?: boolean | null
+          last_admin_seen_at?: string | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          unread_count?: never
+        }
+        Relationships: []
       }
     }
     Functions: {
