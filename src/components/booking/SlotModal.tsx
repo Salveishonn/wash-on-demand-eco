@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { X, Clock, Loader2, MapPin, User, Phone, Mail, Car, CreditCard, Wallet, RefreshCw, Check, AlertCircle, MessageCircle } from "lucide-react";
+import { X, Clock, Loader2, User, Phone, Mail, CreditCard, Wallet, RefreshCw, Check, AlertCircle, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { AddonsSelector } from "./AddonsSelector";
 import { useServiceAddons } from "@/hooks/useServiceAddons";
 import { KipperOptIn } from "@/components/kipper/KipperOptIn";
+import { AddressAutocomplete, PlaceSelection } from "./AddressAutocomplete";
 
 interface SlotInfo {
   time: string;
@@ -473,16 +474,17 @@ export function SlotModal({ date, onClose, onBookingSuccess }: SlotModalProps) {
                 isSelected={isSelected}
               />
 
-              {/* Address */}
+              {/* Address with Google Places Autocomplete */}
               <div className="space-y-2">
-                <Label htmlFor="address" className="text-base font-semibold flex items-center gap-2">
-                  <MapPin className="w-4 h-4" /> Dirección
-                </Label>
-                <Input
-                  id="address"
+                <Label className="text-base font-semibold">Dirección</Label>
+                <AddressAutocomplete
+                  key={step === "form" ? "form-open" : "form-closed"}
+                  initialValue={formData.address}
                   placeholder="Ej: Av. Corrientes 1234, CABA"
-                  value={formData.address}
-                  onChange={(e) => handleInputChange("address", e.target.value)}
+                  onTextChange={(text) => handleInputChange("address", text)}
+                  onSelect={(selection: PlaceSelection) => {
+                    handleInputChange("address", selection.address);
+                  }}
                 />
               </div>
 

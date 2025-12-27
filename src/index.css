@@ -209,9 +209,9 @@ html {
   background: hsl(var(--washero-gold-dark));
 }
 
-/* Google Places Autocomplete dropdown */
+/* Google Places Autocomplete dropdown - must be above modals (z-50 = 50, dialog typically 50-100) */
 .pac-container {
-  z-index: 9999 !important;
+  z-index: 2147483647 !important;
   background: hsl(var(--popover));
   color: hsl(var(--popover-foreground));
   border: 1px solid hsl(var(--border));
