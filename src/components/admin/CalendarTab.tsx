@@ -13,7 +13,13 @@ import {
   Loader2,
   CheckCircle,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  MapPin,
+  Phone,
+  Car,
+  Eye,
+  XCircle,
+  DollarSign
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -134,6 +140,11 @@ export function CalendarTab() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Day management drawer state
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [isDayDrawerOpen, setIsDayDrawerOpen] = useState(false);
+  const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
 
   // Calculate date range based on view mode
   const dateRange = useMemo(() => {
@@ -364,6 +375,81 @@ export function CalendarTab() {
     setIsDetailOpen(true);
   };
 
+  // Open day management drawer
+  const openDayDrawer = (date: Date) => {
+    setSelectedDay(date);
+    setIsDayDrawerOpen(true);
+  };
+
+  // Get bookings for selected day
+  const selectedDayBookings = useMemo(() => {
+    if (!selectedDay) return [];
+    const dateStr = format(selectedDay, 'yyyy-MM-dd');
+    return (bookingsByDate[dateStr] || []).sort((a, b) => a.booking_time.localeCompare(b.booking_time));
+  }, [selectedDay, bookingsByDate]);
+
+  // Calculate day stats
+  const selectedDayStats = useMemo(() => {
+    const totalRevenue = selectedDayBookings.reduce((sum, b) => sum + (b.total_cents || 0), 0);
+    return {
+      count: selectedDayBookings.length,
+      revenue: totalRevenue,
+    };
+  }, [selectedDayBookings]);
+
+  // Day drawer actions
+  const handleDayAction = async (bookingId: string, action: 'confirm' | 'complete' | 'cancel' | 'paid') => {
+    setUpdatingBookingId(bookingId);
+    try {
+      let updateData: Record<string, string> = {};
+      let successMessage = '';
+
+      switch (action) {
+        case 'confirm':
+          updateData = { status: 'confirmed' };
+          successMessage = 'Reserva confirmada';
+          break;
+        case 'complete':
+          updateData = { status: 'completed' };
+          successMessage = 'Reserva completada';
+          break;
+        case 'cancel':
+          updateData = { status: 'cancelled' };
+          successMessage = 'Reserva cancelada';
+          break;
+        case 'paid':
+          updateData = { payment_status: 'approved' };
+          successMessage = 'Pago marcado';
+          break;
+      }
+
+      const { error } = await supabase
+        .from('bookings')
+        .update(updateData)
+        .eq('id', bookingId);
+
+      if (error) throw error;
+
+      toast({ title: successMessage });
+      fetchCalendarBookings(false);
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    } finally {
+      setUpdatingBookingId(null);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const config: Record<string, { className: string; label: string }> = {
+      pending: { className: 'bg-yellow-100 text-yellow-800', label: 'Pendiente' },
+      confirmed: { className: 'bg-blue-100 text-blue-800', label: 'Confirmada' },
+      completed: { className: 'bg-green-100 text-green-800', label: 'Completada' },
+      cancelled: { className: 'bg-red-100 text-red-800', label: 'Cancelada' },
+    };
+    const c = config[status] || { className: 'bg-gray-100 text-gray-800', label: status };
+    return <Badge variant="secondary" className={c.className}>{c.label}</Badge>;
+  };
+
   const getDateTitle = () => {
     switch (viewMode) {
       case 'day':
@@ -484,18 +570,22 @@ export function CalendarTab() {
               return (
                 <div
                   key={dateStr}
-                  className={`bg-background min-h-[100px] p-2 ${isCurrentDay ? 'ring-2 ring-primary ring-inset' : ''}`}
+                  onClick={() => openDayDrawer(date)}
+                  className={`bg-background min-h-[100px] p-2 cursor-pointer hover:bg-muted/30 transition-colors ${isCurrentDay ? 'ring-2 ring-primary ring-inset' : ''}`}
                 >
                   <div className={`text-sm font-medium mb-1 ${isCurrentDay ? 'text-primary' : ''}`}>
                     {format(date, 'd')}
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
                     {dayBookings.slice(0, 3).map((booking) => {
                       const addonsCount = getAddonsCount(booking);
                       return (
                         <button
                           key={booking.id}
-                          onClick={() => openBookingDetail(booking)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDayDrawer(date);
+                          }}
                           className={`w-full text-left p-1 rounded text-xs border-l-2 truncate ${getServiceColor(booking.service_name)}`}
                         >
                           {booking.booking_time} - {booking.service_name.split(' ')[0]}
@@ -765,6 +855,169 @@ export function CalendarTab() {
               </div>
             </div>
           )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Day Management Drawer */}
+      <Sheet open={isDayDrawerOpen} onOpenChange={setIsDayDrawerOpen}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="capitalize">
+              {selectedDay && format(selectedDay, "EEEE d 'de' MMMM yyyy", { locale: es })}
+            </SheetTitle>
+            <SheetDescription className="flex items-center gap-4 text-sm">
+              <span>{selectedDayStats.count} reserva{selectedDayStats.count !== 1 ? 's' : ''}</span>
+              <span className="font-medium text-foreground">
+                Total: {formatPrice(selectedDayStats.revenue)}
+              </span>
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-4">
+            {selectedDayBookings.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <CalendarIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium">No hay reservas para este día</p>
+                <p className="text-sm">Seleccioná otro día del calendario</p>
+              </div>
+            ) : (
+              selectedDayBookings.map((booking) => {
+                const isUpdatingThis = updatingBookingId === booking.id;
+                const addonsCount = getAddonsCount(booking);
+                
+                return (
+                  <div
+                    key={booking.id}
+                    className={`rounded-lg border p-4 space-y-3 ${getServiceColor(booking.service_name)} border-l-4`}
+                  >
+                    {/* Header: time + service + badges */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-muted-foreground" />
+                          <span className="font-bold text-lg">{booking.booking_time}</span>
+                          <span className="text-muted-foreground">·</span>
+                          <span className="font-medium">{booking.service_name}</span>
+                          {addonsCount > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              <Sparkles className="w-3 h-3 mr-1" />+{addonsCount}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right font-bold text-lg">
+                        {formatPrice(booking.total_cents)}
+                      </div>
+                    </div>
+
+                    {/* Status badges */}
+                    <div className="flex gap-2 flex-wrap">
+                      {getStatusBadge(booking.booking_status)}
+                      {getPaymentBadge(booking)}
+                      {booking.payment_method && (
+                        <Badge variant="outline" className="text-xs">{booking.payment_method}</Badge>
+                      )}
+                    </div>
+
+                    {/* Customer info */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-muted-foreground" />
+                        <span className="font-medium">{booking.customer_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        <a href={`tel:${booking.customer_phone}`} className="text-primary hover:underline">
+                          {booking.customer_phone}
+                        </a>
+                      </div>
+                      {booking.address && (
+                        <div className="flex items-start gap-2 col-span-full">
+                          <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                          <span className="text-muted-foreground">{booking.address}</span>
+                        </div>
+                      )}
+                      {booking.car_type && (
+                        <div className="flex items-center gap-2">
+                          <Car className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">{booking.car_type}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex flex-wrap gap-2 pt-2 border-t">
+                      {/* Confirmar: for pending bookings */}
+                      {booking.booking_status === 'pending' && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleDayAction(booking.id, 'confirm')}
+                          disabled={isUpdatingThis}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          {isUpdatingThis ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <CheckCircle className="w-3 h-3 mr-1" />}
+                          Confirmar
+                        </Button>
+                      )}
+
+                      {/* Completar: for confirmed bookings */}
+                      {booking.booking_status === 'confirmed' && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleDayAction(booking.id, 'complete')}
+                          disabled={isUpdatingThis}
+                        >
+                          {isUpdatingThis ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <CheckCircle className="w-3 h-3 mr-1" />}
+                          Completar
+                        </Button>
+                      )}
+
+                      {/* Marcar cobrado: for pending payment */}
+                      {booking.payment_status === 'pending' && !booking.is_subscription_booking && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDayAction(booking.id, 'paid')}
+                          disabled={isUpdatingThis}
+                          className="text-green-700 border-green-300 hover:bg-green-50"
+                        >
+                          {isUpdatingThis ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <DollarSign className="w-3 h-3 mr-1" />}
+                          Marcar Cobrado
+                        </Button>
+                      )}
+
+                      {/* Cancelar: for pending or confirmed */}
+                      {(booking.booking_status === 'pending' || booking.booking_status === 'confirmed') && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDayAction(booking.id, 'cancel')}
+                          disabled={isUpdatingThis}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          {isUpdatingThis ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <XCircle className="w-3 h-3 mr-1" />}
+                          Cancelar
+                        </Button>
+                      )}
+
+                      {/* Ver detalle */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setIsDayDrawerOpen(false);
+                          setTimeout(() => openBookingDetail(booking), 150);
+                        }}
+                      >
+                        <Eye className="w-3 h-3 mr-1" />
+                        Ver Detalle
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </SheetContent>
       </Sheet>
     </motion.div>
