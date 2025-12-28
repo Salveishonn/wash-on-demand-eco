@@ -36,6 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatDateKey } from "@/lib/dateUtils";
 
 interface AvailabilityRule {
   id?: string;
@@ -163,8 +164,8 @@ export function DisponibilidadTab() {
       const { data: overridesData, error: overridesError } = await supabase
         .from("availability_overrides")
         .select("*")
-        .gte("date", fromDate.toISOString().split("T")[0])
-        .lte("date", toDate.toISOString().split("T")[0])
+        .gte("date", formatDateKey(fromDate))
+        .lte("date", formatDateKey(toDate))
         .order("date");
 
       if (overridesError) throw overridesError;
@@ -174,8 +175,8 @@ export function DisponibilidadTab() {
       const { data: slotOverridesData, error: slotOverridesError } = await supabase
         .from("availability_override_slots")
         .select("*")
-        .gte("date", fromDate.toISOString().split("T")[0])
-        .lte("date", toDate.toISOString().split("T")[0]);
+        .gte("date", formatDateKey(fromDate))
+        .lte("date", formatDateKey(toDate));
 
       if (slotOverridesError) throw slotOverridesError;
       setSlotOverrides(slotOverridesData || []);
@@ -270,9 +271,10 @@ export function DisponibilidadTab() {
       existingOverride?.surcharge_percent ? existingOverride.surcharge_percent.toString() : ""
     );
 
-    // Get the weekday rule for this date
-    const d = new Date(dateStr + "T12:00:00Z");
-    const dayOfWeek = d.getUTCDay();
+    // Get the weekday rule for this date - parse in local time
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    const dayOfWeek = d.getDay();
     const rule = weeklyRules.find((r) => r.weekday === dayOfWeek);
 
     if (rule && rule.is_open) {
@@ -465,9 +467,7 @@ export function DisponibilidadTab() {
     return days;
   };
 
-  const formatDateKey = (date: Date): string => {
-    return date.toISOString().split("T")[0];
-  };
+  // formatDateKey is now imported from @/lib/dateUtils
 
   const days = getMonthDays(viewYear, viewMonth);
   const todayStr = formatDateKey(today);

@@ -13,6 +13,7 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer";
 import { useToast } from "@/hooks/use-toast";
+import { formatDateKey } from "@/lib/dateUtils";
 
 interface DayAvailability {
   date: string;
@@ -65,10 +66,6 @@ function getMonthDays(year: number, month: number) {
   }
   
   return days;
-}
-
-function formatDateKey(date: Date): string {
-  return date.toISOString().split("T")[0];
 }
 
 function formatDateLong(date: Date): string {
