@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { CalendarScheduler } from "@/components/booking/CalendarScheduler";
 
 const Reservar = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const bookingSource = searchParams.get("source") || "direct";
 
   const handleBookingComplete = (bookingId: string, paymentMethod: string) => {
     navigate(`/reserva-confirmada?booking_id=${bookingId}&payment_method=${paymentMethod}`);
@@ -34,7 +36,7 @@ const Reservar = () => {
       {/* Calendar Scheduler - Compact padding */}
       <section className="py-4 sm:py-8 md:py-10 bg-background">
         <div className="container mx-auto px-3 sm:px-4">
-          <CalendarScheduler onBookingComplete={handleBookingComplete} />
+          <CalendarScheduler onBookingComplete={handleBookingComplete} bookingSource={bookingSource} />
         </div>
       </section>
     </Layout>

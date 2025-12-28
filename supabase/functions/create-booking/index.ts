@@ -31,6 +31,7 @@ interface CreateBookingRequest {
   whatsappOptIn?: boolean;
   addons?: AddonItem[];
   addonsTotalCents?: number;
+  bookingSource?: string;
 }
 
 serve(async (req) => {
@@ -159,6 +160,7 @@ serve(async (req) => {
         confirmed_at: isSubscription ? new Date().toISOString() : null,
         addons: addonsData,
         addons_total_cents: addonsTotalCents,
+        booking_source: data.bookingSource || "direct",
       })
       .select()
       .single();
