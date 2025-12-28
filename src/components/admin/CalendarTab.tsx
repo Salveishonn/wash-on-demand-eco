@@ -89,6 +89,7 @@ interface CalendarBooking {
   notes: string | null;
   created_at: string;
   confirmed_at: string | null;
+  booking_source: string | null;
 }
 
 type ViewMode = 'day' | 'week' | 'month';
@@ -847,6 +848,16 @@ export function CalendarTab() {
                 <div className="space-y-2">
                   <h4 className="font-medium text-sm text-muted-foreground uppercase">Notas</h4>
                   <p className="text-sm bg-muted/30 rounded-lg p-3">{selectedBooking.notes}</p>
+                </div>
+              )}
+
+              {/* Booking Source */}
+              {selectedBooking.booking_source && selectedBooking.booking_source !== 'direct' && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="font-medium">Origen:</span>
+                  <Badge variant="outline" className="text-xs capitalize">
+                    {selectedBooking.booking_source}
+                  </Badge>
                 </div>
               )}
 

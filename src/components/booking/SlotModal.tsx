@@ -23,6 +23,7 @@ interface SlotModalProps {
   preselectedTime?: string | null;
   onClose: () => void;
   onBookingSuccess: (bookingId: string, paymentMethod: string) => void;
+  bookingSource?: string;
 }
 
 interface Service {
@@ -85,7 +86,7 @@ function formatDateLong(date: Date): string {
 
 // formatDateKey is now imported from @/lib/dateUtils
 
-export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess }: SlotModalProps) {
+export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bookingSource = "direct" }: SlotModalProps) {
   const { toast } = useToast();
   // If preselectedTime is provided, skip directly to form
   const [step, setStep] = useState<"slots" | "form">(preselectedTime ? "form" : "slots");
@@ -279,6 +280,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess }: 
             whatsappOptIn: whatsappOptIn,
             addons: selectedAddons,
             addonsTotalCents: getAddonsTotal(),
+            bookingSource: bookingSource,
           },
         }
       );

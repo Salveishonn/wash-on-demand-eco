@@ -34,6 +34,7 @@ interface SlotInfo {
 
 interface CalendarSchedulerProps {
   onBookingComplete?: (bookingId: string, paymentMethod: string) => void;
+  bookingSource?: string;
 }
 
 // Single letter for mobile, full for desktop
@@ -72,7 +73,7 @@ function formatDateLong(date: Date): string {
   return `${DAYS_FULL[date.getDay()]} ${date.getDate()} de ${MONTHS[date.getMonth()].toLowerCase()}`;
 }
 
-export function CalendarScheduler({ onBookingComplete }: CalendarSchedulerProps) {
+export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" }: CalendarSchedulerProps) {
   const { toast } = useToast();
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
@@ -456,6 +457,7 @@ export function CalendarScheduler({ onBookingComplete }: CalendarSchedulerProps)
             preselectedTime={selectedTime}
             onClose={handleModalClose}
             onBookingSuccess={handleBookingSuccess}
+            bookingSource={bookingSource}
           />
         )}
       </AnimatePresence>

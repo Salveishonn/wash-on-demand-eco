@@ -101,6 +101,7 @@ export type Database = {
           addons_total_cents: number | null
           address: string | null
           booking_date: string
+          booking_source: string | null
           booking_time: string
           car_type: string | null
           car_type_extra_cents: number | null
@@ -133,6 +134,7 @@ export type Database = {
           addons_total_cents?: number | null
           address?: string | null
           booking_date: string
+          booking_source?: string | null
           booking_time: string
           car_type?: string | null
           car_type_extra_cents?: number | null
@@ -165,6 +167,7 @@ export type Database = {
           addons_total_cents?: number | null
           address?: string | null
           booking_date?: string
+          booking_source?: string | null
           booking_time?: string
           car_type?: string | null
           car_type_extra_cents?: number | null
@@ -973,6 +976,7 @@ export type Database = {
           addons_total_cents: number | null
           address: string | null
           booking_date: string | null
+          booking_source: string | null
           booking_status: Database["public"]["Enums"]["booking_status"] | null
           booking_time: string | null
           car_type: string | null
@@ -997,6 +1001,7 @@ export type Database = {
           addons_total_cents?: number | null
           address?: string | null
           booking_date?: string | null
+          booking_source?: string | null
           booking_status?: Database["public"]["Enums"]["booking_status"] | null
           booking_time?: string | null
           car_type?: string | null
@@ -1021,6 +1026,7 @@ export type Database = {
           addons_total_cents?: number | null
           address?: string | null
           booking_date?: string | null
+          booking_source?: string | null
           booking_status?: Database["public"]["Enums"]["booking_status"] | null
           booking_time?: string | null
           car_type?: string | null
