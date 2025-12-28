@@ -1179,6 +1179,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* Mensajes Tab */}
         {activeTab === 'mensajes' && <MessagesTab />}
+
+        {/* Disponibilidad Tab */}
+        {activeTab === 'disponibilidad' && <DisponibilidadTab />}
       </div>
 
       {/* Booking Detail Dialog */}
