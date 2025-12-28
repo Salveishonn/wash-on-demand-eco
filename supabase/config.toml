@@ -100,3 +100,6 @@ verify_jwt = false
 
 [functions.twilio-whatsapp-webhook]
 verify_jwt = false
+
+[functions.admin-update-availability]
+verify_jwt = false
