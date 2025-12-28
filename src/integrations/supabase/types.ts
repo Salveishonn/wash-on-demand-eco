@@ -14,6 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      availability_override_slots: {
+        Row: {
+          date: string
+          id: string
+          is_open: boolean
+          time: string
+        }
+        Insert: {
+          date: string
+          id?: string
+          is_open?: boolean
+          time: string
+        }
+        Update: {
+          date?: string
+          id?: string
+          is_open?: boolean
+          time?: string
+        }
+        Relationships: []
+      }
+      availability_overrides: {
+        Row: {
+          date: string
+          id: string
+          is_closed: boolean
+          note: string | null
+          surcharge_amount: number | null
+          surcharge_percent: number | null
+          updated_at: string
+        }
+        Insert: {
+          date: string
+          id?: string
+          is_closed?: boolean
+          note?: string | null
+          surcharge_amount?: number | null
+          surcharge_percent?: number | null
+          updated_at?: string
+        }
+        Update: {
+          date?: string
+          id?: string
+          is_closed?: boolean
+          note?: string | null
+          surcharge_amount?: number | null
+          surcharge_percent?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      availability_rules: {
+        Row: {
+          end_time: string
+          id: string
+          is_open: boolean
+          slot_interval_minutes: number
+          start_time: string
+          updated_at: string
+          weekday: number
+        }
+        Insert: {
+          end_time?: string
+          id?: string
+          is_open?: boolean
+          slot_interval_minutes?: number
+          start_time?: string
+          updated_at?: string
+          weekday: number
+        }
+        Update: {
+          end_time?: string
+          id?: string
+          is_open?: boolean
+          slot_interval_minutes?: number
+          start_time?: string
+          updated_at?: string
+          weekday?: number
+        }
+        Relationships: []
+      }
       bookings: {
         Row: {
           addons: Json | null

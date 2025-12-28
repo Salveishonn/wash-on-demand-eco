@@ -8,29 +8,35 @@ const corsHeaders = {
 
 interface SlotInfo {
   time: string;
-  status: "available" | "booked";
+  status: "available" | "booked" | "closed";
+  reason?: string;
 }
 
-// Generate slots based on day of week
-function generateSlots(date: string): string[] {
-  const d = new Date(date + "T12:00:00Z"); // Use noon UTC to avoid timezone issues
-  const dayOfWeek = d.getUTCDay(); // 0 = Sunday, 6 = Saturday
+interface AvailabilityRule {
+  weekday: number;
+  is_open: boolean;
+  start_time: string;
+  end_time: string;
+  slot_interval_minutes: number;
+}
 
-  if (dayOfWeek === 0) {
-    // Sunday - closed
-    return [];
+// Generate time slots based on start/end time and interval
+function generateTimeSlots(startTime: string, endTime: string, intervalMinutes: number): string[] {
+  const slots: string[] = [];
+  const [startH, startM] = startTime.split(":").map(Number);
+  const [endH, endM] = endTime.split(":").map(Number);
+  
+  let currentMinutes = startH * 60 + startM;
+  const endMinutes = endH * 60 + endM;
+  
+  while (currentMinutes <= endMinutes) {
+    const hours = Math.floor(currentMinutes / 60);
+    const mins = currentMinutes % 60;
+    slots.push(`${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`);
+    currentMinutes += intervalMinutes;
   }
-
-  if (dayOfWeek === 6) {
-    // Saturday: 08:00 to 11:00 (4 slots)
-    return ["08:00", "09:00", "10:00", "11:00"];
-  }
-
-  // Monday-Friday: 08:00 to 17:00 (10 slots)
-  return [
-    "08:00", "09:00", "10:00", "11:00", "12:00",
-    "13:00", "14:00", "15:00", "16:00", "17:00"
-  ];
+  
+  return slots;
 }
 
 serve(async (req) => {
@@ -62,36 +68,124 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get all possible slots for this day
-    const allSlots = generateSlots(date);
+    const d = new Date(date + "T12:00:00Z");
+    const dayOfWeek = d.getUTCDay();
+
+    // Fetch the availability rule for this weekday
+    const { data: ruleData, error: ruleError } = await supabase
+      .from("availability_rules")
+      .select("*")
+      .eq("weekday", dayOfWeek)
+      .single();
+
+    if (ruleError && ruleError.code !== "PGRST116") {
+      console.error("[get-available-slots] Rule query error:", ruleError);
+      throw ruleError;
+    }
+
+    // Check for date override
+    const { data: overrideData, error: overrideError } = await supabase
+      .from("availability_overrides")
+      .select("*")
+      .eq("date", date)
+      .single();
+
+    if (overrideError && overrideError.code !== "PGRST116") {
+      console.error("[get-available-slots] Override query error:", overrideError);
+      throw overrideError;
+    }
+
+    // If day is closed by override
+    if (overrideData?.is_closed) {
+      return new Response(
+        JSON.stringify({ 
+          date, 
+          closed: true, 
+          reason: overrideData.note || "Cerrado",
+          slots: [],
+          surchargeAmount: null,
+          surchargePercent: null,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // If no rule or rule says closed
+    if (!ruleData || !ruleData.is_open) {
+      return new Response(
+        JSON.stringify({ date, closed: true, reason: "Cerrado por horario regular", slots: [] }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Generate base slots from rule
+    let allSlots = generateTimeSlots(ruleData.start_time, ruleData.end_time, ruleData.slot_interval_minutes);
+
+    // Fetch slot-level overrides
+    const { data: slotOverrides, error: slotOverridesError } = await supabase
+      .from("availability_override_slots")
+      .select("*")
+      .eq("date", date);
+
+    if (slotOverridesError) {
+      console.error("[get-available-slots] Slot overrides query error:", slotOverridesError);
+      throw slotOverridesError;
+    }
+
+    // Create sets for closed and added slots
+    const closedSlots = new Set<string>();
+    const addedSlots: string[] = [];
+    
+    for (const so of slotOverrides || []) {
+      if (!so.is_open) {
+        closedSlots.add(so.time);
+      } else if (!allSlots.includes(so.time)) {
+        addedSlots.push(so.time);
+      }
+    }
+
+    // Remove closed slots and add opened ones
+    allSlots = allSlots.filter(s => !closedSlots.has(s));
+    allSlots = [...allSlots, ...addedSlots].sort();
 
     if (allSlots.length === 0) {
-      // Sunday - closed
       return new Response(
-        JSON.stringify({ date, closed: true, slots: [] }),
+        JSON.stringify({ 
+          date, 
+          closed: true, 
+          reason: "Sin horarios disponibles", 
+          slots: [],
+          surchargeAmount: overrideData?.surcharge_amount || null,
+          surchargePercent: overrideData?.surcharge_percent || null,
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Query booked slots for this date (excluding cancelled)
-    const { data: bookings, error } = await supabase
+    const { data: bookings, error: bookingsError } = await supabase
       .from("bookings")
       .select("booking_time")
       .eq("booking_date", date)
       .in("status", ["pending", "confirmed"]);
 
-    if (error) {
-      console.error("[get-available-slots] Query error:", error);
-      throw error;
+    if (bookingsError) {
+      console.error("[get-available-slots] Bookings query error:", bookingsError);
+      throw bookingsError;
     }
 
     const bookedTimes = new Set(bookings?.map(b => b.booking_time) || []);
 
-    // Build slots array
-    const slots: SlotInfo[] = allSlots.map(time => ({
-      time,
-      status: bookedTimes.has(time) ? "booked" : "available"
-    }));
+    // Build slots array with status and reason
+    const slots: SlotInfo[] = allSlots.map(time => {
+      if (bookedTimes.has(time)) {
+        return { time, status: "booked" as const, reason: "Reservado" };
+      }
+      if (closedSlots.has(time)) {
+        return { time, status: "closed" as const, reason: "Bloqueado" };
+      }
+      return { time, status: "available" as const };
+    });
 
     const availableCount = slots.filter(s => s.status === "available").length;
 
@@ -103,7 +197,10 @@ serve(async (req) => {
         closed: false,
         totalSlots: allSlots.length,
         availableSlots: availableCount,
-        slots 
+        slots,
+        surchargeAmount: overrideData?.surcharge_amount || null,
+        surchargePercent: overrideData?.surcharge_percent || null,
+        note: overrideData?.note || null,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
