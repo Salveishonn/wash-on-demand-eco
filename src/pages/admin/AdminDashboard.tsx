@@ -1,12 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Calendar, 
-  Clock, 
-  Users, 
   CreditCard, 
-  Bell, 
   CheckCircle, 
   XCircle, 
   AlertCircle,
@@ -14,14 +10,15 @@ import {
   RefreshCw,
   Filter,
   DollarSign,
-  Eye,
-  Phone,
-  Mail,
-  MapPin,
+  Loader2,
+  Clock,
+  Bell,
   Shield,
-  Send,
+  Users,
   MessageCircle,
-  Loader2
+  Eye,
+  Send,
+  Mail
 } from 'lucide-react';
 import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
 import { SubscriptionsTab } from '@/components/admin/SubscriptionsTab';
@@ -29,6 +26,7 @@ import { CalendarTab } from '@/components/admin/CalendarTab';
 import { FinanzasTab } from '@/components/admin/FinanzasTab';
 import { MessagesTab } from '@/components/admin/MessagesTab';
 import { DisponibilidadTab } from '@/components/admin/DisponibilidadTab';
+import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -79,7 +77,6 @@ interface NotificationLog {
   created_at: string;
 }
 
-type TabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'mensajes' | 'disponibilidad';
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 const formatPrice = (cents: number) => {
@@ -112,7 +109,7 @@ export default function AdminDashboard() {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   
-  const [activeTab, setActiveTab] = useState<TabType>('bookings');
+  const [activeTab, setActiveTab] = useState<AdminTabType>('bookings');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [notifications, setNotifications] = useState<NotificationLog[]>([]);
@@ -738,69 +735,8 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
           </motion.div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          <Button
-            variant={activeTab === 'bookings' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('bookings')}
-          >
-            <Calendar className="w-4 h-4 mr-2" />
-            Reservas
-          </Button>
-          <Button
-            variant={activeTab === 'notifications' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('notifications')}
-          >
-            <Bell className="w-4 h-4 mr-2" />
-            Notificaciones
-          </Button>
-          <Button
-            variant={activeTab === 'kipper' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('kipper')}
-            className={activeTab === 'kipper' ? 'bg-[#8B1E2F] hover:bg-[#6B1726]' : ''}
-          >
-            <Shield className="w-4 h-4 mr-2" />
-            Leads Kipper
-          </Button>
-          <Button
-            variant={activeTab === 'subscriptions' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('subscriptions')}
-          >
-            <Users className="w-4 h-4 mr-2" />
-            Suscripciones
-          </Button>
-          <Button
-            variant={activeTab === 'calendario' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('calendario')}
-          >
-            <Calendar className="w-4 h-4 mr-2" />
-            Calendario
-          </Button>
-          <Button
-            variant={activeTab === 'finanzas' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('finanzas')}
-            className={activeTab === 'finanzas' ? 'bg-green-600 hover:bg-green-700' : ''}
-          >
-            <DollarSign className="w-4 h-4 mr-2" />
-            Finanzas
-          </Button>
-          <Button
-            variant={activeTab === 'mensajes' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('mensajes')}
-            className={activeTab === 'mensajes' ? 'bg-green-600 hover:bg-green-700' : ''}
-          >
-            <MessageCircle className="w-4 h-4 mr-2" />
-            Mensajes
-          </Button>
-          <Button
-            variant={activeTab === 'disponibilidad' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('disponibilidad')}
-            className={activeTab === 'disponibilidad' ? 'bg-orange-600 hover:bg-orange-700' : ''}
-          >
-            <Clock className="w-4 h-4 mr-2" />
-            Disponibilidad
-          </Button>
-        </div>
+        {/* Navigation */}
+        <AdminNav activeTab={activeTab} onTabChange={setActiveTab} />
 
         {/* Bookings Tab */}
         {activeTab === 'bookings' && (
