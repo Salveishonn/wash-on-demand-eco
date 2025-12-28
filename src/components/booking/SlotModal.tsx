@@ -11,6 +11,7 @@ import { AddonsSelector } from "./AddonsSelector";
 import { useServiceAddons } from "@/hooks/useServiceAddons";
 import { KipperOptIn } from "@/components/kipper/KipperOptIn";
 import { AddressAutocomplete, PlaceSelection } from "./AddressAutocomplete";
+import { formatDateKey } from "@/lib/dateUtils";
 
 interface SlotInfo {
   time: string;
@@ -82,9 +83,7 @@ function formatDateLong(date: Date): string {
   return `${DAYS_FULL[date.getDay()]} ${date.getDate()} de ${MONTHS_FULL[date.getMonth()]}`;
 }
 
-function formatDateKey(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
+// formatDateKey is now imported from @/lib/dateUtils
 
 export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess }: SlotModalProps) {
   const { toast } = useToast();
