@@ -19,6 +19,7 @@ interface SlotInfo {
 
 interface SlotModalProps {
   date: Date;
+  preselectedTime?: string | null;
   onClose: () => void;
   onBookingSuccess: (bookingId: string, paymentMethod: string) => void;
 }
@@ -85,12 +86,13 @@ function formatDateKey(date: Date): string {
   return date.toISOString().split("T")[0];
 }
 
-export function SlotModal({ date, onClose, onBookingSuccess }: SlotModalProps) {
+export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess }: SlotModalProps) {
   const { toast } = useToast();
-  const [step, setStep] = useState<"slots" | "form">("slots");
+  // If preselectedTime is provided, skip directly to form
+  const [step, setStep] = useState<"slots" | "form">(preselectedTime ? "form" : "slots");
   const [slots, setSlots] = useState<SlotInfo[]>([]);
-  const [isLoadingSlots, setIsLoadingSlots] = useState(true);
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(!preselectedTime);
+  const [selectedTime, setSelectedTime] = useState<string | null>(preselectedTime || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state
@@ -150,8 +152,11 @@ export function SlotModal({ date, onClose, onBookingSuccess }: SlotModalProps) {
   }, [date, toast]);
 
   useEffect(() => {
-    fetchSlots();
-  }, [fetchSlots]);
+    // Only fetch slots if we don't have a preselected time
+    if (!preselectedTime) {
+      fetchSlots();
+    }
+  }, [fetchSlots, preselectedTime]);
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
