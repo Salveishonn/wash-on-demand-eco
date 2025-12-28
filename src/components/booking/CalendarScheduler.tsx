@@ -20,11 +20,15 @@ interface DayAvailability {
   totalSlots: number;
   bookedSlots: number;
   availableSlots: number;
+  surchargeAmount: number | null;
+  surchargePercent: number | null;
+  note: string | null;
 }
 
 interface SlotInfo {
   time: string;
-  status: "available" | "booked";
+  status: "available" | "booked" | "closed";
+  reason?: string;
 }
 
 interface CalendarSchedulerProps {
@@ -85,6 +89,7 @@ export function CalendarScheduler({ onBookingComplete }: CalendarSchedulerProps)
   const [slots, setSlots] = useState<SlotInfo[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [currentSurcharge, setCurrentSurcharge] = useState<{ amount: number | null; percent: number | null } | null>(null);
   
   // Full modal for booking form
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -151,6 +156,10 @@ export function CalendarScheduler({ onBookingComplete }: CalendarSchedulerProps)
 
       const result = await response.json();
       setSlots(result.slots || []);
+      setCurrentSurcharge({
+        amount: result.surchargeAmount || null,
+        percent: result.surchargePercent || null,
+      });
     } catch (error) {
       console.error("[CalendarScheduler] Error fetching slots:", error);
       toast({
@@ -317,10 +326,11 @@ export function CalendarScheduler({ onBookingComplete }: CalendarSchedulerProps)
               const dayInfo = availability[dateKey];
               const isPast = dateKey < todayStr;
               const isToday = dateKey === todayStr;
-              const isClosed = dayInfo?.closed || date.getDay() === 0;
+              const isClosed = dayInfo?.closed;
               const hasAvailability = dayInfo?.availableSlots && dayInfo.availableSlots > 0;
               const isFullyBooked = dayInfo && !dayInfo.closed && dayInfo.availableSlots === 0;
               const isClickable = !isPast && !isClosed;
+              const hasSurcharge = dayInfo?.surchargeAmount || dayInfo?.surchargePercent;
 
               return (
                 <motion.button
@@ -337,6 +347,7 @@ export function CalendarScheduler({ onBookingComplete }: CalendarSchedulerProps)
                     ${isClosed && !isPast ? "bg-muted/30" : ""}
                     ${isClickable && hasAvailability ? "hover:bg-primary/10 active:bg-primary/20 cursor-pointer" : ""}
                     ${isClickable && isFullyBooked ? "bg-destructive/5" : ""}
+                    ${isClickable && hasSurcharge ? "bg-yellow-50" : ""}
                     ${isToday ? "ring-2 ring-primary ring-inset" : ""}
                     ${!isClickable ? "cursor-not-allowed" : ""}
                   `}
@@ -351,11 +362,14 @@ export function CalendarScheduler({ onBookingComplete }: CalendarSchedulerProps)
 
                   {/* Availability indicator dot */}
                   {!isPast && !isClosed && dayInfo && (
-                    <div className="mt-0.5 sm:mt-1">
+                    <div className="mt-0.5 sm:mt-1 flex gap-0.5">
                       {hasAvailability ? (
                         <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-accent" />
                       ) : (
                         <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-destructive/50" />
+                      )}
+                      {hasSurcharge && (
+                        <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-yellow-500" />
                       )}
                     </div>
                   )}
@@ -375,6 +389,10 @@ export function CalendarScheduler({ onBookingComplete }: CalendarSchedulerProps)
             <div className="w-2 h-2 rounded-full bg-destructive/50" />
             <span>Lleno</span>
           </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-yellow-500" />
+            <span>Recargo</span>
+          </div>
         </div>
       </div>
 
@@ -387,6 +405,13 @@ export function CalendarScheduler({ onBookingComplete }: CalendarSchedulerProps)
             </DrawerTitle>
             <DrawerDescription>
               {selectedDate && formatDateLong(selectedDate)}
+              {currentSurcharge && (currentSurcharge.amount || currentSurcharge.percent) && (
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                  Recargo: {currentSurcharge.amount ? `+$${(currentSurcharge.amount / 100).toLocaleString('es-AR')}` : ''}
+                  {currentSurcharge.amount && currentSurcharge.percent ? ' + ' : ''}
+                  {currentSurcharge.percent ? `+${currentSurcharge.percent}%` : ''}
+                </span>
+              )}
             </DrawerDescription>
           </DrawerHeader>
           
