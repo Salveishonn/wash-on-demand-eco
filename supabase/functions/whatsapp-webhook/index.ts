@@ -32,13 +32,18 @@ serve(async (req) => {
       const token = url.searchParams.get("hub.verify_token");
       const challenge = url.searchParams.get("hub.challenge");
 
-      console.log("[whatsapp-webhook] Verification request:", { mode, token, challenge });
+      console.log("[whatsapp-webhook] Verification request:", { mode, token, challenge, verifyToken: verifyToken ? "set" : "not set" });
 
-      if (mode === "subscribe" && token === verifyToken) {
-        console.log("[whatsapp-webhook] Verification successful");
-        return new Response(challenge, { status: 200 });
+      // Meta sends hub.mode=subscribe for verification
+      if (mode === "subscribe" && token && token === verifyToken) {
+        console.log("[whatsapp-webhook] Verification successful, returning challenge");
+        // Return challenge as plain text - this is critical for Meta verification
+        return new Response(challenge || "", { 
+          status: 200,
+          headers: { "Content-Type": "text/plain" }
+        });
       } else {
-        console.error("[whatsapp-webhook] Verification failed");
+        console.error("[whatsapp-webhook] Verification failed - mode:", mode, "token match:", token === verifyToken);
         return new Response("Forbidden", { status: 403 });
       }
     }
