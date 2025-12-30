@@ -1,75 +1,23 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
-import { CheckCircle, Clock, ChevronRight, Sparkles, Car, Sofa, Droplet, Wind, Cog, Leaf, Check } from "lucide-react";
-import detailImage from "@/assets/washero-detail-1.jpg";
-import interiorImage from "@/assets/washero-interior.jpg";
-import { useServiceAddons, ServiceAddon } from "@/hooks/useServiceAddons";
-import { useToast } from "@/hooks/use-toast";
-
-const services = [
-  {
-    id: "exterior",
-    name: "Lavado Exterior",
-    description: "Limpieza exterior completa con productos eco-friendly y nuestro sistema de ahorro de agua",
-    price: "Desde $25.000",
-    time: "45 min",
-    icon: Car,
-    image: detailImage,
-    features: [
-      "Pre-lavado y aplicación de espuma",
-      "Lavado a mano con guantes de microfibra",
-      "Limpieza de llantas y cubiertas",
-      "Limpieza de vidrios",
-      "Enjuague con agua filtrada",
-      "Secado a mano con toallas premium",
-    ],
-  },
-  {
-    id: "interior",
-    name: "Limpieza Interior",
-    description: "Detailing interior profundo para un habitáculo fresco e impecable",
-    price: "Desde $35.000",
-    time: "60 min",
-    icon: Sofa,
-    image: interiorImage,
-    features: [
-      "Aspirado completo (asientos, alfombras, baúl)",
-      "Limpieza de tablero y consola",
-      "Detailing de paneles de puertas",
-      "Limpieza de portavasos y ventilaciones",
-      "Limpieza de vidrios (interior)",
-      "Aplicación de aromatizante",
-    ],
-  },
-  {
-    id: "full-detail",
-    name: "Detailing Completo",
-    description: "Transformación premium completa de tu vehículo – nuestro paquete más elegido",
-    price: "Desde $75.000",
-    time: "2-3 horas",
-    icon: Sparkles,
-    popular: true,
-    features: [
-      "Lavado exterior completo",
-      "Limpieza interior completa",
-      "Encerado o sellador",
-      "Acondicionamiento de cueros",
-      "Limpieza de motor",
-      "Tratamiento eliminador de olores",
-    ],
-  },
-];
-
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  Sparkles,
-  Droplet,
-  Wind,
-  Cog,
-  Leaf,
-};
+import { 
+  CheckCircle, 
+  ChevronRight, 
+  Sparkles, 
+  Car, 
+  Truck, 
+  MessageCircle,
+  CreditCard,
+  Banknote,
+  QrCode,
+  Home,
+  Star,
+  Check
+} from "lucide-react";
+import { useServiceAddons } from "@/hooks/useServiceAddons";
 
 const formatPrice = (cents: number) => {
   return new Intl.NumberFormat('es-AR', {
@@ -82,7 +30,7 @@ const formatPrice = (cents: number) => {
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.5 },
+  transition: { duration: 0.4 },
 };
 
 const staggerContainer = {
@@ -93,218 +41,417 @@ const staggerContainer = {
   },
 };
 
+// Individual services data
+const serviciosIndividuales = [
+  {
+    name: "Lavado Básico",
+    description: "Exterior + interior básico",
+    price: "$25.000",
+    icon: Car,
+  },
+  {
+    name: "Lavado Completo",
+    description: "Exterior + interior detallado",
+    price: "$32.000",
+    icon: Sparkles,
+  },
+  {
+    name: "SUV / Camioneta",
+    description: "Cargo adicional",
+    price: "+ $5.000",
+    icon: Truck,
+    isExtra: true,
+  },
+];
+
+// Plans data
+const planes = [
+  {
+    id: "basico",
+    name: "Plan Básico",
+    price: "$45.000",
+    period: "/ mes",
+    features: [
+      "2 lavados / mes",
+      "Exterior + interior",
+    ],
+    popular: false,
+  },
+  {
+    id: "confort",
+    name: "Plan Confort",
+    price: "$85.000",
+    period: "/ mes",
+    features: [
+      "4 lavados / mes (1 por semana)",
+      "Exterior + interior",
+      "Prioridad en agenda",
+    ],
+    popular: true,
+    badge: "Más elegido",
+  },
+  {
+    id: "premium",
+    name: "Plan Premium",
+    price: "$110.000",
+    period: "/ mes",
+    features: [
+      "4 lavados / mes",
+      "Incluye encerado rápido (1 vez por mes)",
+      "Detallado interior liviano",
+      "Máxima prioridad",
+    ],
+    popular: false,
+  },
+];
+
+// Payment methods
+const metodosPago = [
+  { name: "Efectivo", icon: Banknote },
+  { name: "Transferencia", icon: CreditCard },
+  { name: "Mercado Pago", icon: QrCode },
+  { name: "Débito / Crédito", icon: CreditCard },
+];
+
 const Servicios = () => {
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const { addons, selectedAddons, toggleAddon, isSelected } = useServiceAddons();
+  const { addons } = useServiceAddons();
   
-  const handleReservarWithExtras = () => {
-    // Store selected addons in sessionStorage for the booking page
-    if (selectedAddons.length > 0) {
-      sessionStorage.setItem('preselected_addons', JSON.stringify(selectedAddons));
-      toast({
-        title: `${selectedAddons.length} extra(s) seleccionado(s)`,
-        description: "Se agregarán a tu reserva",
-      });
-    }
-    navigate('/reservar');
+  // WhatsApp config - using the same number from existing config
+  const whatsappNumber = "5491130951804";
+  const whatsappMessage = encodeURIComponent("Hola! Quiero reservar un lavado con Washero 🚗");
+  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+
+  const scrollToPlanes = () => {
+    document.getElementById('planes')?.scrollIntoView({ behavior: 'smooth' });
   };
   
   return (
     <Layout>
-      {/* Hero Section */}
-      <section className="py-24 bg-washero-charcoal">
+      {/* Hero Section - Compact */}
+      <section className="py-12 md:py-20 bg-gradient-to-b from-washero-charcoal to-washero-charcoal/95">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center max-w-3xl mx-auto"
+            className="text-center max-w-2xl mx-auto"
           >
-            <h1 className="font-display text-5xl md:text-6xl font-black text-background mb-6">
-              Nuestros <span className="text-primary">Servicios</span>
+            <h1 className="font-display text-4xl md:text-5xl font-black text-background mb-4">
+              Servicios & <span className="text-primary">Planes</span>
             </h1>
-            <p className="text-xl text-background/70">
-              Elegí el paquete perfecto para tu vehículo. Todos incluyen nuestro sistema eco-friendly de ahorro de agua.
+            <p className="text-lg text-background/80">
+              Lavamos tu auto en tu casa, sin que pierdas tiempo.
             </p>
           </motion.div>
         </div>
       </section>
 
-      {/* Services Grid */}
-      <section className="py-24 bg-background">
+      {/* Individual Services */}
+      <section className="py-12 bg-background">
         <div className="container mx-auto px-4">
+          <motion.h2
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="font-display text-2xl md:text-3xl font-bold text-foreground mb-8 text-center"
+          >
+            Servicios Individuales
+          </motion.h2>
+          
           <motion.div
             initial="initial"
             whileInView="animate"
             viewport={{ once: true }}
             variants={staggerContainer}
-            className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+            className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto"
           >
-            {services.map((service) => (
+            {serviciosIndividuales.map((servicio) => (
               <motion.div
-                key={service.id}
+                key={servicio.name}
                 variants={fadeInUp}
-                className={`relative p-8 rounded-2xl border-2 transition-all duration-300 hover:-translate-y-2 ${
-                  service.popular
-                    ? "border-primary bg-primary/5 shadow-gold"
-                    : "border-border bg-card hover:border-primary/50"
+                className={`p-6 rounded-xl border-2 transition-all ${
+                  servicio.isExtra 
+                    ? 'border-dashed border-muted-foreground/30 bg-muted/30' 
+                    : 'border-border bg-card hover:border-primary/50 hover:shadow-md'
                 }`}
               >
-                {service.popular && (
-                  <span className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full">
-                    Más Elegido
-                  </span>
-                )}
-                
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
-                  <service.icon className="w-8 h-8 text-primary" />
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                    servicio.isExtra ? 'bg-muted' : 'bg-primary/10'
+                  }`}>
+                    <servicio.icon className={`w-6 h-6 ${servicio.isExtra ? 'text-muted-foreground' : 'text-primary'}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display text-lg font-bold text-foreground">
+                      {servicio.name}
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {servicio.description}
+                    </p>
+                    <p className={`font-display text-2xl font-black mt-2 ${
+                      servicio.isExtra ? 'text-muted-foreground' : 'text-primary'
+                    }`}>
+                      {servicio.price}
+                    </p>
+                  </div>
                 </div>
-                
-                <h2 className="font-display text-2xl font-bold text-foreground mb-3">
-                  {service.name}
-                </h2>
-                <p className="text-muted-foreground mb-6">{service.description}</p>
-                
-                <div className="flex items-baseline gap-3 mb-6">
-                  <span className="font-display text-4xl font-black text-primary">
-                    {service.price}
-                  </span>
-                  <span className="flex items-center gap-1 text-muted-foreground">
-                    <Clock className="w-4 h-4" />
-                    {service.time}
-                  </span>
-                </div>
-                
-                <div className="border-t border-border pt-6 mb-8">
-                  <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-4">
-                    Qué Incluye
-                  </h4>
-                  <ul className="space-y-3">
-                    {service.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-3 text-sm">
-                        <CheckCircle className="w-5 h-5 text-washero-eco shrink-0 mt-0.5" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                
-                <Button
-                  variant={service.popular ? "hero" : "outline"}
-                  className="w-full"
-                  size="lg"
-                  asChild
-                >
-                  <Link to={`/reservar?servicio=${service.id}`}>
-                    Reservar <ChevronRight className="w-4 h-4" />
-                  </Link>
-                </Button>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Add-ons Section */}
-      <section className="py-24 bg-secondary">
+      {/* Extras Section */}
+      <section className="py-12 bg-muted/30">
         <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
+          <motion.h2
+            initial={{ opacity: 0, y: 10 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-16"
+            className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2 text-center"
           >
-            <h2 className="font-display text-4xl font-black text-foreground mb-4">
-              Servicios <span className="text-primary">Adicionales</span>
-            </h2>
-            <p className="text-lg text-muted-foreground">
-              Potenciá tu servicio con estos extras premium
-            </p>
-          </motion.div>
-
+            Extras
+          </motion.h2>
+          <p className="text-center text-muted-foreground mb-8">
+            Agregá estos servicios adicionales a tu lavado
+          </p>
+          
           <motion.div
             initial="initial"
             whileInView="animate"
             viewport={{ once: true }}
             variants={staggerContainer}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+            className="flex flex-wrap justify-center gap-3 max-w-3xl mx-auto"
           >
-            {addons.map((addon) => {
-              const IconComponent = iconMap[addon.icon || 'Sparkles'] || Sparkles;
-              const selected = isSelected(addon.id);
-              
-              return (
-                <motion.button
-                  key={addon.id}
-                  variants={fadeInUp}
-                  onClick={() => toggleAddon(addon)}
-                  className={`relative p-6 rounded-xl bg-background border-2 transition-all duration-300 text-center cursor-pointer ${
-                    selected 
-                      ? 'border-primary bg-primary/5 shadow-md' 
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                >
-                  {selected && (
-                    <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                      <Check className="w-4 h-4 text-washero-charcoal" />
-                    </div>
-                  )}
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                    selected ? 'bg-primary/20' : 'bg-primary/10'
-                  }`}>
-                    <IconComponent className="w-6 h-6 text-primary" />
-                  </div>
-                  <h3 className="font-display font-bold text-foreground mb-2">
-                    {addon.name}
-                  </h3>
-                  <p className={`font-bold ${selected ? 'text-primary' : 'text-muted-foreground'}`}>
-                    +{formatPrice(addon.price_cents)}
-                  </p>
-                </motion.button>
-              );
-            })}
-          </motion.div>
-          
-          {selectedAddons.length > 0 && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-8 text-center"
-            >
-              <Button variant="hero" size="lg" onClick={handleReservarWithExtras}>
-                Reservar con {selectedAddons.length} extra{selectedAddons.length > 1 ? 's' : ''} <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
+            {/* Static extras from spec */}
+            <motion.div variants={fadeInUp} className="px-4 py-3 rounded-full bg-background border border-border">
+              <span className="font-medium text-foreground">Encerado rápido</span>
+              <span className="ml-2 text-primary font-bold">$8.000</span>
             </motion.div>
-          )}
+            <motion.div variants={fadeInUp} className="px-4 py-3 rounded-full bg-background border border-border">
+              <span className="font-medium text-foreground">Detallado interior</span>
+              <span className="ml-2 text-primary font-bold">$8.000 – $10.000</span>
+            </motion.div>
+            
+            {/* Dynamic extras from DB (Pelo de Mascotas, Eliminación de Olores) */}
+            {addons.filter(a => ['Pelo de Mascotas', 'Eliminación de Olores'].includes(a.name)).map((addon) => (
+              <motion.div 
+                key={addon.id} 
+                variants={fadeInUp} 
+                className="px-4 py-3 rounded-full bg-background border border-border"
+              >
+                <span className="font-medium text-foreground">{addon.name}</span>
+                <span className="ml-2 text-primary font-bold">{formatPrice(addon.price_cents)}</span>
+              </motion.div>
+            ))}
+          </motion.div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-24 bg-washero-charcoal">
+      {/* Monthly Plans */}
+      <section id="planes" className="py-16 bg-background scroll-mt-16">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
+              Planes Mensuales
+            </h2>
+            <p className="text-muted-foreground">
+              Mantené tu auto siempre impecable con un plan a tu medida
+            </p>
+          </motion.div>
+          
+          <motion.div
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+            variants={staggerContainer}
+            className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto"
+          >
+            {planes.map((plan) => (
+              <motion.div
+                key={plan.id}
+                variants={fadeInUp}
+                className={`relative p-6 md:p-8 rounded-2xl border-2 transition-all ${
+                  plan.popular
+                    ? 'border-primary bg-primary/5 shadow-gold md:scale-105 z-10'
+                    : 'border-border bg-card hover:border-primary/50'
+                }`}
+              >
+                {plan.badge && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full whitespace-nowrap flex items-center gap-1">
+                    <Star className="w-3 h-3" />
+                    {plan.badge}
+                  </span>
+                )}
+                
+                <h3 className="font-display text-xl md:text-2xl font-bold text-foreground mb-2 mt-2">
+                  {plan.name}
+                </h3>
+                
+                <div className="flex items-baseline gap-1 mb-6">
+                  <span className="font-display text-3xl md:text-4xl font-black text-primary">
+                    {plan.price}
+                  </span>
+                  <span className="text-muted-foreground text-sm">{plan.period}</span>
+                </div>
+                
+                <ul className="space-y-3 mb-6">
+                  {plan.features.map((feature, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-sm">
+                      <CheckCircle className="w-5 h-5 text-washero-eco shrink-0 mt-0.5" />
+                      <span className="text-foreground">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                
+                <Button
+                  variant={plan.popular ? "hero" : "outline"}
+                  className="w-full"
+                  size="lg"
+                  asChild
+                >
+                  <Link to="/suscripciones">
+                    Suscribirme <ChevronRight className="w-4 h-4 ml-1" />
+                  </Link>
+                </Button>
+              </motion.div>
+            ))}
+          </motion.div>
+          
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center text-sm text-muted-foreground mt-8 flex items-center justify-center gap-2"
+          >
+            <Check className="w-4 h-4 text-washero-eco" />
+            Los planes se abonan por adelantado
+          </motion.p>
+        </div>
+      </section>
+
+      {/* Barrios Cerrados */}
+      <section className="py-8 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="max-w-2xl mx-auto bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-2xl p-6 md:p-8"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                <Home className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-display text-lg md:text-xl font-bold text-foreground mb-2">
+                  🏘️ Barrios Cerrados
+                </h3>
+                <p className="text-muted-foreground">
+                  <span className="font-semibold text-foreground">5 o más autos del mismo barrio →</span>{" "}
+                  <span className="text-primary font-bold">10–15% OFF</span>
+                  <br />
+                  <span className="text-sm">Mismo día y horario</span>
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Payment Methods */}
+      <section className="py-12 bg-background">
+        <div className="container mx-auto px-4">
+          <motion.h3
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="font-display text-xl font-bold text-foreground mb-6 text-center"
+          >
+            Medios de Pago
+          </motion.h3>
+          
+          <motion.div
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+            variants={staggerContainer}
+            className="flex flex-wrap justify-center gap-4 max-w-2xl mx-auto"
+          >
+            {metodosPago.map((metodo) => (
+              <motion.div
+                key={metodo.name}
+                variants={fadeInUp}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 border border-border"
+              >
+                <metodo.icon className="w-5 h-5 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">{metodo.name}</span>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Sticky CTA for Mobile */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border md:hidden z-50">
+        <div className="flex gap-3">
+          <Button 
+            variant="hero" 
+            size="lg" 
+            className="flex-1"
+            asChild
+          >
+            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
+              <MessageCircle className="w-5 h-5 mr-2" />
+              Reservar por WhatsApp
+            </a>
+          </Button>
+          <Button 
+            variant="outline" 
+            size="lg"
+            onClick={scrollToPlanes}
+          >
+            Planes
+          </Button>
+        </div>
+      </div>
+
+      {/* Desktop CTA Section */}
+      <section className="py-16 bg-washero-charcoal hidden md:block">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            className="text-center max-w-3xl mx-auto"
+            className="text-center max-w-2xl mx-auto"
           >
-            <h2 className="font-display text-4xl md:text-5xl font-black text-background mb-6">
-              ¿No Sabés Cuál <span className="text-primary">Elegir?</span>
+            <h2 className="font-display text-3xl md:text-4xl font-black text-background mb-4">
+              ¿Listo para <span className="text-primary">empezar?</span>
             </h2>
-            <p className="text-xl text-background/70 mb-10">
-              Contactanos y te ayudamos a encontrar el servicio perfecto para tu vehículo.
+            <p className="text-lg text-background/70 mb-8">
+              Reservá tu lavado ahora o consultanos sobre los planes mensuales.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button variant="hero" size="lg" asChild>
-                <Link to="/reservar">Reservar Ahora</Link>
+                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle className="w-5 h-5 mr-2" />
+                  Reservar por WhatsApp
+                </a>
               </Button>
-              <Button variant="heroDark" size="lg" asChild>
-                <Link to="/contacto">Contactanos</Link>
+              <Button variant="heroDark" size="lg" onClick={scrollToPlanes}>
+                Consultar planes mensuales
               </Button>
             </div>
           </motion.div>
         </div>
       </section>
+
+      {/* Bottom padding for mobile sticky CTA */}
+      <div className="h-24 md:hidden" />
     </Layout>
   );
 };
