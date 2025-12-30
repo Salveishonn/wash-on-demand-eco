@@ -13,9 +13,15 @@ import {
   Eye,
   Send,
   Plus,
-  Minus
+  Minus,
+  Search,
+  History,
+  Calendar,
+  CreditCard,
+  MessageCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -26,8 +32,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 
 interface Subscription {
   id: string;
@@ -48,6 +61,14 @@ interface Subscription {
   };
 }
 
+interface SubscriptionEvent {
+  id: string;
+  subscription_id: string;
+  event_type: string;
+  payload: any;
+  created_at: string;
+}
+
 // Canonical status values (must match DB enum)
 const SUBSCRIPTION_STATUSES = {
   pending: 'pending',
@@ -63,6 +84,20 @@ const STATUS_LABELS: Record<string, string> = {
   paused: 'Pausada',
   cancelled: 'Cancelada',
   payment_failed: 'Pago fallido',
+};
+
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  created: 'Creada',
+  activated: 'Activada',
+  status_changed: 'Estado cambiado',
+  credits_adjusted: 'Créditos ajustados',
+  cycle_generated: 'Nuevo ciclo',
+  payment_email_sent: 'Email de pago enviado',
+  wash_used: 'Lavado usado',
+  renewed: 'Renovada',
+  paused: 'Pausada',
+  resumed: 'Reanudada',
+  cancelled: 'Cancelada',
 };
 
 const formatPrice = (cents: number) => {
@@ -81,6 +116,16 @@ const formatDate = (date: string) => {
   });
 };
 
+const formatDateTime = (date: string) => {
+  return new Date(date).toLocaleString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 export function SubscriptionsTab() {
   const { toast } = useToast();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -90,8 +135,11 @@ export function SubscriptionsTab() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isSendingPayment, setIsSendingPayment] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'cancelled' | 'pending'>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [creditsDelta, setCreditsDelta] = useState<number>(0);
+  const [events, setEvents] = useState<SubscriptionEvent[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
 
   const fetchSubscriptions = useCallback(async () => {
     try {
@@ -121,9 +169,34 @@ export function SubscriptionsTab() {
     }
   }, [toast]);
 
+  const fetchEvents = useCallback(async (subscriptionId: string) => {
+    setIsLoadingEvents(true);
+    try {
+      const { data, error } = await supabase
+        .from('subscription_events')
+        .select('*')
+        .eq('subscription_id', subscriptionId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setEvents(data || []);
+    } catch (error: any) {
+      console.error('Error fetching events:', error);
+    } finally {
+      setIsLoadingEvents(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchSubscriptions();
   }, [fetchSubscriptions]);
+
+  useEffect(() => {
+    if (selectedSubscription) {
+      fetchEvents(selectedSubscription.id);
+    }
+  }, [selectedSubscription, fetchEvents]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -135,12 +208,9 @@ export function SubscriptionsTab() {
     });
   };
 
-  // Use edge function for status update
   const handleUpdateStatus = async (subscriptionId: string, newStatus: string) => {
     setIsUpdating(true);
     try {
-      console.log('[SubscriptionsTab] Updating status:', { subscriptionId, newStatus });
-      
       const { data, error } = await supabase.functions.invoke('admin-set-subscription-status', {
         body: {
           subscription_id: subscriptionId,
@@ -157,9 +227,10 @@ export function SubscriptionsTab() {
         description: data.message || `Suscripción ${STATUS_LABELS[newStatus] || newStatus}`,
       });
 
-      // Refresh data and close dialog
       await fetchSubscriptions();
-      setIsDetailOpen(false);
+      if (selectedSubscription) {
+        fetchEvents(selectedSubscription.id);
+      }
     } catch (error: any) {
       console.error('[SubscriptionsTab] Update status error:', error);
       toast({
@@ -172,14 +243,11 @@ export function SubscriptionsTab() {
     }
   };
 
-  // Use edge function for credits adjustment
   const handleAdjustCredits = async (subscriptionId: string, delta: number) => {
     if (delta === 0) return;
     
     setIsUpdating(true);
     try {
-      console.log('[SubscriptionsTab] Adjusting credits:', { subscriptionId, delta });
-      
       const { data, error } = await supabase.functions.invoke('admin-adjust-subscription-credits', {
         body: {
           subscription_id: subscriptionId,
@@ -199,9 +267,9 @@ export function SubscriptionsTab() {
       await fetchSubscriptions();
       setCreditsDelta(0);
       
-      // Update selected subscription if still open
       if (selectedSubscription && selectedSubscription.id === subscriptionId) {
         setSelectedSubscription(prev => prev ? { ...prev, washes_remaining: data.new_credits } : null);
+        fetchEvents(subscriptionId);
       }
     } catch (error: any) {
       console.error('[SubscriptionsTab] Adjust credits error:', error);
@@ -215,12 +283,9 @@ export function SubscriptionsTab() {
     }
   };
 
-  // Use edge function for sending payment email
   const handleSendPaymentEmail = async (subscription: Subscription) => {
     setIsSendingPayment(true);
     try {
-      console.log('[SubscriptionsTab] Sending payment email:', subscription.id);
-      
       const { data, error } = await supabase.functions.invoke('admin-send-subscription-payment-email', {
         body: {
           subscription_id: subscription.id,
@@ -237,6 +302,9 @@ export function SubscriptionsTab() {
       });
 
       await fetchSubscriptions();
+      if (selectedSubscription) {
+        fetchEvents(selectedSubscription.id);
+      }
     } catch (error: any) {
       console.error('[SubscriptionsTab] Send payment email error:', error);
       toast({
@@ -249,12 +317,9 @@ export function SubscriptionsTab() {
     }
   };
 
-  // Use edge function for generating new cycle
   const handleGenerateNewCycle = async (subscription: Subscription) => {
     setIsUpdating(true);
     try {
-      console.log('[SubscriptionsTab] Generating new cycle:', subscription.id);
-      
       const { data, error } = await supabase.functions.invoke('admin-generate-cycle', {
         body: {
           subscription_id: subscription.id,
@@ -270,6 +335,9 @@ export function SubscriptionsTab() {
       });
 
       await fetchSubscriptions();
+      if (selectedSubscription) {
+        fetchEvents(selectedSubscription.id);
+      }
     } catch (error: any) {
       console.error('[SubscriptionsTab] Generate cycle error:', error);
       toast({
@@ -282,9 +350,27 @@ export function SubscriptionsTab() {
     }
   };
 
+  const openWhatsApp = (phone: string) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    window.open(`https://wa.me/${cleanPhone}`, '_blank');
+  };
+
+  // Filter subscriptions
   const filteredSubscriptions = subscriptions.filter(sub => {
-    if (statusFilter === 'all') return true;
-    return sub.status === statusFilter;
+    // Status filter
+    if (statusFilter !== 'all' && sub.status !== statusFilter) return false;
+    
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        sub.customer_name?.toLowerCase().includes(query) ||
+        sub.customer_email?.toLowerCase().includes(query) ||
+        sub.customer_phone?.includes(query)
+      );
+    }
+    
+    return true;
   });
 
   const stats = {
@@ -321,53 +407,66 @@ export function SubscriptionsTab() {
   return (
     <div className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="bg-white p-4 rounded-lg border">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="bg-card p-4 rounded-lg border">
           <div className="text-2xl font-bold text-foreground">{stats.total}</div>
           <div className="text-sm text-muted-foreground">Total</div>
         </div>
-        <div className="bg-white p-4 rounded-lg border">
+        <div className="bg-card p-4 rounded-lg border">
           <div className="text-2xl font-bold text-green-600">{stats.active}</div>
           <div className="text-sm text-muted-foreground">Activas</div>
         </div>
-        <div className="bg-white p-4 rounded-lg border">
+        <div className="bg-card p-4 rounded-lg border">
           <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
           <div className="text-sm text-muted-foreground">Pendientes</div>
         </div>
-        <div className="bg-white p-4 rounded-lg border">
+        <div className="bg-card p-4 rounded-lg border">
           <div className="text-2xl font-bold text-orange-600">{stats.paused}</div>
           <div className="text-sm text-muted-foreground">Pausadas</div>
         </div>
-        <div className="bg-white p-4 rounded-lg border">
+        <div className="bg-card p-4 rounded-lg border">
           <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
           <div className="text-sm text-muted-foreground">Canceladas</div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground">Filtrar:</span>
-          {(['all', 'active', 'pending', 'paused', 'cancelled'] as const).map((filter) => (
-            <Button
-              key={filter}
-              variant={statusFilter === filter ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatusFilter(filter)}
-            >
-              {filter === 'all' ? 'Todas' : STATUS_LABELS[filter]}
-            </Button>
-          ))}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+        {/* Search */}
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nombre, email o teléfono..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
         </div>
+        
+        {/* Status filter dropdown (mobile friendly) */}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full md:w-[180px]">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="active">Activas</SelectItem>
+            <SelectItem value="pending">Pendientes</SelectItem>
+            <SelectItem value="paused">Pausadas</SelectItem>
+            <SelectItem value="cancelled">Canceladas</SelectItem>
+          </SelectContent>
+        </Select>
+        
         <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
           <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-          Actualizar
+          <span className="hidden md:inline">Actualizar</span>
         </Button>
       </div>
 
-      {/* Subscriptions list */}
-      <div className="bg-white rounded-lg border overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Subscriptions list - Mobile Cards / Desktop Table */}
+      <div className="bg-card rounded-lg border overflow-hidden">
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/50 border-b">
               <tr>
@@ -432,11 +531,46 @@ export function SubscriptionsTab() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Cards */}
+        <div className="md:hidden divide-y">
+          {filteredSubscriptions.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              No hay suscripciones
+            </div>
+          ) : (
+            filteredSubscriptions.map((sub) => (
+              <div
+                key={sub.id}
+                className="p-4 active:bg-muted/30 cursor-pointer"
+                onClick={() => {
+                  setSelectedSubscription(sub);
+                  setCreditsDelta(0);
+                  setIsDetailOpen(true);
+                }}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <div className="font-medium text-foreground">{sub.customer_name}</div>
+                    <div className="text-sm text-muted-foreground">{sub.subscription_plans?.name}</div>
+                  </div>
+                  {getStatusBadge(sub.status)}
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {sub.washes_remaining}/{sub.subscription_plans?.washes_per_month} lavados
+                  </span>
+                  <span className="text-muted-foreground">{formatDate(sub.created_at)}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {/* Detail Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalle de Suscripción</DialogTitle>
             <DialogDescription>
@@ -456,9 +590,18 @@ export function SubscriptionsTab() {
                   <Mail className="w-4 h-4 text-muted-foreground" />
                   <span>{selectedSubscription.customer_email}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone className="w-4 h-4 text-muted-foreground" />
-                  <span>{selectedSubscription.customer_phone}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="w-4 h-4 text-muted-foreground" />
+                    <span>{selectedSubscription.customer_phone}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openWhatsApp(selectedSubscription.customer_phone)}
+                  >
+                    <MessageCircle className="w-4 h-4 text-green-600" />
+                  </Button>
                 </div>
               </div>
 
@@ -476,12 +619,31 @@ export function SubscriptionsTab() {
                   <span className="text-sm text-muted-foreground">Estado</span>
                   {getStatusBadge(selectedSubscription.status)}
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Créditos disponibles</span>
-                  <span className="font-bold text-lg text-primary">
-                    {selectedSubscription.washes_remaining} / {selectedSubscription.subscription_plans?.washes_per_month}
-                  </span>
+                
+                {/* Credits with progress bar */}
+                <div className="pt-2">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-muted-foreground">Créditos disponibles</span>
+                    <span className="font-bold text-lg text-primary">
+                      {selectedSubscription.washes_remaining} / {selectedSubscription.subscription_plans?.washes_per_month}
+                    </span>
+                  </div>
+                  <Progress 
+                    value={(selectedSubscription.washes_remaining / (selectedSubscription.subscription_plans?.washes_per_month || 1)) * 100} 
+                    className="h-2"
+                  />
                 </div>
+                
+                {selectedSubscription.current_period_start && selectedSubscription.current_period_end && (
+                  <div className="flex justify-between items-center text-sm pt-2">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Calendar className="w-3 h-3" /> Período
+                    </span>
+                    <span className="text-muted-foreground">
+                      {formatDate(selectedSubscription.current_period_start)} - {formatDate(selectedSubscription.current_period_end)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Adjust credits */}
@@ -518,6 +680,48 @@ export function SubscriptionsTab() {
                   >
                     {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
                   </Button>
+                </div>
+              </div>
+
+              {/* Event History */}
+              <div className="border rounded-lg">
+                <div className="flex items-center gap-2 p-3 border-b bg-muted/30">
+                  <History className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">Historial</span>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {isLoadingEvents ? (
+                    <div className="p-4 text-center">
+                      <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                    </div>
+                  ) : events.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      Sin eventos registrados
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {events.map((event) => (
+                        <div key={event.id} className="p-3 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">
+                              {EVENT_TYPE_LABELS[event.event_type] || event.event_type}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateTime(event.created_at)}
+                            </span>
+                          </div>
+                          {event.payload && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {typeof event.payload === 'object' 
+                                ? JSON.stringify(event.payload).slice(0, 100)
+                                : event.payload
+                              }
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -13,7 +13,8 @@ import {
   CreditCard, 
   Wallet,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Star
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,6 +43,28 @@ const formatPrice = (cents: number) => {
     currency: 'ARS',
     minimumFractionDigits: 0,
   }).format(cents / 100);
+};
+
+// Plan features mapping
+const planFeatures: Record<string, string[]> = {
+  "Plan Básico": [
+    "2 lavados por mes",
+    "Exterior + interior",
+    "Agendá cuando quieras",
+    "Sin cargos extra",
+  ],
+  "Plan Confort": [
+    "4 lavados por mes (1 por semana)",
+    "Exterior + interior",
+    "Prioridad en agenda",
+    "Sin cargos extra",
+  ],
+  "Plan Premium": [
+    "4 lavados por mes",
+    "Incluye encerado rápido (1 vez por mes)",
+    "Detallado interior liviano",
+    "Máxima prioridad",
+  ],
 };
 
 export default function Suscripciones() {
@@ -114,8 +137,6 @@ export default function Suscripciones() {
     try {
       const isPayLater = paymentMethod === "pay_later" || !PAYMENTS_ENABLED;
 
-      console.log("[Suscripciones] Creating subscription, payLater:", isPayLater);
-
       const { data, error } = await supabase.functions.invoke("create-guest-subscription", {
         body: {
           planId: selectedPlan.id,
@@ -128,10 +149,7 @@ export default function Suscripciones() {
 
       if (error) throw error;
 
-      console.log("[Suscripciones] Subscription response:", data);
-
       if (isPayLater) {
-        // Pay later - redirect to confirmation
         toast({
           title: "¡Solicitud recibida!",
           description: "Te contactaremos para activar tu suscripción.",
@@ -139,7 +157,6 @@ export default function Suscripciones() {
         setIsCheckoutOpen(false);
         navigate(`/suscripcion-confirmada?status=pending&plan=${selectedPlan.name}`);
       } else if (data.initPoint) {
-        // MercadoPago - redirect to payment
         toast({
           title: "Redirigiendo a MercadoPago...",
           description: "Serás redirigido para completar el pago.",
@@ -160,26 +177,13 @@ export default function Suscripciones() {
     }
   };
 
-  const planFeatures = {
-    "Básico": [
-      "2 lavados exteriores por mes",
-      "Agendá cuando quieras",
-      "Sin cargos extra",
-      "Cancelá cuando quieras",
-    ],
-    "Premium": [
-      "4 lavados exteriores por mes",
-      "Prioridad de agenda",
-      "Incluye aspirado interior",
-      "Sin cargos extra",
-      "Cancelá cuando quieras",
-    ],
-  };
+  // Determine which plan is "Confort" (most popular)
+  const isConfortPlan = (name: string) => name.toLowerCase().includes('confort');
 
   return (
     <Layout>
       {/* Hero */}
-      <section className="py-16 bg-washero-charcoal">
+      <section className="py-12 md:py-16 bg-washero-charcoal">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -187,17 +191,17 @@ export default function Suscripciones() {
             className="text-center max-w-3xl mx-auto"
           >
             <h1 className="font-display text-4xl md:text-5xl font-black text-background mb-4">
-              Planes de <span className="text-primary">Suscripción</span>
+              Planes <span className="text-primary">Mensuales</span>
             </h1>
-            <p className="text-lg text-background/70">
-              Ahorrá todos los meses y olvidate de coordinar cada lavado
+            <p className="text-lg text-background/80">
+              Mantené tu auto siempre impecable con un plan a tu medida
             </p>
           </motion.div>
         </div>
       </section>
 
       {/* Plans Grid */}
-      <section className="py-16 bg-background">
+      <section className="py-12 md:py-16 bg-background">
         <div className="container mx-auto px-4">
           {isLoading ? (
             <div className="flex justify-center py-12">
@@ -209,10 +213,10 @@ export default function Suscripciones() {
               <p className="text-muted-foreground">No hay planes disponibles en este momento</p>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
               {plans.map((plan, index) => {
-                const isPremium = plan.name === "Premium";
-                const features = planFeatures[plan.name as keyof typeof planFeatures] || [];
+                const isPopular = isConfortPlan(plan.name);
+                const features = planFeatures[plan.name] || [plan.description];
                 
                 return (
                   <motion.div
@@ -220,47 +224,37 @@ export default function Suscripciones() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className={`relative rounded-2xl border-2 p-8 ${
-                      isPremium 
-                        ? "border-primary bg-primary/5" 
-                        : "border-border bg-background"
+                    className={`relative rounded-2xl border-2 p-6 md:p-8 ${
+                      isPopular 
+                        ? "border-primary bg-primary/5 shadow-gold md:scale-105 z-10" 
+                        : "border-border bg-background hover:border-primary/50"
                     }`}
                   >
-                    {isPremium && (
+                    {isPopular && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                        <span className="px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full flex items-center gap-1">
-                          <Sparkles className="w-4 h-4" /> Más Popular
+                        <span className="px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full flex items-center gap-1 whitespace-nowrap">
+                          <Star className="w-3 h-3" /> Más elegido
                         </span>
                       </div>
                     )}
                     
-                    <div className="text-center mb-6">
-                      <h2 className="font-display text-2xl font-bold text-foreground mb-2">
+                    <div className="text-center mb-6 mt-2">
+                      <h2 className="font-display text-xl md:text-2xl font-bold text-foreground mb-4">
                         {plan.name}
                       </h2>
-                      <p className="text-muted-foreground text-sm mb-4">
-                        {plan.description}
-                      </p>
                       <div className="flex items-baseline justify-center gap-1">
-                        <span className="font-display text-4xl font-black text-primary">
+                        <span className="font-display text-3xl md:text-4xl font-black text-primary">
                           {formatPrice(plan.price_cents)}
                         </span>
-                        <span className="text-muted-foreground">/mes</span>
+                        <span className="text-muted-foreground text-sm">/mes</span>
                       </div>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-2 mb-6 text-foreground">
-                      <Car className="w-5 h-5 text-primary" />
-                      <span className="font-semibold">
-                        {plan.washes_per_month} lavados por mes
-                      </span>
                     </div>
 
                     <ul className="space-y-3 mb-8">
                       {features.map((feature, i) => (
                         <li key={i} className="flex items-start gap-2">
                           <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                          <span className="text-muted-foreground">{feature}</span>
+                          <span className="text-sm text-foreground">{feature}</span>
                         </li>
                       ))}
                     </ul>
@@ -268,7 +262,7 @@ export default function Suscripciones() {
                     <Button
                       className="w-full"
                       size="lg"
-                      variant={isPremium ? "default" : "outline"}
+                      variant={isPopular ? "hero" : "outline"}
                       onClick={() => handleSelectPlan(plan)}
                     >
                       Suscribirme
@@ -278,6 +272,17 @@ export default function Suscripciones() {
               })}
             </div>
           )}
+
+          {/* Note about advance payment */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="text-center text-sm text-muted-foreground mt-8 flex items-center justify-center gap-2"
+          >
+            <Check className="w-4 h-4 text-washero-eco" />
+            Los planes se abonan por adelantado
+          </motion.p>
 
           {/* Kipper Seguros Partnership Banner */}
           <div className="mt-12 max-w-4xl mx-auto">
@@ -289,7 +294,7 @@ export default function Suscripciones() {
       {/* How it works */}
       <section className="py-16 bg-muted/30">
         <div className="container mx-auto px-4">
-          <h2 className="font-display text-3xl font-bold text-center text-foreground mb-12">
+          <h2 className="font-display text-2xl md:text-3xl font-bold text-center text-foreground mb-12">
             ¿Cómo funciona?
           </h2>
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
@@ -300,8 +305,8 @@ export default function Suscripciones() {
               <h3 className="font-display text-lg font-bold text-foreground mb-2">
                 1. Elegí tu plan
               </h3>
-              <p className="text-muted-foreground">
-                Básico o Premium según tus necesidades
+              <p className="text-muted-foreground text-sm">
+                Básico, Confort o Premium según tus necesidades
               </p>
             </div>
             <div className="text-center">
@@ -311,7 +316,7 @@ export default function Suscripciones() {
               <h3 className="font-display text-lg font-bold text-foreground mb-2">
                 2. Reservá tus lavados
               </h3>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 Usá tus lavados cuando quieras durante el mes
               </p>
             </div>
@@ -322,7 +327,7 @@ export default function Suscripciones() {
               <h3 className="font-display text-lg font-bold text-foreground mb-2">
                 3. Disfrutá el ahorro
               </h3>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 Tu cuota se renueva automáticamente cada mes
               </p>
             </div>

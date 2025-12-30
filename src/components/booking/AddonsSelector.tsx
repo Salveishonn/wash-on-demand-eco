@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Check, Sparkles, Droplet, Wind, Cog, Leaf } from 'lucide-react';
+import { Check, Sparkles, Droplet, Wind, Cog, Leaf, Sofa } from 'lucide-react';
 import { ServiceAddon, SelectedAddon } from '@/hooks/useServiceAddons';
 
 interface AddonsSelectorProps {
@@ -15,6 +15,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Wind,
   Cog,
   Leaf,
+  Sofa,
 };
 
 const formatPrice = (cents: number) => {
