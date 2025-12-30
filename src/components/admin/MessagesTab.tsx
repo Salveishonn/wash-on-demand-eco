@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Search,
   Send,
@@ -21,6 +22,7 @@ import {
   Timer,
   CheckCircle,
   CalendarX,
+  AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -104,6 +106,7 @@ export function MessagesTab() {
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [configWarning, setConfigWarning] = useState<string | null>(null);
 
   // Load conversations
   const fetchConversations = async () => {
@@ -290,15 +293,19 @@ export function MessagesTab() {
         );
       }
 
-      if (result.stub) {
+      // Check if it was stub mode (no provider configured)
+      if (result.stub || result.provider === 'stub') {
+        setConfigWarning('WhatsApp no configurado. Los mensajes se guardan pero no se envían.');
         toast({
           title: 'Mensaje guardado',
-          description: 'Twilio no configurado - mensaje almacenado localmente',
+          description: 'WhatsApp no configurado - mensaje almacenado localmente',
+          variant: 'default',
         });
       } else {
+        setConfigWarning(null);
         toast({
           title: 'Mensaje enviado ✅',
-          description: 'WhatsApp enviado correctamente',
+          description: `Enviado vía ${result.provider === 'meta' ? 'Meta WhatsApp' : 'WhatsApp'}`,
         });
       }
 
@@ -309,9 +316,15 @@ export function MessagesTab() {
       // Remove optimistic message on error
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
       setMessageText(textToSend); // Restore text
+      
+      // Check for specific error types
+      if (error.message?.includes('META_') || error.message?.includes('outside 24h')) {
+        setConfigWarning('Error: Fuera de la ventana de 24h. Use una plantilla aprobada.');
+      }
+      
       toast({
         variant: 'destructive',
-        title: 'Error',
+        title: 'Error al enviar',
         description: error.message || 'No se pudo enviar el mensaje',
       });
     } finally {
@@ -349,8 +362,18 @@ export function MessagesTab() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex h-[calc(100vh-280px)] min-h-[500px] bg-background rounded-xl shadow-sm overflow-hidden border border-border"
+      className="flex flex-col h-[calc(100vh-280px)] min-h-[500px]"
     >
+      {/* Config Warning Banner */}
+      {configWarning && (
+        <Alert variant="destructive" className="mb-2">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Configuración</AlertTitle>
+          <AlertDescription>{configWarning}</AlertDescription>
+        </Alert>
+      )}
+      
+      <div className="flex flex-1 bg-background rounded-xl shadow-sm overflow-hidden border border-border">
       {/* Left: Conversations List */}
       <div className="w-80 border-r border-border flex flex-col">
         {/* Search */}
@@ -554,6 +577,7 @@ export function MessagesTab() {
           </div>
         )}
       </div>
+    </div>
     </motion.div>
   );
 }
