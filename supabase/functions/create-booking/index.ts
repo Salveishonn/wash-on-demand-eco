@@ -135,12 +135,66 @@ serve(async (req) => {
     const addonsData = data.addons || [];
     const addonsTotalCents = data.addonsTotalCents || addonsData.reduce((sum, a) => sum + a.price_cents, 0);
 
+    // Normalize phone to E.164 for Argentina
+    let phoneE164 = data.customerPhone.trim().replace(/[^0-9+]/g, "");
+    if (!phoneE164.startsWith("+")) {
+      // Assume Argentina if no country code
+      if (phoneE164.startsWith("54")) {
+        phoneE164 = "+" + phoneE164;
+      } else if (phoneE164.startsWith("11") || phoneE164.startsWith("15")) {
+        // Buenos Aires mobile
+        phoneE164 = "+549" + phoneE164.replace(/^15/, "");
+      } else {
+        phoneE164 = "+54" + phoneE164;
+      }
+    }
+
+    // Upsert customer
+    let customerId: string | null = null;
+    if (data.whatsappOptIn) {
+      const { data: existingCustomer } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("phone_e164", phoneE164)
+        .maybeSingle();
+
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+        // Update customer with opt-in
+        await supabase
+          .from("customers")
+          .update({
+            full_name: data.customerName.trim(),
+            email: data.customerEmail.trim().toLowerCase(),
+            whatsapp_opt_in: true,
+            whatsapp_opt_in_at: new Date().toISOString(),
+          })
+          .eq("id", customerId);
+      } else {
+        // Create new customer
+        const { data: newCustomer } = await supabase
+          .from("customers")
+          .insert({
+            full_name: data.customerName.trim(),
+            email: data.customerEmail.trim().toLowerCase(),
+            phone_e164: phoneE164,
+            whatsapp_opt_in: true,
+            whatsapp_opt_in_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        customerId = newCustomer?.id || null;
+      }
+      console.log("[create-booking] Customer upserted:", customerId);
+    }
+
     // Create the booking
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .insert({
         user_id: data.userId || null,
         subscription_id: data.subscriptionId || null,
+        customer_id: customerId,
         customer_name: data.customerName.trim(),
         customer_email: data.customerEmail.trim().toLowerCase(),
         customer_phone: data.customerPhone.trim(),
@@ -161,6 +215,7 @@ serve(async (req) => {
         addons: addonsData,
         addons_total_cents: addonsTotalCents,
         booking_source: data.bookingSource || "direct",
+        whatsapp_opt_in: data.whatsappOptIn || false,
       })
       .select()
       .single();

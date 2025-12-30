@@ -108,6 +108,7 @@ export type Database = {
           confirmed_at: string | null
           created_at: string
           customer_email: string
+          customer_id: string | null
           customer_name: string
           customer_phone: string
           id: string
@@ -128,6 +129,10 @@ export type Database = {
           updated_at: string
           user_id: string | null
           webhook_processed_at: string | null
+          whatsapp_last_error: string | null
+          whatsapp_last_message_type: string | null
+          whatsapp_message_status: string | null
+          whatsapp_opt_in: boolean | null
         }
         Insert: {
           addons?: Json | null
@@ -141,6 +146,7 @@ export type Database = {
           confirmed_at?: string | null
           created_at?: string
           customer_email: string
+          customer_id?: string | null
           customer_name: string
           customer_phone: string
           id?: string
@@ -161,6 +167,10 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           webhook_processed_at?: string | null
+          whatsapp_last_error?: string | null
+          whatsapp_last_message_type?: string | null
+          whatsapp_message_status?: string | null
+          whatsapp_opt_in?: boolean | null
         }
         Update: {
           addons?: Json | null
@@ -174,6 +184,7 @@ export type Database = {
           confirmed_at?: string | null
           created_at?: string
           customer_email?: string
+          customer_id?: string | null
           customer_name?: string
           customer_phone?: string
           id?: string
@@ -194,8 +205,19 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           webhook_processed_at?: string | null
+          whatsapp_last_error?: string | null
+          whatsapp_last_message_type?: string | null
+          whatsapp_message_status?: string | null
+          whatsapp_opt_in?: boolean | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bookings_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bookings_payment_intent_id_fkey"
             columns: ["payment_intent_id"]
@@ -211,6 +233,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      customers: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          full_name: string
+          id: string
+          phone_e164: string
+          whatsapp_last_message_at: string | null
+          whatsapp_opt_in: boolean | null
+          whatsapp_opt_in_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          full_name: string
+          id?: string
+          phone_e164: string
+          whatsapp_last_message_at?: string | null
+          whatsapp_opt_in?: boolean | null
+          whatsapp_opt_in_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string
+          id?: string
+          phone_e164?: string
+          whatsapp_last_message_at?: string | null
+          whatsapp_opt_in?: boolean | null
+          whatsapp_opt_in_at?: string | null
+        }
+        Relationships: []
       }
       kipper_leads: {
         Row: {
@@ -774,6 +829,7 @@ export type Database = {
           current_period_end: string | null
           current_period_start: string | null
           customer_email: string | null
+          customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
           id: string
@@ -784,12 +840,16 @@ export type Database = {
           user_id: string | null
           washes_remaining: number
           washes_used_in_cycle: number
+          whatsapp_last_error: string | null
+          whatsapp_last_message_type: string | null
+          whatsapp_message_status: string | null
         }
         Insert: {
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
           customer_email?: string | null
+          customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
           id?: string
@@ -800,12 +860,16 @@ export type Database = {
           user_id?: string | null
           washes_remaining?: number
           washes_used_in_cycle?: number
+          whatsapp_last_error?: string | null
+          whatsapp_last_message_type?: string | null
+          whatsapp_message_status?: string | null
         }
         Update: {
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
           customer_email?: string | null
+          customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
           id?: string
@@ -816,8 +880,18 @@ export type Database = {
           user_id?: string | null
           washes_remaining?: number
           washes_used_in_cycle?: number
+          whatsapp_last_error?: string | null
+          whatsapp_last_message_type?: string | null
+          whatsapp_message_status?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "subscriptions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "subscriptions_plan_id_fkey"
             columns: ["plan_id"]
@@ -968,6 +1042,95 @@ export type Database = {
           },
         ]
       }
+      whatsapp_outbox: {
+        Row: {
+          attempts: number | null
+          created_at: string | null
+          customer_id: string | null
+          entity_id: string | null
+          entity_type: string
+          id: string
+          language_code: string | null
+          last_error: string | null
+          next_retry_at: string | null
+          sent_at: string | null
+          status: string | null
+          template_name: string
+          template_vars: Json
+          to_phone_e164: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          created_at?: string | null
+          customer_id?: string | null
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          language_code?: string | null
+          last_error?: string | null
+          next_retry_at?: string | null
+          sent_at?: string | null
+          status?: string | null
+          template_name: string
+          template_vars?: Json
+          to_phone_e164: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          created_at?: string | null
+          customer_id?: string | null
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          language_code?: string | null
+          last_error?: string | null
+          next_retry_at?: string | null
+          sent_at?: string | null
+          status?: string | null
+          template_name?: string
+          template_vars?: Json
+          to_phone_e164?: string
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_outbox_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_templates: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          parameter_count: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          parameter_count?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          parameter_count?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       calendar_bookings_v: {
@@ -984,6 +1147,7 @@ export type Database = {
           confirmed_at: string | null
           created_at: string | null
           customer_email: string | null
+          customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
           id: string | null
@@ -995,6 +1159,7 @@ export type Database = {
           service_price_cents: number | null
           subscription_id: string | null
           total_cents: number | null
+          whatsapp_opt_in: boolean | null
         }
         Insert: {
           addons?: Json | null
@@ -1009,6 +1174,7 @@ export type Database = {
           confirmed_at?: string | null
           created_at?: string | null
           customer_email?: string | null
+          customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
           id?: string | null
@@ -1019,7 +1185,8 @@ export type Database = {
           service_name?: string | null
           service_price_cents?: number | null
           subscription_id?: string | null
-          total_cents?: never
+          total_cents?: number | null
+          whatsapp_opt_in?: boolean | null
         }
         Update: {
           addons?: Json | null
@@ -1034,6 +1201,7 @@ export type Database = {
           confirmed_at?: string | null
           created_at?: string | null
           customer_email?: string | null
+          customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
           id?: string | null
@@ -1044,9 +1212,17 @@ export type Database = {
           service_name?: string | null
           service_price_cents?: number | null
           subscription_id?: string | null
-          total_cents?: never
+          total_cents?: number | null
+          whatsapp_opt_in?: boolean | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bookings_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bookings_subscription_id_fkey"
             columns: ["subscription_id"]

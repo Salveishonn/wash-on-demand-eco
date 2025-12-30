@@ -103,3 +103,15 @@ verify_jwt = false
 
 [functions.admin-update-availability]
 verify_jwt = false
+
+[functions.whatsapp-send]
+verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.whatsapp-process-outbox]
+verify_jwt = false
+
+[functions.whatsapp-send-text]
+verify_jwt = false

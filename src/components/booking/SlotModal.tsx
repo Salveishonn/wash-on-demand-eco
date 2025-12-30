@@ -555,17 +555,18 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
               </div>
 
               {/* WhatsApp Opt-in */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
                 <input
                   type="checkbox"
                   id="whatsapp"
                   checked={whatsappOptIn}
                   onChange={(e) => setWhatsappOptIn(e.target.checked)}
-                  className="mt-1"
+                  className="mt-1 accent-green-600"
                 />
-                <label htmlFor="whatsapp" className="text-sm text-muted-foreground">
-                  <MessageCircle className="w-4 h-4 inline mr-1" />
-                  Recibir recordatorio por WhatsApp
+                <label htmlFor="whatsapp" className="text-sm text-foreground">
+                  <MessageCircle className="w-4 h-4 inline mr-1 text-green-600" />
+                  <span className="font-medium">Quiero recibir confirmaciones por WhatsApp</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">Te avisamos cuando confirmemos tu turno y cuando estemos en camino</p>
                 </label>
               </div>
 
