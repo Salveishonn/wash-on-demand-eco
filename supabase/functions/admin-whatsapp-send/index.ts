@@ -15,16 +15,80 @@ const corsHeaders = {
 };
 
 function normalizePhoneForMeta(phone: string): string {
-  // Meta expects phone without + prefix
-  return phone.replace(/[^0-9]/g, "");
+  // Meta expects phone without + prefix, just digits
+  const e164 = normalizePhoneE164(phone);
+  return e164.replace(/[^0-9]/g, "");
 }
 
 function normalizePhoneE164(phone: string): string {
-  let normalized = phone.replace(/[^0-9]/g, "");
-  if (!normalized.startsWith("+")) {
-    normalized = "+" + normalized;
+  if (!phone) return '';
+  
+  // Remove all non-digit characters except leading +
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  
+  // Remove leading + for processing
+  const hasPlus = cleaned.startsWith('+');
+  if (hasPlus) {
+    cleaned = cleaned.substring(1);
   }
-  return normalized;
+  
+  // Handle Argentina-specific formats
+  
+  // Already has full Argentina code with 9 (mobile indicator)
+  if (cleaned.startsWith('549') && cleaned.length >= 12) {
+    return '+' + cleaned;
+  }
+  
+  // Has Argentina code without mobile 9
+  if (cleaned.startsWith('54') && !cleaned.startsWith('549')) {
+    const rest = cleaned.substring(2);
+    // Check if it's a mobile number (needs 9)
+    if (rest.startsWith('11') || rest.startsWith('15') || rest.length === 10) {
+      // Add mobile indicator 9
+      let mobile = rest;
+      if (mobile.startsWith('15')) {
+        // Remove local mobile prefix and add 9
+        mobile = mobile.substring(2);
+      }
+      return '+549' + mobile;
+    }
+    return '+54' + rest;
+  }
+  
+  // Starts with 15 (local mobile prefix in Argentina)
+  if (cleaned.startsWith('15') && cleaned.length >= 8) {
+    // Remove 15 and add full prefix (assume Buenos Aires 11)
+    const number = cleaned.substring(2);
+    return '+54911' + number;
+  }
+  
+  // Starts with 11 (Buenos Aires area code)
+  if (cleaned.startsWith('11') && cleaned.length >= 10) {
+    return '+549' + cleaned;
+  }
+  
+  // Starts with 9 (mobile indicator without country code)
+  if (cleaned.startsWith('9') && cleaned.length >= 10) {
+    return '+54' + cleaned;
+  }
+  
+  // 10-digit number (area code + number)
+  if (cleaned.length === 10) {
+    return '+549' + cleaned;
+  }
+  
+  // 8-digit number (Buenos Aires local without area code)
+  if (cleaned.length === 8) {
+    return '+54911' + cleaned;
+  }
+  
+  // Fallback: add +54 if it looks like an Argentina number
+  if (cleaned.length >= 8 && cleaned.length <= 12 && !cleaned.startsWith('54')) {
+    return '+54' + cleaned;
+  }
+  
+  // Return as-is with + if it's already formatted
+  return '+' + cleaned;
 }
 
 serve(async (req) => {

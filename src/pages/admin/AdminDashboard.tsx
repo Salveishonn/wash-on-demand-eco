@@ -26,6 +26,7 @@ import { CalendarTab } from '@/components/admin/CalendarTab';
 import { FinanzasTab } from '@/components/admin/FinanzasTab';
 import { MessagesTab } from '@/components/admin/MessagesTab';
 import { DisponibilidadTab } from '@/components/admin/DisponibilidadTab';
+import { WhatsAppSettingsTab } from '@/components/admin/WhatsAppSettingsTab';
 import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { Button } from '@/components/ui/button';
@@ -1118,6 +1119,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* Disponibilidad Tab */}
         {activeTab === 'disponibilidad' && <DisponibilidadTab />}
+
+        {/* WhatsApp Config Tab */}
+        {activeTab === 'whatsapp-config' && <WhatsAppSettingsTab />}
       </div>
 
       {/* Booking Detail Dialog */}
