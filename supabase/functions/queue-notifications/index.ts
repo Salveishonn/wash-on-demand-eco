@@ -25,8 +25,9 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // WhatsApp mode: "sandbox" = only admin gets WhatsApp, "production" = everyone
-  const whatsappMode = Deno.env.get("WHATSAPP_MODE") || "sandbox";
+  // WhatsApp mode: "sandbox" = only admin gets WhatsApp, "meta" or "production" = everyone via Meta
+  // Default to meta (Meta Cloud API as primary provider)
+  const whatsappMode = Deno.env.get("WHATSAPP_MODE") || "meta";
 
   try {
     const { bookingId, isPayLater, whatsappOptIn }: QueueNotificationsRequest = await req.json();
@@ -71,7 +72,7 @@ serve(async (req) => {
     // Only send if:
     // 1. In production mode OR
     // 2. Customer explicitly opted in (we'll attempt anyway but log warning in sandbox)
-    if (whatsappMode === "production" && whatsappOptIn) {
+    if ((whatsappMode === "production" || whatsappMode === "meta") && whatsappOptIn) {
       notifications.push({
         booking_id: bookingId,
         notification_type: "whatsapp",
@@ -80,7 +81,7 @@ serve(async (req) => {
         status: "pending",
         next_retry_at: new Date().toISOString(),
       });
-      console.log("[queue-notifications] Customer WhatsApp queued (production mode + opt-in)");
+      console.log("[queue-notifications] Customer WhatsApp queued (meta/production mode + opt-in)");
     } else if (whatsappMode === "sandbox" && whatsappOptIn) {
       // In sandbox mode, log that customer opted in but we can't send
       console.log("[queue-notifications] Customer opted in for WhatsApp but sandbox mode active - email only");

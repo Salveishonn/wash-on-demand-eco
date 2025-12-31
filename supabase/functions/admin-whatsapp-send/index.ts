@@ -37,7 +37,8 @@ serve(async (req) => {
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   
-  // Provider configuration
+  // Provider configuration - default to meta (production)
+  // Production number: +54 9 11 2679 9335
   const whatsappMode = Deno.env.get('WHATSAPP_MODE') || 'meta'; // meta | twilio | stub
   
   // Meta WhatsApp API credentials
