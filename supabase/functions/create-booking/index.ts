@@ -72,9 +72,13 @@ serve(async (req) => {
       );
     }
 
-    const isSubscription = data.isSubscriptionBooking === true && data.subscriptionId;
-    const isTransfer = data.paymentMethod === "transfer";
-    const isPayLater = data.paymentMethod === "pay_later";
+    // CRITICAL: Ensure all boolean values are strictly boolean (not truthy/falsy values)
+    const isSubscription: boolean = Boolean(data.isSubscriptionBooking === true && data.subscriptionId);
+    const isTransfer: boolean = data.paymentMethod === "transfer";
+    const isPayLater: boolean = data.paymentMethod === "pay_later";
+    const whatsappOptIn: boolean = Boolean(data.whatsappOptIn);
+
+    console.log("[create-booking] Boolean values - isSubscription:", isSubscription, "isTransfer:", isTransfer, "isPayLater:", isPayLater, "whatsappOptIn:", whatsappOptIn);
 
     // If subscription booking, verify subscription is active
     if (isSubscription && data.subscriptionId) {
@@ -188,35 +192,39 @@ serve(async (req) => {
       console.log("[create-booking] Customer upserted:", customerId);
     }
 
-    // Create the booking
+    // Create the booking - ensure all boolean fields are explicitly boolean
+    const bookingInsertData = {
+      user_id: data.userId || null,
+      subscription_id: data.subscriptionId || null,
+      customer_id: customerId,
+      customer_name: data.customerName.trim(),
+      customer_email: data.customerEmail.trim().toLowerCase(),
+      customer_phone: data.customerPhone.trim(),
+      service_name: data.serviceName,
+      service_price_cents: data.servicePriceCents || 0,
+      car_type: data.carType || null,
+      car_type_extra_cents: data.carTypeExtraCents || 0,
+      booking_date: data.bookingDate,
+      booking_time: data.bookingTime,
+      address: data.address.trim(),
+      notes: data.notes?.trim() || null,
+      is_subscription_booking: isSubscription, // Already cast to boolean above
+      requires_payment: Boolean(requiresPayment),
+      status: bookingStatus,
+      payment_status: paymentStatus,
+      payment_method: paymentMethodValue,
+      confirmed_at: isSubscription ? new Date().toISOString() : null,
+      addons: addonsData,
+      addons_total_cents: addonsTotalCents,
+      booking_source: data.bookingSource || "direct",
+      whatsapp_opt_in: whatsappOptIn, // Already cast to boolean above
+    };
+
+    console.log("[create-booking] Insert payload - is_subscription_booking:", bookingInsertData.is_subscription_booking, "(type:", typeof bookingInsertData.is_subscription_booking, ") whatsapp_opt_in:", bookingInsertData.whatsapp_opt_in, "(type:", typeof bookingInsertData.whatsapp_opt_in, ")");
+
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
-      .insert({
-        user_id: data.userId || null,
-        subscription_id: data.subscriptionId || null,
-        customer_id: customerId,
-        customer_name: data.customerName.trim(),
-        customer_email: data.customerEmail.trim().toLowerCase(),
-        customer_phone: data.customerPhone.trim(),
-        service_name: data.serviceName,
-        service_price_cents: data.servicePriceCents || 0,
-        car_type: data.carType || null,
-        car_type_extra_cents: data.carTypeExtraCents || 0,
-        booking_date: data.bookingDate,
-        booking_time: data.bookingTime,
-        address: data.address.trim(),
-        notes: data.notes?.trim() || null,
-        is_subscription_booking: isSubscription,
-        requires_payment: requiresPayment,
-        status: bookingStatus,
-        payment_status: paymentStatus,
-        payment_method: paymentMethodValue,
-        confirmed_at: isSubscription ? new Date().toISOString() : null,
-        addons: addonsData,
-        addons_total_cents: addonsTotalCents,
-        booking_source: data.bookingSource || "direct",
-        whatsapp_opt_in: data.whatsappOptIn || false,
-      })
+      .insert(bookingInsertData)
       .select()
       .single();
 
