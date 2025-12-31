@@ -1,6 +1,15 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// ============================================================
+// PROCESS NOTIFICATIONS - Meta Cloud API (Primary) + Resend Email
+// ============================================================
+// Processes notification queue and sends via appropriate channel
+// WhatsApp: Meta Cloud API (primary), Twilio (fallback)
+// Email: Resend
+// Production number: +54 9 11 2679 9335
+// ============================================================
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -9,7 +18,7 @@ const corsHeaders = {
 const BACKOFF_MULTIPLIER = 2;
 const BASE_DELAY_SECONDS = 60;
 
-// Admin WhatsApp number for sandbox validation
+// Admin WhatsApp number for notifications
 const ADMIN_WHATSAPP = "+5491130951804";
 
 const formatPrice = (cents: number) => {
@@ -29,6 +38,24 @@ const formatDate = (date: string) => {
   });
 };
 
+function normalizePhoneForMeta(phone: string): string {
+  // Meta expects phone without + prefix, just digits
+  return phone.replace(/[^0-9]/g, "");
+}
+
+function normalizePhoneE164(phone: string): string {
+  let normalized = phone.replace(/[^0-9]/g, "");
+  // Handle Argentina mobile numbers
+  if (normalized.startsWith("15")) {
+    normalized = "5411" + normalized.substring(2);
+  } else if (normalized.length === 10 && !normalized.startsWith("54")) {
+    normalized = "54" + normalized;
+  } else if (!normalized.startsWith("54") && normalized.length < 13) {
+    normalized = "54" + normalized;
+  }
+  return "+" + normalized;
+}
+
 async function sendEmail(
   resendApiKey: string,
   fromEmail: string,
@@ -37,10 +64,7 @@ async function sendEmail(
   html: string,
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
-    console.log(`[process-notifications] Sending email via Resend`);
-    console.log(`[process-notifications] From: ${fromEmail}`);
-    console.log(`[process-notifications] To: ${to}`);
-    console.log(`[process-notifications] API Key prefix: ${resendApiKey.substring(0, 8)}...`);
+    console.log(`[process-notifications] Sending email via Resend to: ${to}`);
     
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -57,7 +81,6 @@ async function sendEmail(
     });
 
     const data = await response.json();
-    console.log(`[process-notifications] Resend response:`, JSON.stringify(data));
 
     if (!response.ok) {
       return { success: false, error: data.message || data.name || "Email send failed" };
@@ -69,51 +92,67 @@ async function sendEmail(
   }
 }
 
-// Normalize phone number to E.164 format
-function normalizePhoneNumber(phone: string): string {
-  // Remove all non-digit characters except leading +
-  let cleaned = phone.replace(/[^\d+]/g, "");
-  // Ensure it starts with +
-  if (!cleaned.startsWith("+")) {
-    cleaned = "+" + cleaned;
+// Send WhatsApp via Meta Cloud API
+async function sendWhatsAppMeta(
+  accessToken: string,
+  phoneNumberId: string,
+  to: string,
+  body: string,
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const phoneForMeta = normalizePhoneForMeta(to);
+    console.log(`[process-notifications] Sending WhatsApp via Meta to: ${phoneForMeta}`);
+
+    const metaPayload = {
+      messaging_product: 'whatsapp',
+      to: phoneForMeta,
+      type: 'text',
+      text: { body },
+    };
+
+    const response = await fetch(
+      `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(metaPayload),
+      }
+    );
+
+    const result = await response.json();
+
+    if (response.ok && result.messages?.[0]?.id) {
+      return { success: true, messageId: result.messages[0].id };
+    } else {
+      const errorMsg = result.error?.message || 'Meta API error';
+      const errorCode = result.error?.code || response.status;
+      return { success: false, error: `META_${errorCode}: ${errorMsg}` };
+    }
+  } catch (err: any) {
+    return { success: false, error: `META_ERROR: ${err.message}` };
   }
-  return cleaned;
 }
 
-// Format number for WhatsApp (add whatsapp: prefix if not present)
-function formatWhatsAppNumber(phone: string): string {
-  const normalized = normalizePhoneNumber(phone);
-  // If already has whatsapp: prefix, return as-is
-  if (phone.toLowerCase().startsWith("whatsapp:")) {
-    return phone;
-  }
-  return `whatsapp:${normalized}`;
-}
-
-async function sendWhatsApp(
+// Send WhatsApp via Twilio (fallback)
+async function sendWhatsAppTwilio(
   accountSid: string,
   authToken: string,
   fromNumber: string,
   to: string,
   body: string,
-): Promise<{
-  success: boolean;
-  sid?: string;
-  status?: string;
-  error?: string;
-  errorCode?: number;
-  from?: string;
-  to?: string;
-}> {
+): Promise<{ success: boolean; sid?: string; error?: string }> {
   try {
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
     const auth = btoa(`${accountSid}:${authToken}`);
 
-    // Format From and To correctly for WhatsApp
-    const formattedFrom = formatWhatsAppNumber(fromNumber);
-    const formattedTo = formatWhatsAppNumber(to);
+    const normalizedTo = normalizePhoneE164(to);
+    const formattedFrom = fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`;
+    const formattedTo = `whatsapp:${normalizedTo}`;
 
-    console.log(`[sendWhatsApp] Sending from: ${formattedFrom} to: ${formattedTo}`);
+    console.log(`[process-notifications] Sending WhatsApp via Twilio to: ${formattedTo}`);
 
     const response = await fetch(twilioUrl, {
       method: "POST",
@@ -130,27 +169,12 @@ async function sendWhatsApp(
 
     const data = await response.json();
 
-    console.log(`[sendWhatsApp] Twilio response:`, JSON.stringify(data));
-
     if (!response.ok) {
-      return {
-        success: false,
-        error: data.message || JSON.stringify(data),
-        errorCode: data.code,
-        from: formattedFrom,
-        to: formattedTo,
-      };
+      return { success: false, error: data.message || JSON.stringify(data) };
     }
 
-    return {
-      success: true,
-      sid: data.sid,
-      status: data.status,
-      from: formattedFrom,
-      to: formattedTo,
-    };
+    return { success: true, sid: data.sid };
   } catch (err: any) {
-    console.error(`[sendWhatsApp] Exception:`, err);
     return { success: false, error: err.message };
   }
 }
@@ -270,16 +294,30 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const resendApiKey = Deno.env.get("RESEND_API_KEY");
   const resendFromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "Washero <reservas@washero.online>";
+  
+  // Meta WhatsApp API (PRIMARY)
+  const metaAccessToken = Deno.env.get("META_WA_ACCESS_TOKEN");
+  const metaPhoneNumberId = Deno.env.get("META_WA_PHONE_NUMBER_ID");
+  const metaConfigured = !!(metaAccessToken && metaPhoneNumberId);
+  
+  // Twilio (FALLBACK)
   const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
   const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
   const twilioWhatsAppNumber = Deno.env.get("TWILIO_WHATSAPP_NUMBER");
-  const whatsappMode = Deno.env.get("WHATSAPP_MODE") || "sandbox";
+  const twilioConfigured = !!(twilioAccountSid && twilioAuthToken && twilioWhatsAppNumber);
+  
+  // WhatsApp mode - default to meta
+  const whatsappMode = Deno.env.get("WHATSAPP_MODE") || "meta";
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
     console.log("[process-notifications] Starting notification processing");
-    console.log(`[process-notifications] WhatsApp mode: ${whatsappMode}`);
+    console.log("[process-notifications] Config:", {
+      whatsappMode,
+      metaConfigured,
+      twilioConfigured,
+    });
 
     // Get pending notifications (limit batch size)
     const { data: pendingNotifications, error: fetchError } = await supabase
@@ -310,8 +348,8 @@ serve(async (req) => {
     let succeeded = 0;
     let failed = 0;
 
-    // Rate limiting: add delay between notifications to avoid Resend 2 rps limit
-    const DELAY_BETWEEN_SENDS_MS = 600; // 600ms = ~1.6 rps, safe for 2 rps limit
+    // Rate limiting: add delay between notifications
+    const DELAY_BETWEEN_SENDS_MS = 600;
 
     for (let i = 0; i < pendingNotifications.length; i++) {
       const notification = pendingNotifications[i];
@@ -320,6 +358,7 @@ serve(async (req) => {
       if (i > 0 && notification.notification_type === "email") {
         await new Promise((resolve) => setTimeout(resolve, DELAY_BETWEEN_SENDS_MS));
       }
+      
       // Mark as processing
       await supabase.from("notification_queue").update({ status: "processing" }).eq("id", notification.id);
 
@@ -346,7 +385,8 @@ serve(async (req) => {
       const isCustomerNotification =
         notification.recipient !== "washerocarwash@gmail.com" && notification.recipient !== ADMIN_WHATSAPP;
 
-      let result: { success: boolean; id?: string; sid?: string; error?: string };
+      let result: { success: boolean; id?: string; sid?: string; messageId?: string; error?: string };
+      let provider = 'none';
 
       if (notification.notification_type === "email") {
         if (!resendApiKey) {
@@ -358,30 +398,51 @@ serve(async (req) => {
             : `🚗 Nueva Reserva: ${booking.customer_name} - ${formatDate(booking.booking_date)}`;
 
           result = await sendEmail(resendApiKey, resendFromEmail, notification.recipient, subject, html);
+          provider = 'resend';
         }
       } else if (notification.notification_type === "whatsapp") {
-        if (!twilioAccountSid || !twilioAuthToken || !twilioWhatsAppNumber) {
-          result = { success: false, error: "Twilio credentials not configured" };
+        // In sandbox mode, only send to admin number
+        if (whatsappMode === "sandbox" && isCustomerNotification) {
+          result = {
+            success: false,
+            error: "WhatsApp in sandbox mode - customer messages not sent.",
+          };
+          console.log(`[process-notifications] Skipping customer WhatsApp in sandbox mode`);
+        } 
+        // Try Meta first (primary provider)
+        else if ((whatsappMode === "meta" || whatsappMode === "production") && metaConfigured) {
+          provider = 'meta';
+          const message = buildWhatsAppMessage(booking, isCustomerNotification);
+          const metaResult = await sendWhatsAppMeta(
+            metaAccessToken!,
+            metaPhoneNumberId!,
+            notification.recipient,
+            message
+          );
+          result = { 
+            success: metaResult.success, 
+            id: metaResult.messageId, 
+            error: metaResult.error 
+          };
+        }
+        // Fallback to Twilio
+        else if (twilioConfigured) {
+          provider = 'twilio';
+          const message = buildWhatsAppMessage(booking, isCustomerNotification);
+          const twilioResult = await sendWhatsAppTwilio(
+            twilioAccountSid!,
+            twilioAuthToken!,
+            twilioWhatsAppNumber!,
+            notification.recipient,
+            message
+          );
+          result = { 
+            success: twilioResult.success, 
+            sid: twilioResult.sid, 
+            error: twilioResult.error 
+          };
         } else {
-          // In sandbox mode, only send to admin number
-          if (whatsappMode === "sandbox" && isCustomerNotification) {
-            result = {
-              success: false,
-              error: "WhatsApp in sandbox mode - customer messages not sent. Customer will receive email confirmation.",
-            };
-            console.log(
-              `[process-notifications] Skipping customer WhatsApp in sandbox mode for ${notification.recipient}`,
-            );
-          } else {
-            const message = buildWhatsAppMessage(booking, isCustomerNotification);
-            result = await sendWhatsApp(
-              twilioAccountSid,
-              twilioAuthToken,
-              twilioWhatsAppNumber,
-              notification.recipient,
-              message,
-            );
-          }
+          result = { success: false, error: "No WhatsApp provider configured" };
         }
       } else {
         result = { success: false, error: "Unknown notification type" };
@@ -396,41 +457,40 @@ serve(async (req) => {
           .update({
             status: "sent",
             attempts: newAttempts,
-            external_id: result.id || result.sid,
+            external_id: result.id || result.sid || result.messageId,
             sent_at: new Date().toISOString(),
             last_error: null,
           })
           .eq("id", notification.id);
 
-        // Also log to notification_logs for admin visibility
+        // Log to notification_logs
         await supabase.from("notification_logs").insert({
           booking_id: notification.booking_id,
           notification_type: notification.notification_type,
           status: "sent",
           recipient: notification.recipient,
-          external_id: result.id || result.sid,
+          external_id: result.id || result.sid || result.messageId,
+          message_type: provider,
         });
 
         succeeded++;
-        console.log(`[process-notifications] ✅ ${notification.notification_type} sent for ${notification.booking_id}`);
+        console.log(`[process-notifications] ✅ ${notification.notification_type} sent via ${provider}`);
       } else {
-        // For sandbox mode customer WhatsApp, mark as skipped (not exhausted)
+        // For sandbox mode customer WhatsApp, mark as skipped
         const isSandboxSkip =
           whatsappMode === "sandbox" && notification.notification_type === "whatsapp" && isCustomerNotification;
 
         if (isSandboxSkip) {
-          // Mark as sent with note about sandbox mode
           await supabase
             .from("notification_queue")
             .update({
               status: "sent",
               attempts: newAttempts,
-              last_error: "Skipped - sandbox mode (customer receives email)",
+              last_error: "Skipped - sandbox mode",
               sent_at: new Date().toISOString(),
             })
             .eq("id", notification.id);
 
-          // Log for admin visibility
           await supabase.from("notification_logs").insert({
             booking_id: notification.booking_id,
             notification_type: notification.notification_type,
@@ -439,10 +499,10 @@ serve(async (req) => {
             message_content: "Skipped - sandbox mode",
           });
 
-          console.log(`[process-notifications] ⏭️ WhatsApp skipped for customer (sandbox mode)`);
-          succeeded++; // Count as success since expected behavior
+          console.log(`[process-notifications] ⏭️ WhatsApp skipped (sandbox mode)`);
+          succeeded++;
         } else {
-          // Failure - schedule retry with exponential backoff
+          // Failure - schedule retry
           const nextRetryDelay = BASE_DELAY_SECONDS * Math.pow(BACKOFF_MULTIPLIER, newAttempts);
           const nextRetryAt = new Date(Date.now() + nextRetryDelay * 1000);
           const newStatus = newAttempts >= 3 ? "exhausted" : "failed";
@@ -457,7 +517,6 @@ serve(async (req) => {
             })
             .eq("id", notification.id);
 
-          // Log failure
           await supabase.from("notification_logs").insert({
             booking_id: notification.booking_id,
             notification_type: notification.notification_type,
