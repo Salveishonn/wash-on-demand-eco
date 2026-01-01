@@ -26,6 +26,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
+import { WHATSAPP_NUMBER_DISPLAY } from '@/config/whatsapp';
 
 interface WhatsAppConfig {
   provider: 'meta' | 'twilio' | 'none';
@@ -212,7 +213,7 @@ export function WhatsAppSettingsTab() {
             Configuración WhatsApp
           </h2>
           <p className="text-sm text-muted-foreground">
-            Meta Cloud API - Número: +54 9 11 2679 9335
+            Meta Cloud API - Número: {WHATSAPP_NUMBER_DISPLAY}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchConfig}>

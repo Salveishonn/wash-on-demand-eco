@@ -18,6 +18,7 @@ import {
   Check
 } from "lucide-react";
 import { useServiceAddons } from "@/hooks/useServiceAddons";
+import { getWhatsAppUrl } from "@/config/whatsapp";
 
 const formatPrice = (cents: number) => {
   return new Intl.NumberFormat('es-AR', {
@@ -116,10 +117,8 @@ const metodosPago = [
 const Servicios = () => {
   const { addons } = useServiceAddons();
   
-  // WhatsApp config - using the same number from existing config
-  const whatsappNumber = "5491130951804";
-  const whatsappMessage = encodeURIComponent("Hola! Quiero reservar un lavado con Washero 🚗");
-  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+  // WhatsApp URL from centralized config
+  const whatsappUrl = getWhatsAppUrl("Hola! Quiero reservar un lavado con Washero 🚗");
 
   const scrollToPlanes = () => {
     document.getElementById('planes')?.scrollIntoView({ behavior: 'smooth' });

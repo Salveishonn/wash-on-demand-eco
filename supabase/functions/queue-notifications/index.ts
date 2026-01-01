@@ -12,9 +12,9 @@ interface QueueNotificationsRequest {
   whatsappOptIn?: boolean;
 }
 
-// Admin recipients
+// Admin recipients - centralized WhatsApp number
 const ADMIN_EMAIL = "washerocarwash@gmail.com";
-const ADMIN_WHATSAPP = "+5491130951804";
+const ADMIN_WHATSAPP = "+5491176247835";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {

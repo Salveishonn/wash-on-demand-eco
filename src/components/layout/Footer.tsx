@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Instagram, Facebook, MessageCircle, Mail, MapPin } from "lucide-react";
 import washeroLogo from "@/assets/washero-logo.jpeg";
+import { WHATSAPP_BASE_URL } from "@/config/whatsapp";
 
 const footerLinks = {
   servicios: [
@@ -25,7 +26,7 @@ const footerLinks = {
 const socialLinks = [
   { icon: Instagram, href: "https://instagram.com/washero.ar", label: "Instagram" },
   { icon: Facebook, href: "https://facebook.com/washero.ar", label: "Facebook" },
-  { icon: MessageCircle, href: "https://wa.me/5491112345678", label: "WhatsApp" },
+  { icon: MessageCircle, href: WHATSAPP_BASE_URL, label: "WhatsApp" },
 ];
 
 export const Footer = () => {
@@ -107,7 +108,7 @@ export const Footer = () => {
               </li>
               <li className="flex items-start gap-3">
                 <MessageCircle className="w-5 h-5 text-primary mt-0.5" />
-                <a href="https://wa.me/5491112345678" className="text-sm hover:text-primary transition-colors">
+                <a href={WHATSAPP_BASE_URL} className="text-sm hover:text-primary transition-colors">
                   WhatsApp
                 </a>
               </li>

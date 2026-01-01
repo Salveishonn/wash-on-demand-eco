@@ -7,7 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // Processes notification queue and sends via appropriate channel
 // WhatsApp: Meta Cloud API (primary), Twilio (fallback)
 // Email: Resend
-// Production number: +54 9 11 2679 9335
+// Production number: +54 9 11 7624 7835
 // ============================================================
 
 const corsHeaders = {
@@ -18,8 +18,8 @@ const corsHeaders = {
 const BACKOFF_MULTIPLIER = 2;
 const BASE_DELAY_SECONDS = 60;
 
-// Admin WhatsApp number for notifications
-const ADMIN_WHATSAPP = "+5491130951804";
+// Admin WhatsApp number for notifications - centralized
+const ADMIN_WHATSAPP = "+5491176247835";
 
 const formatPrice = (cents: number) => {
   return new Intl.NumberFormat("es-AR", {

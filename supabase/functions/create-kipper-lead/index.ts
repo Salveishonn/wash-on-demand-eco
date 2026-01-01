@@ -7,8 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Admin recipients - centralized WhatsApp number
 const ADMIN_EMAIL = "washerocarwash@gmail.com";
-const ADMIN_WHATSAPP = "+5491130951804";
+const ADMIN_WHATSAPP = "+5491176247835";
 
 interface KipperLeadRequest {
   customerName: string;
