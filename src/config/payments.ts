@@ -8,4 +8,4 @@ export const PAYMENTS_ENABLED = false;
 
 // Admin notification recipients for pay-later bookings
 export const ADMIN_EMAIL = 'washerocarwash@gmail.com';
-export const ADMIN_WHATSAPP = '+5491130951804';
+export const ADMIN_WHATSAPP = '+5491176247835';

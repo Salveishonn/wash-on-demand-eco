@@ -13,9 +13,9 @@ interface SendNotificationsRequest {
   testEmailTo?: string;
 }
 
-// Admin recipients
+// Admin recipients - centralized WhatsApp number
 const ADMIN_EMAIL = "washerocarwash@gmail.com";
-const ADMIN_WHATSAPP = "+5491130951804";
+const ADMIN_WHATSAPP = "+5491176247835";
 
 const formatPrice = (cents: number) => {
   return new Intl.NumberFormat("es-AR", {

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Mail, Phone, MapPin, MessageCircle, Instagram, Facebook, Send, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { WHATSAPP_BASE_URL, WHATSAPP_NUMBER_DISPLAY } from "@/config/whatsapp";
 
 const contactMethods = [
   {
@@ -20,15 +21,15 @@ const contactMethods = [
   {
     icon: MessageCircle,
     title: "WhatsApp",
-    value: "+54 11 1234-5678",
-    href: "https://wa.me/5491112345678",
+    value: WHATSAPP_NUMBER_DISPLAY,
+    href: WHATSAPP_BASE_URL,
     description: "Respuestas rápidas en horario comercial",
   },
   {
     icon: Phone,
     title: "Teléfono",
-    value: "+54 11 1234-5678",
-    href: "tel:+5491112345678",
+    value: WHATSAPP_NUMBER_DISPLAY,
+    href: `tel:+5491176247835`,
     description: "Lun-Sáb 9:00-18:00",
   },
 ];
