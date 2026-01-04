@@ -65,12 +65,12 @@ const serviciosIndividuales = [
   },
 ];
 
-// Plans data
+// Plans data - Updated prices
 const planes = [
   {
     id: "basico",
     name: "Plan Básico",
-    price: "$45.000",
+    price: "$55.000",
     period: "/ mes",
     features: [
       "2 lavados / mes",
@@ -81,7 +81,7 @@ const planes = [
   {
     id: "confort",
     name: "Plan Confort",
-    price: "$85.000",
+    price: "$95.000",
     period: "/ mes",
     features: [
       "4 lavados / mes (1 por semana)",
@@ -94,7 +94,7 @@ const planes = [
   {
     id: "premium",
     name: "Plan Premium",
-    price: "$110.000",
+    price: "$125.000",
     period: "/ mes",
     features: [
       "4 lavados / mes",

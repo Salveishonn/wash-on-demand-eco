@@ -16,10 +16,10 @@ import Contacto from "./pages/Contacto";
 import ReservaConfirmada from "./pages/ReservaConfirmada";
 import Suscripciones from "./pages/Suscripciones";
 import SuscripcionConfirmada from "./pages/SuscripcionConfirmada";
-import Planes from "./pages/Planes";
-import PlanConfirmado from "./pages/PlanConfirmado";
 import KipperSeguros from "./pages/KipperSeguros";
 import Pagar from "./pages/Pagar";
+import Auth from "./pages/Auth";
+import Dashboard from "./pages/Dashboard";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import NotFound from "./pages/NotFound";
@@ -46,10 +46,12 @@ const App = () => (
             <Route path="/reserva-confirmada" element={<ReservaConfirmada />} />
             <Route path="/suscripciones" element={<Suscripciones />} />
             <Route path="/suscripcion-confirmada" element={<SuscripcionConfirmada />} />
-            <Route path="/planes" element={<Planes />} />
-            <Route path="/plan-confirmado" element={<PlanConfirmado />} />
             <Route path="/kipper-seguros" element={<KipperSeguros />} />
             <Route path="/pagar/:paymentIntentId" element={<Pagar />} />
+            
+            {/* Auth Routes */}
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             
             {/* Admin Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />

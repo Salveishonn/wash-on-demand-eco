@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
@@ -7,14 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
   Check, 
-  Car, 
   Sparkles, 
   Clock, 
   CreditCard, 
   Wallet,
   Loader2,
-  AlertCircle,
-  Star
+  Star,
+  ChevronRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,124 +27,123 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-interface SubscriptionPlan {
-  id: string;
-  name: string;
-  description: string;
-  price_cents: number;
-  washes_per_month: number;
-  is_active: boolean;
-}
-
-const formatPrice = (cents: number) => {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 0,
-  }).format(cents / 100);
-};
-
-// Plan features mapping
-const planFeatures: Record<string, string[]> = {
-  "Plan Básico": [
-    "2 lavados por mes",
-    "Exterior + interior",
-    "Agendá cuando quieras",
-    "Sin cargos extra",
-  ],
-  "Plan Confort": [
-    "4 lavados por mes (1 por semana)",
-    "Exterior + interior",
-    "Prioridad en agenda",
-    "Sin cargos extra",
-  ],
-  "Plan Premium": [
-    "4 lavados por mes",
-    "Incluye encerado rápido (1 vez por mes)",
-    "Detallado interior liviano",
-    "Máxima prioridad",
-  ],
-};
+// Updated plan data with correct prices
+const PLANS = [
+  {
+    id: "basic",
+    name: "Plan Básico",
+    price: 55000,
+    priceDisplay: "$55.000",
+    washes: 2,
+    popular: false,
+    features: [
+      "2 lavados por mes",
+      "Exterior + interior",
+      "Agendá cuando quieras",
+      "Sin cargos extra",
+    ],
+  },
+  {
+    id: "confort",
+    name: "Plan Confort",
+    price: 95000,
+    priceDisplay: "$95.000",
+    washes: 4,
+    popular: true,
+    badge: "Más elegido",
+    features: [
+      "4 lavados por mes (1 por semana)",
+      "Exterior + interior",
+      "Prioridad en agenda",
+      "Sin cargos extra",
+    ],
+  },
+  {
+    id: "premium",
+    name: "Plan Premium",
+    price: 125000,
+    priceDisplay: "$125.000",
+    washes: 4,
+    popular: false,
+    features: [
+      "4 lavados por mes",
+      "Incluye encerado rápido (1 vez por mes)",
+      "Detallado interior liviano",
+      "Máxima prioridad",
+    ],
+  },
+];
 
 export default function Suscripciones() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[0] | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"online" | "pay_later">(
     PAYMENTS_ENABLED ? "online" : "pay_later"
   );
-  
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-  });
 
+  // Check auth on mount
   useEffect(() => {
-    fetchPlans();
-  }, []);
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user || null);
+      setIsCheckingAuth(false);
 
-  const fetchPlans = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("subscription_plans")
-        .select("*")
-        .eq("is_active", true)
-        .order("price_cents", { ascending: true });
+      // Auto-select plan from URL
+      const planId = searchParams.get("plan");
+      if (planId && session?.user) {
+        const plan = PLANS.find(p => p.id === planId);
+        if (plan) {
+          setSelectedPlan(plan);
+          setIsCheckoutOpen(true);
+        }
+      }
+    };
+    checkAuth();
 
-      if (error) throw error;
-      setPlans(data || []);
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudieron cargar los planes",
-      });
-    } finally {
-      setIsLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [searchParams]);
+
+  const handleSelectPlan = (plan: typeof PLANS[0]) => {
+    if (!user) {
+      // Redirect to auth with plan param
+      navigate(`/auth?redirect=/suscripciones&plan=${plan.id}`);
+      return;
     }
-  };
-
-  const handleSelectPlan = (plan: SubscriptionPlan) => {
     setSelectedPlan(plan);
     setIsCheckoutOpen(true);
   };
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
   const handleSubscribe = async () => {
-    if (!selectedPlan) return;
-    
-    if (!formData.name || !formData.email || !formData.phone) {
-      toast({
-        variant: "destructive",
-        title: "Datos incompletos",
-        description: "Por favor completá todos los campos",
-      });
-      return;
-    }
+    if (!selectedPlan || !user) return;
 
     setIsSubmitting(true);
 
     try {
       const isPayLater = paymentMethod === "pay_later" || !PAYMENTS_ENABLED;
 
-      const { data, error } = await supabase.functions.invoke("create-guest-subscription", {
-        body: {
-          planId: selectedPlan.id,
-          customerName: formData.name,
-          customerEmail: formData.email,
-          customerPhone: formData.phone,
-          paymentMethod: isPayLater ? "pay_later" : "mercadopago",
-        },
-      });
+      // Create subscription in user_managed_subscriptions
+      const { data: subscription, error } = await supabase
+        .from("user_managed_subscriptions")
+        .insert({
+          user_id: user.id,
+          plan_id: selectedPlan.id,
+          status: isPayLater ? "pending" : "active",
+          washes_remaining: selectedPlan.washes,
+          payment_status: isPayLater ? "unpaid" : "unknown",
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
@@ -156,14 +154,14 @@ export default function Suscripciones() {
         });
         setIsCheckoutOpen(false);
         navigate(`/suscripcion-confirmada?status=pending&plan=${selectedPlan.name}`);
-      } else if (data.initPoint) {
-        toast({
-          title: "Redirigiendo a MercadoPago...",
-          description: "Serás redirigido para completar el pago.",
-        });
-        window.location.href = data.initPoint;
       } else {
-        throw new Error("No se pudo obtener el link de pago");
+        // TODO: Integrate MercadoPago for recurring payments
+        toast({
+          title: "¡Suscripción creada!",
+          description: "Podés ver tu plan en el dashboard.",
+        });
+        setIsCheckoutOpen(false);
+        navigate("/dashboard");
       }
     } catch (error: any) {
       console.error("[Suscripciones] Error:", error);
@@ -176,9 +174,6 @@ export default function Suscripciones() {
       setIsSubmitting(false);
     }
   };
-
-  // Determine which plan is "Confort" (most popular)
-  const isConfortPlan = (name: string) => name.toLowerCase().includes('confort');
 
   return (
     <Layout>
@@ -203,75 +198,67 @@ export default function Suscripciones() {
       {/* Plans Grid */}
       <section className="py-12 md:py-16 bg-background">
         <div className="container mx-auto px-4">
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
-          ) : plans.length === 0 ? (
-            <div className="text-center py-12">
-              <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No hay planes disponibles en este momento</p>
-            </div>
-          ) : (
-            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-              {plans.map((plan, index) => {
-                const isPopular = isConfortPlan(plan.name);
-                const features = planFeatures[plan.name] || [plan.description];
+          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {PLANS.map((plan, index) => (
+              <motion.div
+                key={plan.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className={`relative rounded-2xl border-2 p-6 md:p-8 ${
+                  plan.popular 
+                    ? "border-primary bg-primary/5 shadow-gold md:scale-105 z-10" 
+                    : "border-border bg-background hover:border-primary/50"
+                }`}
+              >
+                {plan.badge && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full flex items-center gap-1 whitespace-nowrap">
+                      <Star className="w-3 h-3" /> {plan.badge}
+                    </span>
+                  </div>
+                )}
                 
-                return (
-                  <motion.div
-                    key={plan.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className={`relative rounded-2xl border-2 p-6 md:p-8 ${
-                      isPopular 
-                        ? "border-primary bg-primary/5 shadow-gold md:scale-105 z-10" 
-                        : "border-border bg-background hover:border-primary/50"
-                    }`}
-                  >
-                    {isPopular && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                        <span className="px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full flex items-center gap-1 whitespace-nowrap">
-                          <Star className="w-3 h-3" /> Más elegido
-                        </span>
-                      </div>
-                    )}
-                    
-                    <div className="text-center mb-6 mt-2">
-                      <h2 className="font-display text-xl md:text-2xl font-bold text-foreground mb-4">
-                        {plan.name}
-                      </h2>
-                      <div className="flex items-baseline justify-center gap-1">
-                        <span className="font-display text-3xl md:text-4xl font-black text-primary">
-                          {formatPrice(plan.price_cents)}
-                        </span>
-                        <span className="text-muted-foreground text-sm">/mes</span>
-                      </div>
-                    </div>
+                <div className="text-center mb-6 mt-2">
+                  <h2 className="font-display text-xl md:text-2xl font-bold text-foreground mb-4">
+                    {plan.name}
+                  </h2>
+                  <div className="flex items-baseline justify-center gap-1">
+                    <span className="font-display text-3xl md:text-4xl font-black text-primary">
+                      {plan.priceDisplay}
+                    </span>
+                    <span className="text-muted-foreground text-sm">/mes</span>
+                  </div>
+                </div>
 
-                    <ul className="space-y-3 mb-8">
-                      {features.map((feature, i) => (
-                        <li key={i} className="flex items-start gap-2">
-                          <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                          <span className="text-sm text-foreground">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
+                <ul className="space-y-3 mb-8">
+                  {plan.features.map((feature, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-sm text-foreground">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
 
-                    <Button
-                      className="w-full"
-                      size="lg"
-                      variant={isPopular ? "hero" : "outline"}
-                      onClick={() => handleSelectPlan(plan)}
-                    >
+                <Button
+                  className="w-full"
+                  size="lg"
+                  variant={plan.popular ? "hero" : "outline"}
+                  onClick={() => handleSelectPlan(plan)}
+                  disabled={isCheckingAuth}
+                >
+                  {isCheckingAuth ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
                       Suscribirme
-                    </Button>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </>
+                  )}
+                </Button>
+              </motion.div>
+            ))}
+          </div>
 
           {/* Note about advance payment */}
           <motion.p
@@ -335,50 +322,26 @@ export default function Suscripciones() {
         </div>
       </section>
 
-      {/* Checkout Dialog */}
+      {/* Checkout Dialog - Only for logged in users */}
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-xl">
-              Suscribite a {selectedPlan?.name}
+              Confirmar {selectedPlan?.name}
             </DialogTitle>
             <DialogDescription>
-              {formatPrice(selectedPlan?.price_cents || 0)}/mes - {selectedPlan?.washes_per_month} lavados
+              {selectedPlan?.priceDisplay}/mes - {selectedPlan?.washes} lavados
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="sub-name">Nombre completo</Label>
-              <Input
-                id="sub-name"
-                placeholder="Juan Pérez"
-                value={formData.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="sub-email">Email</Label>
-              <Input
-                id="sub-email"
-                type="email"
-                placeholder="juan@ejemplo.com"
-                value={formData.email}
-                onChange={(e) => handleInputChange("email", e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="sub-phone">Teléfono / WhatsApp</Label>
-              <Input
-                id="sub-phone"
-                type="tel"
-                placeholder="+54 11 1234-5678"
-                value={formData.phone}
-                onChange={(e) => handleInputChange("phone", e.target.value)}
-                className="mt-1"
-              />
+            <div className="p-4 bg-muted/50 rounded-xl">
+              <p className="text-sm text-muted-foreground">
+                Suscribiéndote como:
+              </p>
+              <p className="font-medium text-foreground">
+                {user?.email}
+              </p>
             </div>
 
             {/* Payment Method */}
@@ -445,10 +408,10 @@ export default function Suscripciones() {
               ) : paymentMethod === "online" ? (
                 <>
                   <CreditCard className="w-4 h-4 mr-2" />
-                  Pagar {formatPrice(selectedPlan?.price_cents || 0)}
+                  Pagar {selectedPlan?.priceDisplay}
                 </>
               ) : (
-                "Enviar solicitud"
+                "Confirmar suscripción"
               )}
             </Button>
           </div>
