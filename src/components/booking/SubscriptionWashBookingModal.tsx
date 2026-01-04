@@ -244,53 +244,135 @@ export function SubscriptionWashBookingModal({
     return address.line1 || address.label || "Dirección sin nombre";
   };
 
+  type ActiveSubscriptionRow = {
+    id: string;
+    user_id: string | null;
+    status: string;
+    plan_id: string;
+    washes_remaining: number;
+    washes_used_in_cycle: number;
+  };
+
+  const getOrCreateActiveSubscriptionForBooking = async (
+    profile?: { full_name: string | null; email: string | null; phone: string | null } | null
+  ): Promise<ActiveSubscriptionRow | null> => {
+    const { data: existing, error: existingError } = await supabase
+      .from("subscriptions")
+      .select("id, user_id, status, plan_id, washes_remaining, washes_used_in_cycle")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+    if (existing) return existing as ActiveSubscriptionRow;
+
+    // No FK-target subscription found. Create one based on the plan shown in dashboard.
+    const { data: planRow, error: planError } = await supabase
+      .from("subscription_plans")
+      .select("id, washes_per_month")
+      .eq("name", planInfo.name)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (planError) throw planError;
+    if (!planRow) return null;
+
+    const { data: created, error: createError } = await supabase
+      .from("subscriptions")
+      .insert({
+        user_id: userId,
+        plan_id: planRow.id,
+        status: "active",
+        washes_remaining: planRow.washes_per_month,
+        washes_used_in_cycle: 0,
+        customer_name: profile?.full_name ?? null,
+        customer_email: profile?.email ?? null,
+        customer_phone: profile?.phone ?? null,
+      })
+      .select("id, user_id, status, plan_id, washes_remaining, washes_used_in_cycle")
+      .single();
+
+    if (createError) throw createError;
+    return created as ActiveSubscriptionRow;
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit || !selectedCar || !selectedAddress) return;
 
     setIsSubmitting(true);
     try {
-      // Get user profile for customer info
+      // Get user profile for customer info (may not exist yet)
       const { data: profile } = await supabase
         .from("profiles")
         .select("full_name, email, phone")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
+
+      // Defensive: ensure we reference the FK target table (subscriptions.id)
+      const activeSub = await getOrCreateActiveSubscriptionForBooking(profile);
+      console.log("[SubscriptionWashBookingModal] activeSub:", activeSub);
+
+      if (!activeSub) {
+        toast({
+          variant: "destructive",
+          title: "No tenés una suscripción activa",
+          description: "Elegí un plan para poder agendar lavados desde tu cuenta.",
+        });
+        return;
+      }
 
       // Format the date for booking
       const bookingDate = format(scheduledDate, "yyyy-MM-dd");
-      
-      // Create the subscription booking
-      const paymentStatus = (getAddonsTotal() > 0 ? "pending" : "approved") as "pending" | "approved";
-      
-      const { error: bookingError } = await supabase
-        .from("bookings")
-        .insert([{
-          user_id: userId,
-          customer_name: profile?.full_name || "Suscriptor",
-          customer_email: profile?.email || "",
-          customer_phone: profile?.phone || "",
-          service_name: planInfo.baseService,
-          service_price_cents: 0, // Subscription booking - no additional cost
-          car_type: getCarDisplay(selectedCar),
-          car_type_extra_cents: 0,
-          booking_date: bookingDate,
-          booking_time: scheduledTime,
-          address: getAddressDisplay(selectedAddress),
-          notes: `Auto: ${getCarDisplay(selectedCar)}`,
-          payment_method: "subscription",
-          is_subscription_booking: true,
-          subscription_id: subscription.id,
-          addons: selectedAddons as unknown as import("@/integrations/supabase/types").Json,
-          addons_total_cents: getAddonsTotal(),
-          // Note: total_cents is computed by the database, do not include it here
-          payment_status: paymentStatus,
-          status: "pending" as const,
-          booking_source: "subscription",
-        }]);
 
+      // Subscription bookings: base is prepaid. Extras may require payment.
+      const paymentStatus = (getAddonsTotal() > 0 ? "pending" : "approved") as "pending" | "approved";
+
+      const payload = {
+        user_id: userId,
+        customer_name: profile?.full_name || "Suscriptor",
+        customer_email: profile?.email || "",
+        customer_phone: profile?.phone || "",
+        service_name: planInfo.baseService,
+        service_price_cents: 0, // Subscription booking - no additional cost
+        car_type: getCarDisplay(selectedCar),
+        car_type_extra_cents: 0,
+        booking_date: bookingDate,
+        booking_time: scheduledTime,
+        address: getAddressDisplay(selectedAddress),
+        notes: `Auto: ${getCarDisplay(selectedCar)}`,
+        payment_method: "subscription",
+        is_subscription_booking: true,
+        subscription_id: activeSub.id, // IMPORTANT: must reference subscriptions.id (FK)
+        addons: selectedAddons as unknown as import("@/integrations/supabase/types").Json,
+        addons_total_cents: getAddonsTotal(),
+        // Note: total_cents is computed by the database, do not include it here
+        payment_status: paymentStatus,
+        status: "pending" as const,
+        booking_source: "subscription",
+      };
+
+      console.log("[SubscriptionWashBookingModal] booking payload:", payload);
+
+      const { error: bookingError } = await supabase.from("bookings").insert([payload]);
       if (bookingError) throw bookingError;
 
-      // Update subscription usage
+      // Update usage on `subscriptions` (FK table)
+      const nextRemaining = Math.max((activeSub.washes_remaining ?? 0) - 1, 0);
+      const nextUsed = (activeSub.washes_used_in_cycle ?? 0) + 1;
+
+      const { error: usageError } = await supabase
+        .from("subscriptions")
+        .update({ washes_remaining: nextRemaining, washes_used_in_cycle: nextUsed })
+        .eq("id", activeSub.id);
+
+      if (usageError) {
+        console.error("[SubscriptionWashBookingModal] Failed to update subscriptions usage:", usageError);
+      }
+
+      // Update subscription usage (dashboard table)
       const newUsed = (subscription.washes_used_this_month || 0) + 1;
       const newRemaining = Math.max((subscription.washes_remaining ?? planInfo.washes) - 1, 0);
 
