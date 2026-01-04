@@ -156,7 +156,7 @@ serve(async (req) => {
             console.log("[whatsapp-webhook] Processing change field:", change.field);
 
             // --------------------------------------------------------
-            // INCOMING MESSAGES
+            // INCOMING MESSAGES - Update last_inbound_at for 24h window
             // --------------------------------------------------------
             if (value.messages && value.messages.length > 0) {
               for (const message of value.messages) {
@@ -171,6 +171,7 @@ serve(async (req) => {
                   type: message.type,
                   bodyLength: messageBody.length,
                   waMessageId: waMessageId,
+                  timestamp: timestamp,
                 });
 
                 // Get or create customer
@@ -209,7 +210,7 @@ serve(async (req) => {
                   console.log("[whatsapp-webhook] Created new customer:", customer?.id);
                 }
 
-                // Get or create conversation
+                // Get or create conversation - ALWAYS update last_inbound_at on inbound
                 let conversation = null;
                 const { data: existingConv } = await supabase
                   .from("whatsapp_conversations")
@@ -219,18 +220,25 @@ serve(async (req) => {
 
                 if (existingConv) {
                   conversation = existingConv;
-                  // Update conversation
-                  await supabase
+                  // Update conversation with last_inbound_at for 24h window tracking
+                  const { error: updateError } = await supabase
                     .from("whatsapp_conversations")
                     .update({
                       last_message_at: timestamp,
                       last_message_preview: messageBody.substring(0, 100),
+                      last_inbound_at: timestamp, // CRITICAL: Track for 24h session window
                       is_open: true,
                       customer_name: contactName || existingConv.customer_name,
                     })
                     .eq("id", conversation.id);
+                  
+                  if (updateError) {
+                    console.error("[whatsapp-webhook] Error updating conversation:", updateError);
+                  } else {
+                    console.log("[whatsapp-webhook] Updated conversation with last_inbound_at:", timestamp);
+                  }
                 } else {
-                  // Create new conversation
+                  // Create new conversation with last_inbound_at set
                   const { data: newConv } = await supabase
                     .from("whatsapp_conversations")
                     .insert({
@@ -239,12 +247,13 @@ serve(async (req) => {
                       customer_id: customer?.id,
                       last_message_at: timestamp,
                       last_message_preview: messageBody.substring(0, 100),
+                      last_inbound_at: timestamp, // CRITICAL: Track for 24h session window
                       is_open: true,
                     })
                     .select()
                     .single();
                   conversation = newConv;
-                  console.log("[whatsapp-webhook] Created new conversation:", conversation?.id);
+                  console.log("[whatsapp-webhook] Created new conversation with last_inbound_at:", conversation?.id);
                 }
 
                 // Store message
@@ -262,7 +271,7 @@ serve(async (req) => {
                 if (insertError) {
                   console.error("[whatsapp-webhook] Error storing message:", insertError);
                 } else {
-                  console.log("[whatsapp-webhook] Inbound message stored successfully");
+                  console.log("[whatsapp-webhook] Inbound message stored successfully, 24h window opened");
                 }
               }
             }
@@ -281,6 +290,8 @@ serve(async (req) => {
                   waMessageId,
                   newStatus,
                   hasError: !!errorInfo,
+                  errorCode: errorInfo?.code,
+                  errorTitle: errorInfo?.title,
                 });
 
                 // Update whatsapp_messages by wa_message_id (stored in twilio_message_sid field)

@@ -964,6 +964,7 @@ export type Database = {
           id: string
           is_open: boolean
           last_admin_seen_at: string | null
+          last_inbound_at: string | null
           last_message_at: string
           last_message_preview: string | null
         }
@@ -975,6 +976,7 @@ export type Database = {
           id?: string
           is_open?: boolean
           last_admin_seen_at?: string | null
+          last_inbound_at?: string | null
           last_message_at?: string
           last_message_preview?: string | null
         }
@@ -986,6 +988,7 @@ export type Database = {
           id?: string
           is_open?: boolean
           last_admin_seen_at?: string | null
+          last_inbound_at?: string | null
           last_message_at?: string
           last_message_preview?: string | null
         }

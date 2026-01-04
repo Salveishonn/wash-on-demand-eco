@@ -32,6 +32,7 @@ interface Conversation {
   customer_name: string | null;
   last_message_preview: string | null;
   last_message_at: string;
+  last_inbound_at: string | null;
   is_open: boolean;
   unread_count: number;
 }
@@ -46,11 +47,12 @@ interface Message {
   error: string | null;
 }
 
+// Quick actions mapped to smart-send action types
 const QUICK_ACTIONS = [
-  { label: 'Estamos en camino 🚐', icon: Truck, message: 'Hola! Somos Washero 🚐 Estamos en camino hacia tu ubicación. ¡Llegamos pronto!' },
-  { label: 'Llegamos en 10 min ⏱️', icon: Timer, message: 'Hola! Te avisamos que estamos a 10 minutos de llegar. ¡Preparate!' },
-  { label: 'Ya llegamos ✅', icon: CheckCircle, message: 'Hola! Ya llegamos a tu ubicación. ¿Dónde podemos estacionar?' },
-  { label: 'Reprogramar 📅', icon: CalendarX, message: 'Hola! Lamentamos informarte que necesitamos reprogramar tu turno. ¿Qué horario te queda mejor?' },
+  { label: 'Estamos en camino 🚐', icon: Truck, action: 'on_the_way' },
+  { label: 'Llegamos en 10 min ⏱️', icon: Timer, action: 'arriving_10_min' },
+  { label: 'Ya llegamos ✅', icon: CheckCircle, action: 'arrived' },
+  { label: 'Reprogramar 📅', icon: CalendarX, action: 'reschedule' },
 ];
 
 const formatTime = (date: string) => {
@@ -107,17 +109,26 @@ export function MessagesTab() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [configWarning, setConfigWarning] = useState<string | null>(null);
+  const [sendingAction, setSendingAction] = useState<string | null>(null);
 
-  // Load conversations
+  // Load conversations with last_inbound_at for 24h window tracking
   const fetchConversations = async () => {
     try {
+      // Use both view and table to get last_inbound_at
       const { data, error } = await supabase
-        .from('whatsapp_conversations_v')
-        .select('*')
+        .from('whatsapp_conversations')
+        .select('id, customer_phone_e164, customer_name, last_message_preview, last_message_at, last_inbound_at, is_open')
         .order('last_message_at', { ascending: false });
 
       if (error) throw error;
-      setConversations(data || []);
+      
+      // Add unread_count (simplified - just set to 0 for now)
+      const conversationsWithUnread = (data || []).map(c => ({
+        ...c,
+        unread_count: 0,
+      }));
+      
+      setConversations(conversationsWithUnread);
     } catch (error: any) {
       console.error('Error fetching conversations:', error);
       toast({
@@ -332,9 +343,67 @@ export function MessagesTab() {
     }
   };
 
-  // Handle quick action
-  const handleQuickAction = (message: string) => {
-    setMessageText(message);
+  // Handle quick action - uses smart send with template support
+  const handleQuickAction = async (action: string) => {
+    if (!selectedConversation) return;
+    
+    setSendingAction(action);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('No session');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-smart-send`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: selectedConversation.customer_phone_e164,
+            action: action,
+            customer_name: selectedConversation.customer_name || 'Cliente',
+            conversation_id: selectedConversation.id,
+          }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to send');
+      }
+
+      // Show success with template info
+      const templateInfo = result.used_template 
+        ? `(Template: ${result.template_name})` 
+        : '(Texto libre)';
+      
+      toast({
+        title: 'Mensaje enviado ✅',
+        description: `Enviado ${templateInfo}`,
+      });
+
+      // Refresh messages
+      fetchMessages(selectedConversation.id);
+      fetchConversations();
+    } catch (error: any) {
+      console.error('Error sending quick action:', error);
+      
+      if (error.message?.includes('Fuera de ventana')) {
+        setConfigWarning('El cliente debe responder primero para abrir la ventana de 24h');
+      }
+      
+      toast({
+        variant: 'destructive',
+        title: 'Error al enviar',
+        description: error.message || 'No se pudo enviar el mensaje',
+      });
+    } finally {
+      setSendingAction(null);
+    }
   };
 
   // Filter conversations
@@ -349,14 +418,27 @@ export function MessagesTab() {
     );
   }, [conversations, searchQuery]);
 
-  // Check if within 24h window
+  // Check if within 24h window using conversation's last_inbound_at
   const isWithin24h = useMemo(() => {
-    if (!selectedConversation || messages.length === 0) return false;
-    const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound');
-    if (!lastInbound) return false;
-    const diff = Date.now() - new Date(lastInbound.created_at).getTime();
+    if (!selectedConversation?.last_inbound_at) return false;
+    const diff = Date.now() - new Date(selectedConversation.last_inbound_at).getTime();
     return diff < 24 * 60 * 60 * 1000;
-  }, [messages, selectedConversation]);
+  }, [selectedConversation?.last_inbound_at]);
+  
+  // Format last inbound time for display
+  const lastInboundDisplay = useMemo(() => {
+    if (!selectedConversation?.last_inbound_at) return 'Nunca';
+    const date = new Date(selectedConversation.last_inbound_at);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffHours < 24) {
+      return `Hace ${diffHours}h ${diffMins}m`;
+    }
+    return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }, [selectedConversation?.last_inbound_at]);
 
   return (
     <motion.div
@@ -519,17 +601,26 @@ export function MessagesTab() {
 
             {/* Quick Actions */}
             <div className="px-4 py-2 border-t border-border">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-muted-foreground">Último mensaje entrante:</span>
+                <Badge variant="outline" className="text-xs">{lastInboundDisplay}</Badge>
+              </div>
               <div className="flex gap-2 flex-wrap">
-                {QUICK_ACTIONS.map((action) => (
+                {QUICK_ACTIONS.map((qa) => (
                   <Button
-                    key={action.label}
+                    key={qa.label}
                     variant="outline"
                     size="sm"
-                    onClick={() => handleQuickAction(action.message)}
+                    onClick={() => handleQuickAction(qa.action)}
+                    disabled={sendingAction === qa.action}
                     className="text-xs"
                   >
-                    <action.icon className="w-3 h-3 mr-1" />
-                    {action.label}
+                    {sendingAction === qa.action ? (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : (
+                      <qa.icon className="w-3 h-3 mr-1" />
+                    )}
+                    {qa.label}
                   </Button>
                 ))}
               </div>
