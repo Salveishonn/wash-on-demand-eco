@@ -9,7 +9,7 @@ import { AddonsSelector } from "./AddonsSelector";
 import { useServiceAddons } from "@/hooks/useServiceAddons";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { resolvePlanId, formatPrice, getIncludedServiceForPlan, getIncludedVehicleSizeForPlan } from "@/config/services";
+import { usePricing, formatPrice, getPlanByCode, getServiceByCode, getVehicleExtraByCode } from "@/hooks/usePricing";
 
 interface UserCar {
   id: string;
@@ -61,6 +61,7 @@ export function SubscriptionWashBookingModal({
   onNeedsAddress,
 }: SubscriptionWashBookingModalProps) {
   const { toast } = useToast();
+  const { data: pricing, isLoading: isPricingLoading } = usePricing();
   const [selectedCarId, setSelectedCarId] = useState<string | null>(null);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,12 +69,16 @@ export function SubscriptionWashBookingModal({
   // Addons
   const { addons, selectedAddons, toggleAddon, isSelected, getAddonsTotal } = useServiceAddons();
 
-  // Resolve plan from unified config
-  const resolvedPlan = resolvePlanId(subscription.plan_id);
-  const planName = resolvedPlan?.name || "Plan";
-  const includedService = resolvedPlan ? getIncludedServiceForPlan(resolvedPlan.id) : null;
-  const includedVehicleSize = resolvedPlan ? getIncludedVehicleSizeForPlan(resolvedPlan.id) : null;
-  const washesPerMonth = resolvedPlan?.washesPerMonth || 2;
+  // Resolve plan from pricing
+  const plan = pricing ? getPlanByCode(pricing, subscription.plan_id) : null;
+  const planName = plan?.display_name || "Plan";
+  const includedService = plan?.metadata.included_service 
+    ? getServiceByCode(pricing, plan.metadata.included_service) 
+    : null;
+  const includedVehicleSize = plan?.metadata.included_vehicle_size
+    ? getVehicleExtraByCode(pricing, plan.metadata.included_vehicle_size)
+    : null;
+  const washesPerMonth = plan?.metadata.washes_per_month || 2;
   const washesRemaining = subscription.washes_remaining ?? washesPerMonth;
 
   // Auto-select default car/address if only one exists
@@ -230,6 +235,20 @@ export function SubscriptionWashBookingModal({
     );
   }
 
+  if (isPricingLoading) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+      >
+        <div className="bg-card rounded-2xl p-8">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+        </div>
+      </motion.div>
+    );
+  }
+
   const selectedCar = cars.find((c) => c.id === selectedCarId);
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
 
@@ -286,6 +305,10 @@ export function SubscriptionWashBookingModal({
       .insert({
         user_id: userId,
         plan_id: planRow.id,
+        plan_code: subscription.plan_id,
+        included_service: plan?.metadata.included_service || "basic",
+        included_vehicle_size: plan?.metadata.included_vehicle_size || "small",
+        pricing_version_id: pricing?.versionId || null,
         status: "active",
         washes_remaining: planRow.washes_per_month,
         washes_used_in_cycle: 0,
@@ -301,7 +324,7 @@ export function SubscriptionWashBookingModal({
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit || !selectedCar || !selectedAddress) return;
+    if (!canSubmit || !selectedCar || !selectedAddress || !pricing) return;
 
     setIsSubmitting(true);
     try {
@@ -331,9 +354,9 @@ export function SubscriptionWashBookingModal({
       // Subscription bookings: base is prepaid. Extras may require payment.
       const paymentStatus = (getAddonsTotal() > 0 ? "pending" : "approved") as "pending" | "approved";
 
-      // Use data from unified config
-      const baseServiceName = includedService?.name || "Lavado Básico";
-      const vehicleSizeName = includedVehicleSize?.name || "Auto Chico";
+      // Use data from dynamic pricing
+      const baseServiceName = includedService?.display_name || "Lavado Básico";
+      const vehicleSizeName = includedVehicleSize?.display_name || "Auto chico";
 
       const payload = {
         user_id: userId,
@@ -341,6 +364,9 @@ export function SubscriptionWashBookingModal({
         customer_email: profile?.email || "",
         customer_phone: profile?.phone || "",
         service_name: baseServiceName,
+        service_code: plan?.metadata.included_service || "basic",
+        vehicle_size: plan?.metadata.included_vehicle_size || "small",
+        pricing_version_id: pricing.versionId,
         service_price_cents: 0, // Subscription booking - no additional cost for base
         car_type: vehicleSizeName,
         car_type_extra_cents: 0, // Vehicle size included in subscription
@@ -349,10 +375,15 @@ export function SubscriptionWashBookingModal({
         address: getAddressDisplay(selectedAddress),
         notes: `Auto: ${getCarDisplay(selectedCar)} | Plan: ${planName}`,
         payment_method: "subscription",
+        booking_type: "subscription" as const,
         is_subscription_booking: true,
         subscription_id: activeSub.id,
         addons: selectedAddons as unknown as import("@/integrations/supabase/types").Json,
         addons_total_cents: getAddonsTotal(),
+        base_price_ars: 0,
+        vehicle_extra_ars: 0,
+        extras_total_ars: Math.round(getAddonsTotal() / 100),
+        total_price_ars: Math.round(getAddonsTotal() / 100),
         payment_status: paymentStatus,
         status: "pending" as const,
         booking_source: "subscription",
@@ -442,7 +473,7 @@ export function SubscriptionWashBookingModal({
 
         {/* Content */}
         <div className="p-4 space-y-6">
-          {/* Plan Info Card - From unified config */}
+          {/* Plan Info Card */}
           <div className="p-4 bg-primary/5 rounded-xl border border-primary/20">
             <div className="flex items-center justify-between mb-2">
               <span className="font-display font-bold text-foreground">{planName}</span>
@@ -453,34 +484,32 @@ export function SubscriptionWashBookingModal({
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle className="w-4 h-4 text-primary" />
-                <span>Servicio: {includedService?.name || "Lavado Básico"}</span>
+                <span>Servicio: {includedService?.display_name || "Lavado Básico"}</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle className="w-4 h-4 text-primary" />
-                <span>Vehículo: {includedVehicleSize?.name || "Auto Chico"} incluido</span>
+                <span>Vehículo: {includedVehicleSize?.display_name || "Auto chico"} incluido</span>
               </div>
             </div>
           </div>
 
           {/* Date/Time Summary */}
           <div className="flex gap-4 p-4 bg-muted/30 rounded-xl">
-            <div className="flex items-center gap-2 text-foreground">
-              <Calendar className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">
-                {format(scheduledDate, "EEE d MMM", { locale: es })}
-              </span>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-muted-foreground" />
+              <span className="text-sm">{format(scheduledDate, "d MMM", { locale: es })}</span>
             </div>
-            <div className="flex items-center gap-2 text-foreground">
-              <Clock className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">{scheduledTime} hs</span>
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-muted-foreground" />
+              <span className="text-sm">{scheduledTime} hs</span>
             </div>
           </div>
 
-          {/* Car Selection - NO service/vehicle size selector */}
-          <div className="space-y-3">
-            <Label className="text-base font-semibold flex items-center gap-2">
-              <Car className="w-4 h-4 text-primary" />
-              Seleccioná tu auto
+          {/* Car Selection */}
+          <div>
+            <Label className="text-base font-semibold mb-3 block">
+              <Car className="w-4 h-4 inline mr-2" />
+              ¿Qué auto lavamos?
             </Label>
             <div className="grid gap-2">
               {cars.map((car) => (
@@ -494,20 +523,28 @@ export function SubscriptionWashBookingModal({
                       : "border-border hover:border-primary/50"
                   }`}
                 >
-                  <div className="font-medium text-foreground">{getCarDisplay(car)}</div>
-                  {car.plate && (
-                    <div className="text-sm text-muted-foreground">{car.plate}</div>
-                  )}
+                  <div className="flex items-center gap-3">
+                    <Car className="w-5 h-5 text-muted-foreground" />
+                    <div>
+                      <span className="font-medium text-foreground block">{getCarDisplay(car)}</span>
+                      {car.plate && (
+                        <span className="text-sm text-muted-foreground">{car.plate}</span>
+                      )}
+                    </div>
+                    {selectedCarId === car.id && (
+                      <CheckCircle className="w-5 h-5 text-primary ml-auto" />
+                    )}
+                  </div>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Address Selection */}
-          <div className="space-y-3">
-            <Label className="text-base font-semibold flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-primary" />
-              Seleccioná la dirección
+          <div>
+            <Label className="text-base font-semibold mb-3 block">
+              <MapPin className="w-4 h-4 inline mr-2" />
+              ¿Dónde lo lavamos?
             </Label>
             <div className="grid gap-2">
               {addresses.map((address) => (
@@ -521,63 +558,71 @@ export function SubscriptionWashBookingModal({
                       : "border-border hover:border-primary/50"
                   }`}
                 >
-                  <div className="font-medium text-foreground">
-                    {address.label || "Dirección"}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {getAddressDisplay(address)}
-                    {address.neighborhood && ` · ${address.neighborhood}`}
+                  <div className="flex items-center gap-3">
+                    <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0">
+                      {address.label && (
+                        <span className="text-sm text-primary font-medium block">{address.label}</span>
+                      )}
+                      <span className="font-medium text-foreground block truncate">{address.line1}</span>
+                      {address.neighborhood && (
+                        <span className="text-sm text-muted-foreground">{address.neighborhood}</span>
+                      )}
+                    </div>
+                    {selectedAddressId === address.id && (
+                      <CheckCircle className="w-5 h-5 text-primary ml-auto flex-shrink-0" />
+                    )}
                   </div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Extras (optional - paid) */}
-          {addons.length > 0 && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Extras opcionales (con costo)</Label>
-              <AddonsSelector
-                addons={addons}
-                selectedAddons={selectedAddons}
-                onToggle={toggleAddon}
-                isSelected={isSelected}
-              />
-            </div>
-          )}
-
-          {/* Total */}
-          <div className="p-4 rounded-xl bg-washero-charcoal text-background">
-            <div className="flex justify-between items-center">
-              <span className="font-display text-lg font-bold">Total</span>
-              <span className="font-display text-2xl font-black text-primary">
-                {getAddonsTotal() > 0 ? formatPrice(getAddonsTotal()) : "Incluido en tu plan"}
-              </span>
-            </div>
+          {/* Optional Extras */}
+          <div>
+            <Label className="text-base font-semibold mb-3 block">
+              <Sparkles className="w-4 h-4 inline mr-2" />
+              Extras opcionales (con costo adicional)
+            </Label>
+            <AddonsSelector
+              addons={addons}
+              selectedAddons={selectedAddons}
+              onToggle={toggleAddon}
+              isSelected={isSelected}
+            />
             {getAddonsTotal() > 0 && (
-              <p className="text-sm text-background/70 mt-1">
-                Servicio base incluido · Extras: {formatPrice(getAddonsTotal())}
-              </p>
+              <div className="mt-3 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Total extras:</span>
+                  <span className="font-bold text-primary">{formatPrice(getAddonsTotal() / 100)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Los extras se abonan aparte del plan
+                </p>
+              </div>
             )}
           </div>
+        </div>
 
-          {/* Submit */}
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-background border-t border-border p-4 flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={onClose}>
+            Cancelar
+          </Button>
           <Button
-            variant="hero"
-            size="lg"
-            className="w-full"
+            className="flex-1"
             onClick={handleSubmit}
             disabled={!canSubmit || isSubmitting}
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Agendando...
               </>
             ) : (
               <>
-                <CheckCircle className="w-5 h-5 mr-2" />
-                Confirmar lavado de mi plan
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Confirmar lavado
               </>
             )}
           </Button>

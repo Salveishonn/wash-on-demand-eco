@@ -3,8 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { 
   Check, 
   Sparkles, 
@@ -19,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PAYMENTS_ENABLED } from "@/config/payments";
 import { KipperSubscriptionBanner } from "@/components/kipper/KipperSubscriptionBanner";
+import { usePricing, formatPrice, getPlanByCode } from "@/hooks/usePricing";
 import {
   Dialog,
   DialogContent,
@@ -27,61 +26,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// Updated plan data with correct prices
-const PLANS = [
-  {
-    id: "basic",
-    name: "Plan Básico",
-    price: 55000,
-    priceDisplay: "$55.000",
-    washes: 2,
-    popular: false,
-    features: [
-      "2 lavados por mes",
-      "Exterior + interior",
-      "Agendá cuando quieras",
-      "Sin cargos extra",
-    ],
-  },
-  {
-    id: "confort",
-    name: "Plan Confort",
-    price: 95000,
-    priceDisplay: "$95.000",
-    washes: 4,
-    popular: true,
-    badge: "Más elegido",
-    features: [
-      "4 lavados por mes (1 por semana)",
-      "Exterior + interior",
-      "Prioridad en agenda",
-      "Sin cargos extra",
-    ],
-  },
-  {
-    id: "premium",
-    name: "Plan Premium",
-    price: 125000,
-    priceDisplay: "$125.000",
-    washes: 4,
-    popular: false,
-    features: [
-      "4 lavados por mes",
-      "Incluye encerado rápido (1 vez por mes)",
-      "Detallado interior liviano",
-      "Máxima prioridad",
-    ],
-  },
-];
-
 export default function Suscripciones() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { data: pricing, isLoading: isPricingLoading } = usePricing();
   
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[0] | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"online" | "pay_later">(
@@ -98,11 +51,8 @@ export default function Suscripciones() {
       // Auto-select plan from URL
       const planId = searchParams.get("plan");
       if (planId && session?.user) {
-        const plan = PLANS.find(p => p.id === planId);
-        if (plan) {
-          setSelectedPlan(plan);
-          setIsCheckoutOpen(true);
-        }
+        setSelectedPlan(planId);
+        setIsCheckoutOpen(true);
       }
     };
     checkAuth();
@@ -114,18 +64,20 @@ export default function Suscripciones() {
     return () => subscription.unsubscribe();
   }, [searchParams]);
 
-  const handleSelectPlan = (plan: typeof PLANS[0]) => {
+  const handleSelectPlan = (planCode: string) => {
     if (!user) {
-      // Redirect to auth with plan param
-      navigate(`/auth?redirect=/suscripciones&plan=${plan.id}`);
+      navigate(`/auth?redirect=/suscripciones&plan=${planCode}`);
       return;
     }
-    setSelectedPlan(plan);
+    setSelectedPlan(planCode);
     setIsCheckoutOpen(true);
   };
 
   const handleSubscribe = async () => {
-    if (!selectedPlan || !user) return;
+    if (!selectedPlan || !user || !pricing) return;
+
+    const plan = getPlanByCode(pricing, selectedPlan);
+    if (!plan) return;
 
     setIsSubmitting(true);
 
@@ -137,9 +89,9 @@ export default function Suscripciones() {
         .from("user_managed_subscriptions")
         .insert({
           user_id: user.id,
-          plan_id: selectedPlan.id,
+          plan_id: plan.item_code,
           status: isPayLater ? "pending" : "active",
-          washes_remaining: selectedPlan.washes,
+          washes_remaining: plan.metadata.washes_per_month || 0,
           payment_status: isPayLater ? "unpaid" : "unknown",
         })
         .select()
@@ -147,15 +99,32 @@ export default function Suscripciones() {
 
       if (error) throw error;
 
+      // Also create in subscriptions table for bookings FK
+      const { error: subError } = await supabase
+        .from("subscriptions")
+        .insert({
+          user_id: user.id,
+          plan_id: "00000000-0000-0000-0000-000000000001", // Default plan ref
+          plan_code: plan.item_code,
+          included_service: plan.metadata.included_service,
+          included_vehicle_size: plan.metadata.included_vehicle_size,
+          washes_remaining: plan.metadata.washes_per_month || 0,
+          status: isPayLater ? "pending" : "active",
+          pricing_version_id: pricing.versionId,
+        });
+
+      if (subError) {
+        console.warn("[Suscripciones] Could not create subscriptions record:", subError);
+      }
+
       if (isPayLater) {
         toast({
           title: "¡Solicitud recibida!",
           description: "Te contactaremos para activar tu suscripción.",
         });
         setIsCheckoutOpen(false);
-        navigate(`/suscripcion-confirmada?status=pending&plan=${selectedPlan.name}`);
+        navigate(`/suscripcion-confirmada?status=pending&plan=${plan.display_name}`);
       } else {
-        // TODO: Integrate MercadoPago for recurring payments
         toast({
           title: "¡Suscripción creada!",
           description: "Podés ver tu plan en el dashboard.",
@@ -174,6 +143,18 @@ export default function Suscripciones() {
       setIsSubmitting(false);
     }
   };
+
+  const selectedPlanData = pricing && selectedPlan ? getPlanByCode(pricing, selectedPlan) : null;
+
+  if (isPricingLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -199,68 +180,90 @@ export default function Suscripciones() {
       <section className="py-12 md:py-16 bg-background">
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {PLANS.map((plan, index) => (
-              <motion.div
-                key={plan.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`relative rounded-2xl border-2 p-6 md:p-8 ${
-                  plan.popular 
-                    ? "border-primary bg-primary/5 shadow-gold md:scale-105 z-10" 
-                    : "border-border bg-background hover:border-primary/50"
-                }`}
-              >
-                {plan.badge && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full flex items-center gap-1 whitespace-nowrap">
-                      <Star className="w-3 h-3" /> {plan.badge}
-                    </span>
-                  </div>
-                )}
-                
-                <div className="text-center mb-6 mt-2">
-                  <h2 className="font-display text-xl md:text-2xl font-bold text-foreground mb-4">
-                    {plan.name}
-                  </h2>
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="font-display text-3xl md:text-4xl font-black text-primary">
-                      {plan.priceDisplay}
-                    </span>
-                    <span className="text-muted-foreground text-sm">/mes</span>
-                  </div>
-                </div>
+            {pricing?.plans.map((plan, index) => {
+              const isPopular = plan.item_code === "confort";
+              const washesPerMonth = plan.metadata.washes_per_month || 0;
+              const includedService = plan.metadata.included_service;
+              const includedVehicle = plan.metadata.included_vehicle_size;
 
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((feature, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-foreground">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <Button
-                  className="w-full"
-                  size="lg"
-                  variant={plan.popular ? "hero" : "outline"}
-                  onClick={() => handleSelectPlan(plan)}
-                  disabled={isCheckingAuth}
+              return (
+                <motion.div
+                  key={plan.item_code}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className={`relative rounded-2xl border-2 p-6 md:p-8 ${
+                    isPopular 
+                      ? "border-primary bg-primary/5 shadow-gold md:scale-105 z-10" 
+                      : "border-border bg-background hover:border-primary/50"
+                  }`}
                 >
-                  {isCheckingAuth ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      Suscribirme
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </>
+                  {isPopular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full flex items-center gap-1 whitespace-nowrap">
+                        <Star className="w-3 h-3" /> Más elegido
+                      </span>
+                    </div>
                   )}
-                </Button>
-              </motion.div>
-            ))}
+                  
+                  <div className="text-center mb-6 mt-2">
+                    <h2 className="font-display text-xl md:text-2xl font-bold text-foreground mb-4">
+                      {plan.display_name}
+                    </h2>
+                    <div className="flex items-baseline justify-center gap-1">
+                      <span className="font-display text-3xl md:text-4xl font-black text-primary">
+                        {formatPrice(plan.price_ars)}
+                      </span>
+                      <span className="text-muted-foreground text-sm">/mes</span>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-3 mb-8">
+                    <li className="flex items-start gap-2">
+                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-sm text-foreground">
+                        {washesPerMonth} lavado{washesPerMonth !== 1 ? 's' : ''} por mes
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-sm text-foreground">
+                        Servicio: {includedService === 'basic' ? 'Lavado Básico' : 'Lavado Completo'}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-sm text-foreground">
+                        Vehículo: {includedVehicle === 'small' ? 'Auto chico' : includedVehicle === 'suv' ? 'SUV' : 'Pick Up'}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-sm text-foreground">Sin cargos extra</span>
+                    </li>
+                  </ul>
+
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    variant={isPopular ? "hero" : "outline"}
+                    onClick={() => handleSelectPlan(plan.item_code)}
+                    disabled={isCheckingAuth}
+                  >
+                    {isCheckingAuth ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        Suscribirme
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </>
+                    )}
+                  </Button>
+                </motion.div>
+              );
+            })}
           </div>
 
-          {/* Note about advance payment */}
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -271,7 +274,6 @@ export default function Suscripciones() {
             Los planes se abonan por adelantado
           </motion.p>
 
-          {/* Kipper Seguros Partnership Banner */}
           <div className="mt-12 max-w-4xl mx-auto">
             <KipperSubscriptionBanner />
           </div>
@@ -322,15 +324,15 @@ export default function Suscripciones() {
         </div>
       </section>
 
-      {/* Checkout Dialog - Only for logged in users */}
+      {/* Checkout Dialog */}
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-xl">
-              Confirmar {selectedPlan?.name}
+              Confirmar {selectedPlanData?.display_name}
             </DialogTitle>
             <DialogDescription>
-              {selectedPlan?.priceDisplay}/mes - {selectedPlan?.washes} lavados
+              {selectedPlanData && formatPrice(selectedPlanData.price_ars)}/mes - {selectedPlanData?.metadata.washes_per_month} lavados
             </DialogDescription>
           </DialogHeader>
 
@@ -344,11 +346,10 @@ export default function Suscripciones() {
               </p>
             </div>
 
-            {/* Payment Method */}
             <div className="pt-4 border-t border-border">
-              <Label className="text-base font-semibold mb-3 block">
+              <p className="text-base font-semibold mb-3 block">
                 Método de pago
-              </Label>
+              </p>
               <div className="space-y-3">
                 {PAYMENTS_ENABLED && (
                   <button
@@ -408,7 +409,7 @@ export default function Suscripciones() {
               ) : paymentMethod === "online" ? (
                 <>
                   <CreditCard className="w-4 h-4 mr-2" />
-                  Pagar {selectedPlan?.priceDisplay}
+                  Pagar {selectedPlanData && formatPrice(selectedPlanData.price_ars)}
                 </>
               ) : (
                 "Confirmar suscripción"

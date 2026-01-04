@@ -14,16 +14,16 @@ import {
   QrCode,
   Home,
   Star,
-  Check
+  Check,
+  Loader2,
+  Clock,
+  Droplets,
+  Armchair,
+  Wind,
+  Waves
 } from "lucide-react";
 import { getWhatsAppUrl } from "@/config/whatsapp";
-import { 
-  SERVICES, 
-  VEHICLE_SIZES, 
-  EXTRAS, 
-  SUBSCRIPTION_PLANS, 
-  formatPrice 
-} from "@/config/services";
+import { usePricing, formatPrice } from "@/hooks/usePricing";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -47,18 +47,30 @@ const metodosPago = [
   { name: "Débito / Crédito", icon: CreditCard },
 ];
 
-// Map icons to services
-const serviceIcons: Record<string, typeof Car> = {
-  basico: Car,
-  completo: Sparkles,
+const iconMap: Record<string, React.ReactNode> = {
+  Sparkles: <Sparkles className="w-5 h-5" />,
+  Armchair: <Armchair className="w-5 h-5" />,
+  Wind: <Wind className="w-5 h-5" />,
+  Waves: <Waves className="w-5 h-5" />,
 };
 
 const Servicios = () => {
+  const { data: pricing, isLoading } = usePricing();
   const whatsappUrl = getWhatsAppUrl("Hola! Quiero reservar un lavado con Washero 🚗");
 
   const scrollToPlanes = () => {
     document.getElementById('planes')?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
   
   return (
     <Layout>
@@ -80,7 +92,7 @@ const Servicios = () => {
         </div>
       </section>
 
-      {/* Individual Services - From Config */}
+      {/* Individual Services */}
       <section className="py-12 bg-background">
         <div className="container mx-auto px-4">
           <motion.h2
@@ -97,71 +109,83 @@ const Servicios = () => {
             whileInView="animate"
             viewport={{ once: true }}
             variants={staggerContainer}
-            className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto"
+            className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto"
           >
-            {/* Base Services */}
-            {SERVICES.map((service) => {
-              const Icon = serviceIcons[service.id] || Car;
-              return (
-                <motion.div
-                  key={service.id}
-                  variants={fadeInUp}
-                  className="p-6 rounded-xl border-2 border-border bg-card hover:border-primary/50 hover:shadow-md transition-all"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-primary/10">
-                      <Icon className="w-6 h-6 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-display text-lg font-bold text-foreground">
-                        {service.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {service.description}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {service.durationMinutes} min
-                      </p>
-                      <p className="font-display text-2xl font-black mt-2 text-primary">
-                        {formatPrice(service.priceCents)}
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-
-            {/* Vehicle Size Extra - From Config */}
-            {VEHICLE_SIZES.filter(v => v.extraCents > 0).map((size) => (
+            {pricing?.services.map((service) => (
               <motion.div
-                key={size.id}
+                key={service.item_code}
                 variants={fadeInUp}
-                className="p-6 rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/30"
+                className="p-6 rounded-xl border-2 border-border bg-card hover:border-primary/50 hover:shadow-md transition-all"
               >
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-muted">
-                    <Truck className="w-6 h-6 text-muted-foreground" />
+                  <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0 bg-primary/10">
+                    <Droplets className="w-7 h-7 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-display text-lg font-bold text-foreground">
-                      {size.name}
+                    <h3 className="font-display text-xl font-bold text-foreground">
+                      {service.display_name}
                     </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Cargo adicional
+                      {service.metadata.description}
                     </p>
-                    <p className="font-display text-2xl font-black mt-2 text-muted-foreground">
-                      + {formatPrice(size.extraCents)}
+                    {service.metadata.duration_min && (
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground mt-2">
+                        <Clock className="w-4 h-4" />
+                        <span>{service.metadata.duration_min} min</span>
+                      </div>
+                    )}
+                    <p className="font-display text-2xl font-black mt-3 text-primary">
+                      {formatPrice(service.price_ars)}
                     </p>
                   </div>
                 </div>
+                <Button variant="hero" className="w-full mt-4" asChild>
+                  <Link to="/reservar">Reservar</Link>
+                </Button>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Extras Section - From Config */}
-      <section className="py-12 bg-muted/30">
+      {/* Vehicle Size Section */}
+      <section className="py-10 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <motion.h2
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="font-display text-xl md:text-2xl font-bold text-foreground mb-6 text-center"
+          >
+            Precio según tipo de vehículo
+          </motion.h2>
+          
+          <motion.div
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+            variants={staggerContainer}
+            className="grid grid-cols-3 gap-4 max-w-2xl mx-auto"
+          >
+            {pricing?.vehicleExtras.map((vehicle) => (
+              <motion.div
+                key={vehicle.item_code}
+                variants={fadeInUp}
+                className="p-4 rounded-xl border border-border bg-card text-center"
+              >
+                <Car className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
+                <p className="font-medium text-foreground text-sm">{vehicle.display_name}</p>
+                <p className="text-primary font-bold mt-1">
+                  {vehicle.price_ars === 0 ? "Sin cargo" : `+${formatPrice(vehicle.price_ars)}`}
+                </p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Extras Section */}
+      <section className="py-12 bg-background">
         <div className="container mx-auto px-4">
           <motion.h2
             initial={{ opacity: 0, y: 10 }}
@@ -180,24 +204,27 @@ const Servicios = () => {
             whileInView="animate"
             viewport={{ once: true }}
             variants={staggerContainer}
-            className="flex flex-wrap justify-center gap-3 max-w-3xl mx-auto"
+            className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto"
           >
-            {EXTRAS.map((extra) => (
-              <motion.div 
-                key={extra.id} 
-                variants={fadeInUp} 
-                className="px-4 py-3 rounded-full bg-background border border-border"
+            {pricing?.extras.map((extra) => (
+              <motion.div
+                key={extra.item_code}
+                variants={fadeInUp}
+                className="p-4 rounded-xl border border-border bg-card text-center hover:border-primary/50 transition-colors"
               >
-                <span className="font-medium text-foreground">{extra.name}</span>
-                <span className="ml-2 text-primary font-bold">{formatPrice(extra.priceCents)}</span>
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3 text-primary">
+                  {iconMap[extra.metadata.icon || 'Sparkles'] || <Sparkles className="w-5 h-5" />}
+                </div>
+                <h4 className="font-medium text-foreground text-sm mb-1">{extra.display_name}</h4>
+                <p className="text-primary font-bold">{formatPrice(extra.price_ars)}</p>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Monthly Plans - From Config */}
-      <section id="planes" className="py-16 bg-background scroll-mt-16">
+      {/* Monthly Plans */}
+      <section id="planes" className="py-16 bg-muted/30 scroll-mt-16">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -220,55 +247,78 @@ const Servicios = () => {
             variants={staggerContainer}
             className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto"
           >
-            {SUBSCRIPTION_PLANS.map((plan) => (
-              <motion.div
-                key={plan.id}
-                variants={fadeInUp}
-                className={`relative p-6 md:p-8 rounded-2xl border-2 transition-all ${
-                  plan.popular
-                    ? 'border-primary bg-primary/5 shadow-gold md:scale-105 z-10'
-                    : 'border-border bg-card hover:border-primary/50'
-                }`}
-              >
-                {plan.popular && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full whitespace-nowrap flex items-center gap-1">
-                    <Star className="w-3 h-3" />
-                    Más elegido
-                  </span>
-                )}
-                
-                <h3 className="font-display text-xl md:text-2xl font-bold text-foreground mb-2 mt-2">
-                  {plan.name}
-                </h3>
-                
-                <div className="flex items-baseline gap-1 mb-6">
-                  <span className="font-display text-3xl md:text-4xl font-black text-primary">
-                    {formatPrice(plan.priceCents)}
-                  </span>
-                  <span className="text-muted-foreground text-sm">/ mes</span>
-                </div>
-                
-                <ul className="space-y-3 mb-6">
-                  {plan.features.map((feature, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm">
-                      <CheckCircle className="w-5 h-5 text-washero-eco shrink-0 mt-0.5" />
-                      <span className="text-foreground">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                
-                <Button
-                  variant={plan.popular ? "hero" : "outline"}
-                  className="w-full"
-                  size="lg"
-                  asChild
+            {pricing?.plans.map((plan) => {
+              const isPopular = plan.item_code === "confort";
+              const washesPerMonth = plan.metadata.washes_per_month || 0;
+              const includedService = plan.metadata.included_service;
+              const includedVehicle = plan.metadata.included_vehicle_size;
+
+              return (
+                <motion.div
+                  key={plan.item_code}
+                  variants={fadeInUp}
+                  className={`relative p-6 md:p-8 rounded-2xl border-2 transition-all ${
+                    isPopular
+                      ? 'border-primary bg-primary/5 shadow-gold md:scale-105 z-10'
+                      : 'border-border bg-card hover:border-primary/50'
+                  }`}
                 >
-                  <Link to={`/suscripciones?plan=${plan.id}`}>
-                    Suscribirme <ChevronRight className="w-4 h-4 ml-1" />
-                  </Link>
-                </Button>
-              </motion.div>
-            ))}
+                  {isPopular && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full whitespace-nowrap flex items-center gap-1">
+                      <Star className="w-3 h-3" />
+                      Más elegido
+                    </span>
+                  )}
+                  
+                  <h3 className="font-display text-xl md:text-2xl font-bold text-foreground mb-2 mt-2">
+                    {plan.display_name}
+                  </h3>
+                  
+                  <div className="flex items-baseline gap-1 mb-6">
+                    <span className="font-display text-3xl md:text-4xl font-black text-primary">
+                      {formatPrice(plan.price_ars)}
+                    </span>
+                    <span className="text-muted-foreground text-sm">/ mes</span>
+                  </div>
+                  
+                  <ul className="space-y-3 mb-6">
+                    <li className="flex items-start gap-2 text-sm">
+                      <CheckCircle className="w-5 h-5 text-washero-eco shrink-0 mt-0.5" />
+                      <span className="text-foreground">
+                        {washesPerMonth} lavado{washesPerMonth !== 1 ? 's' : ''} por mes
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2 text-sm">
+                      <CheckCircle className="w-5 h-5 text-washero-eco shrink-0 mt-0.5" />
+                      <span className="text-foreground">
+                        Servicio: {includedService === 'basic' ? 'Lavado Básico' : 'Lavado Completo'}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2 text-sm">
+                      <CheckCircle className="w-5 h-5 text-washero-eco shrink-0 mt-0.5" />
+                      <span className="text-foreground">
+                        Vehículo: {includedVehicle === 'small' ? 'Auto chico' : includedVehicle === 'suv' ? 'SUV' : 'Pick Up'}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2 text-sm">
+                      <CheckCircle className="w-5 h-5 text-washero-eco shrink-0 mt-0.5" />
+                      <span className="text-foreground">Sin cargos extra</span>
+                    </li>
+                  </ul>
+                  
+                  <Button
+                    variant={isPopular ? "hero" : "outline"}
+                    className="w-full"
+                    size="lg"
+                    asChild
+                  >
+                    <Link to={`/suscripciones?plan=${plan.item_code}`}>
+                      Suscribirme <ChevronRight className="w-4 h-4 ml-1" />
+                    </Link>
+                  </Button>
+                </motion.div>
+              );
+            })}
           </motion.div>
           
           <motion.p
@@ -284,7 +334,7 @@ const Servicios = () => {
       </section>
 
       {/* Barrios Cerrados */}
-      <section className="py-8 bg-muted/30">
+      <section className="py-8 bg-background">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -313,7 +363,7 @@ const Servicios = () => {
       </section>
 
       {/* Payment Methods */}
-      <section className="py-12 bg-background">
+      <section className="py-12 bg-muted/30">
         <div className="container mx-auto px-4">
           <motion.h3
             initial={{ opacity: 0, y: 10 }}
@@ -335,7 +385,7 @@ const Servicios = () => {
               <motion.div
                 key={metodo.name}
                 variants={fadeInUp}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 border border-border"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border"
               >
                 <metodo.icon className="w-5 h-5 text-muted-foreground" />
                 <span className="text-sm font-medium text-foreground">{metodo.name}</span>
@@ -354,10 +404,9 @@ const Servicios = () => {
             className="flex-1"
             asChild
           >
-            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-              <MessageCircle className="w-5 h-5 mr-2" />
-              Reservar por WhatsApp
-            </a>
+            <Link to="/reservar">
+              Reservar ahora
+            </Link>
           </Button>
           <Button 
             variant="outline" 
@@ -386,10 +435,9 @@ const Servicios = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button variant="hero" size="lg" asChild>
-                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-                  <MessageCircle className="w-5 h-5 mr-2" />
-                  Reservar por WhatsApp
-                </a>
+                <Link to="/reservar">
+                  Reservar ahora
+                </Link>
               </Button>
               <Button variant="heroDark" size="lg" onClick={scrollToPlanes}>
                 Consultar planes mensuales
