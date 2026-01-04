@@ -115,3 +115,6 @@ verify_jwt = false
 
 [functions.whatsapp-send-text]
 verify_jwt = false
+
+[functions.whatsapp-smart-send]
+verify_jwt = false
