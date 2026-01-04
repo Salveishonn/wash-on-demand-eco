@@ -282,7 +282,7 @@ export function SubscriptionWashBookingModal({
           subscription_id: subscription.id,
           addons: selectedAddons as unknown as import("@/integrations/supabase/types").Json,
           addons_total_cents: getAddonsTotal(),
-          total_cents: getAddonsTotal(), // Only extras cost
+          // Note: total_cents is computed by the database, do not include it here
           payment_status: paymentStatus,
           status: "pending" as const,
           booking_source: "subscription",
