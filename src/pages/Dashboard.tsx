@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { AddressAutocomplete, PlaceSelection } from "@/components/booking/AddressAutocomplete";
 import {
   Loader2,
   Calendar,
@@ -25,9 +27,14 @@ import {
   Plus,
   Edit,
   Trash2,
-  CheckCircle,
   Clock,
   LogOut,
+  History,
+  FileText,
+  Sparkles,
+  CheckCircle,
+  AlertCircle,
+  Download,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -36,11 +43,11 @@ interface Subscription {
   id: string;
   plan_id: string;
   status: string;
-  washes_remaining: number;
-  washes_used_this_month: number;
+  washes_remaining: number | null;
+  washes_used_this_month: number | null;
   next_wash_at: string | null;
-  payment_status: string;
-  start_date: string;
+  payment_status: string | null;
+  start_date: string | null;
 }
 
 interface UserCar {
@@ -50,7 +57,7 @@ interface UserCar {
   model: string | null;
   plate: string | null;
   color: string | null;
-  is_default: boolean;
+  is_default: boolean | null;
 }
 
 interface UserAddress {
@@ -58,41 +65,55 @@ interface UserAddress {
   label: string | null;
   line1: string;
   neighborhood: string | null;
-  is_default: boolean;
+  city: string | null;
+  is_default: boolean | null;
 }
 
-interface UpcomingBooking {
+interface Booking {
   id: string;
-  scheduled_at: string;
+  booking_date: string;
+  booking_time: string;
   service_name: string;
   status: string;
-  address_text: string;
+  address: string | null;
+  total_cents: number | null;
+  is_subscription_booking: boolean | null;
 }
 
-const PLAN_INFO: Record<string, { name: string; washes: number; price: string }> = {
-  basic: { name: "Plan Básico", washes: 2, price: "$55.000" },
-  confort: { name: "Plan Confort", washes: 4, price: "$95.000" },
-  premium: { name: "Plan Premium", washes: 4, price: "$125.000" },
+interface Profile {
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+const PLAN_INFO: Record<string, { name: string; washes: number; price: string; serviceIncluded: string }> = {
+  basic: { name: "Plan Básico", washes: 2, price: "$55.000", serviceIncluded: "Lavado Exterior + Interior" },
+  confort: { name: "Plan Confort", washes: 4, price: "$95.000", serviceIncluded: "Lavado Exterior + Interior" },
+  premium: { name: "Plan Premium", washes: 4, price: "$125.000", serviceIncluded: "Detailing Completo" },
 };
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [cars, setCars] = useState<UserCar[]>([]);
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
-  const [bookings, setBookings] = useState<UpcomingBooking[]>([]);
-  
+  const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
+  const [pastBookings, setPastBookings] = useState<Booking[]>([]);
+  const [activeTab, setActiveTab] = useState("overview");
+
   // Modal states
   const [isCarModalOpen, setIsCarModalOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [editingCar, setEditingCar] = useState<UserCar | null>(null);
   const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Form states
   const [carForm, setCarForm] = useState({
     nickname: "",
@@ -105,6 +126,7 @@ export default function Dashboard() {
     label: "Casa",
     line1: "",
     neighborhood: "",
+    city: "",
   });
 
   useEffect(() => {
@@ -124,11 +146,22 @@ export default function Dashboard() {
   const fetchUserData = async (userId: string) => {
     setIsLoading(true);
     try {
+      // Fetch profile
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("full_name, email, phone")
+        .eq("user_id", userId)
+        .single();
+      setProfile(profileData);
+
       // Fetch subscription
       const { data: subData } = await supabase
         .from("user_managed_subscriptions")
         .select("*")
         .eq("user_id", userId)
+        .in("status", ["active", "paused", "pending"])
+        .order("created_at", { ascending: false })
+        .limit(1)
         .single();
       setSubscription(subData);
 
@@ -148,24 +181,27 @@ export default function Dashboard() {
         .order("created_at", { ascending: false });
       setAddresses(addressesData || []);
 
-      // Fetch upcoming bookings (from main bookings table where user_id matches)
-      const { data: bookingsData } = await supabase
+      // Fetch upcoming bookings
+      const today = new Date().toISOString().split("T")[0];
+      const { data: upcomingData } = await supabase
         .from("bookings")
-        .select("id, booking_date, booking_time, service_name, status, address")
+        .select("id, booking_date, booking_time, service_name, status, address, total_cents, is_subscription_booking")
         .eq("user_id", userId)
-        .gte("booking_date", new Date().toISOString().split("T")[0])
+        .gte("booking_date", today)
+        .neq("status", "cancelled")
         .order("booking_date", { ascending: true })
-        .limit(5);
-      
-      // Transform to match our interface
-      const transformedBookings = (bookingsData || []).map(b => ({
-        id: b.id,
-        scheduled_at: `${b.booking_date}T${b.booking_time}`,
-        service_name: b.service_name,
-        status: b.status,
-        address_text: b.address || "",
-      }));
-      setBookings(transformedBookings);
+        .limit(10);
+      setUpcomingBookings(upcomingData || []);
+
+      // Fetch past bookings
+      const { data: pastData } = await supabase
+        .from("bookings")
+        .select("id, booking_date, booking_time, service_name, status, address, total_cents, is_subscription_booking")
+        .eq("user_id", userId)
+        .lt("booking_date", today)
+        .order("booking_date", { ascending: false })
+        .limit(20);
+      setPastBookings(pastData || []);
     } catch (error) {
       console.error("Error fetching user data:", error);
     } finally {
@@ -180,9 +216,9 @@ export default function Dashboard() {
 
   const toggleSubscriptionPause = async () => {
     if (!subscription) return;
-    
+
     const newStatus = subscription.status === "paused" ? "active" : "paused";
-    
+
     try {
       const { error } = await supabase
         .from("user_managed_subscriptions")
@@ -194,7 +230,7 @@ export default function Dashboard() {
       setSubscription({ ...subscription, status: newStatus });
       toast({
         title: newStatus === "paused" ? "Suscripción pausada" : "Suscripción reactivada",
-        description: newStatus === "paused" 
+        description: newStatus === "paused"
           ? "No se programarán nuevos lavados hasta que la reactives."
           : "Podés volver a agendar tus lavados.",
       });
@@ -243,9 +279,7 @@ export default function Dashboard() {
         if (error) throw error;
       }
 
-      toast({
-        title: editingCar ? "Auto actualizado" : "Auto agregado",
-      });
+      toast({ title: editingCar ? "Auto actualizado" : "Auto agregado" });
       setIsCarModalOpen(false);
       fetchUserData(user.id);
     } catch (error: any) {
@@ -261,14 +295,10 @@ export default function Dashboard() {
 
   const deleteCar = async (carId: string) => {
     if (!user) return;
-    
-    try {
-      const { error } = await supabase
-        .from("cars")
-        .delete()
-        .eq("id", carId);
-      if (error) throw error;
 
+    try {
+      const { error } = await supabase.from("cars").delete().eq("id", carId);
+      if (error) throw error;
       toast({ title: "Auto eliminado" });
       fetchUserData(user.id);
     } catch (error: any) {
@@ -280,7 +310,7 @@ export default function Dashboard() {
     }
   };
 
-  // Address CRUD
+  // Address CRUD with Google Places
   const openAddressModal = (address?: UserAddress) => {
     if (address) {
       setEditingAddress(address);
@@ -288,16 +318,24 @@ export default function Dashboard() {
         label: address.label || "Casa",
         line1: address.line1,
         neighborhood: address.neighborhood || "",
+        city: address.city || "",
       });
     } else {
       setEditingAddress(null);
-      setAddressForm({ label: "Casa", line1: "", neighborhood: "" });
+      setAddressForm({ label: "Casa", line1: "", neighborhood: "", city: "" });
     }
     setIsAddressModalOpen(true);
   };
 
+  const handleAddressSelect = (selection: PlaceSelection) => {
+    setAddressForm(prev => ({
+      ...prev,
+      line1: selection.address,
+    }));
+  };
+
   const handleSaveAddress = async () => {
-    if (!user) return;
+    if (!user || !addressForm.line1) return;
     setIsSubmitting(true);
 
     try {
@@ -314,9 +352,7 @@ export default function Dashboard() {
         if (error) throw error;
       }
 
-      toast({
-        title: editingAddress ? "Dirección actualizada" : "Dirección agregada",
-      });
+      toast({ title: editingAddress ? "Dirección actualizada" : "Dirección agregada" });
       setIsAddressModalOpen(false);
       fetchUserData(user.id);
     } catch (error: any) {
@@ -332,14 +368,10 @@ export default function Dashboard() {
 
   const deleteAddress = async (addressId: string) => {
     if (!user) return;
-    
-    try {
-      const { error } = await supabase
-        .from("addresses")
-        .delete()
-        .eq("id", addressId);
-      if (error) throw error;
 
+    try {
+      const { error } = await supabase.from("addresses").delete().eq("id", addressId);
+      if (error) throw error;
       toast({ title: "Dirección eliminada" });
       fetchUserData(user.id);
     } catch (error: any) {
@@ -351,6 +383,17 @@ export default function Dashboard() {
     }
   };
 
+  // Get user display name
+  const getDisplayName = () => {
+    if (profile?.full_name) return profile.full_name.split(" ")[0];
+    if (user?.user_metadata?.full_name) return user.user_metadata.full_name.split(" ")[0];
+    if (user?.email) return user.email.split("@")[0];
+    return "Usuario";
+  };
+
+  const planInfo = subscription ? PLAN_INFO[subscription.plan_id] : null;
+  const washesRemaining = subscription?.washes_remaining ?? planInfo?.washes ?? 0;
+
   if (isLoading) {
     return (
       <Layout>
@@ -361,24 +404,17 @@ export default function Dashboard() {
     );
   }
 
-  const planInfo = subscription ? PLAN_INFO[subscription.plan_id] : null;
-
   return (
     <Layout>
-      {/* Header */}
+      {/* Header with personalized greeting */}
       <section className="py-8 md:py-12 bg-washero-charcoal">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
               <h1 className="font-display text-2xl md:text-3xl font-black text-background">
-                Mi <span className="text-primary">Dashboard</span>
+                Hola, <span className="text-primary">{getDisplayName()}</span>
               </h1>
-              <p className="text-background/70 text-sm mt-1">
-                {user?.email}
-              </p>
+              <p className="text-background/70 text-sm mt-1">{user?.email}</p>
             </motion.div>
             <Button variant="heroDark" size="sm" onClick={handleSignOut}>
               <LogOut className="w-4 h-4 mr-2" />
@@ -390,10 +426,36 @@ export default function Dashboard() {
 
       <section className="py-8 md:py-12 bg-background">
         <div className="container mx-auto px-4">
-          <div className="grid lg:grid-cols-3 gap-6">
-            {/* Left Column - Subscription & Bookings */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Subscription Card */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid grid-cols-3 md:grid-cols-6 w-full">
+              <TabsTrigger value="overview" className="text-xs md:text-sm">
+                <CreditCard className="w-4 h-4 mr-1 hidden md:inline" />
+                Mi Plan
+              </TabsTrigger>
+              <TabsTrigger value="upcoming" className="text-xs md:text-sm">
+                <Calendar className="w-4 h-4 mr-1 hidden md:inline" />
+                Próximos
+              </TabsTrigger>
+              <TabsTrigger value="history" className="text-xs md:text-sm">
+                <History className="w-4 h-4 mr-1 hidden md:inline" />
+                Historial
+              </TabsTrigger>
+              <TabsTrigger value="cars" className="text-xs md:text-sm">
+                <Car className="w-4 h-4 mr-1 hidden md:inline" />
+                Autos
+              </TabsTrigger>
+              <TabsTrigger value="addresses" className="text-xs md:text-sm">
+                <MapPin className="w-4 h-4 mr-1 hidden md:inline" />
+                Direcciones
+              </TabsTrigger>
+              <TabsTrigger value="invoices" className="text-xs md:text-sm">
+                <FileText className="w-4 h-4 mr-1 hidden md:inline" />
+                Facturas
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Overview / Subscription Tab */}
+            <TabsContent value="overview" className="space-y-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -402,14 +464,10 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="font-display text-xl font-bold flex items-center gap-2">
                     <CreditCard className="w-5 h-5 text-primary" />
-                    Mi Plan
+                    Mi Suscripción
                   </h2>
-                  {subscription && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={toggleSubscriptionPause}
-                    >
+                  {subscription && subscription.status !== "pending" && (
+                    <Button variant="outline" size="sm" onClick={toggleSubscriptionPause}>
                       {subscription.status === "paused" ? (
                         <>
                           <Play className="w-4 h-4 mr-1" />
@@ -435,25 +493,35 @@ export default function Dashboard() {
                         <p className="text-sm text-muted-foreground">
                           {planInfo?.washes} lavados/mes • {planInfo?.price}/mes
                         </p>
+                        {planInfo && (
+                          <p className="text-xs text-primary mt-1 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            Incluye: {planInfo.serviceIncluded}
+                          </p>
+                        )}
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        subscription.status === "active" 
-                          ? "bg-washero-eco/20 text-washero-eco" 
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          subscription.status === "active"
+                            ? "bg-washero-eco/20 text-washero-eco"
+                            : subscription.status === "paused"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {subscription.status === "active"
+                          ? "Activo"
                           : subscription.status === "paused"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-muted text-muted-foreground"
-                      }`}>
-                        {subscription.status === "active" ? "Activo" : 
-                         subscription.status === "paused" ? "Pausado" : 
-                         subscription.status}
+                          ? "Pausado"
+                          : subscription.status === "pending"
+                          ? "Pendiente"
+                          : subscription.status}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-4 bg-muted/50 rounded-xl text-center">
-                        <p className="text-2xl font-bold text-primary">
-                          {subscription.washes_remaining || planInfo?.washes || 0}
-                        </p>
+                        <p className="text-2xl font-bold text-primary">{washesRemaining}</p>
                         <p className="text-sm text-muted-foreground">Lavados restantes</p>
                       </div>
                       <div className="p-4 bg-muted/50 rounded-xl text-center">
@@ -463,24 +531,42 @@ export default function Dashboard() {
                         <p className="text-sm text-muted-foreground">Usados este mes</p>
                       </div>
                     </div>
+
+                    {subscription.status === "active" && washesRemaining > 0 && (
+                      <Button className="w-full" onClick={() => navigate("/reservar")}>
+                        <Calendar className="w-4 h-4 mr-2" />
+                        Agendar un lavado de mi plan
+                      </Button>
+                    )}
+
+                    {subscription.status === "pending" && (
+                      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                        <div className="flex items-center gap-2 text-yellow-800">
+                          <AlertCircle className="w-4 h-4" />
+                          <p className="text-sm font-medium">
+                            Tu suscripción está pendiente de activación.
+                          </p>
+                        </div>
+                        <p className="text-xs text-yellow-700 mt-1">
+                          Te contactaremos para coordinar el pago.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <p className="text-muted-foreground mb-4">
-                      No tenés una suscripción activa
-                    </p>
-                    <Button onClick={() => navigate("/suscripciones")}>
-                      Ver planes
-                    </Button>
+                    <p className="text-muted-foreground mb-4">No tenés una suscripción activa</p>
+                    <Button onClick={() => navigate("/suscripciones")}>Ver planes</Button>
                   </div>
                 )}
               </motion.div>
+            </TabsContent>
 
-              {/* Upcoming Bookings */}
+            {/* Upcoming Bookings Tab */}
+            <TabsContent value="upcoming" className="space-y-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
                 className="bg-card border border-border rounded-2xl p-6"
               >
                 <div className="flex items-center justify-between mb-4">
@@ -494,9 +580,9 @@ export default function Dashboard() {
                   </Button>
                 </div>
 
-                {bookings.length > 0 ? (
+                {upcomingBookings.length > 0 ? (
                   <div className="space-y-3">
-                    {bookings.map((booking) => (
+                    {upcomingBookings.map((booking) => (
                       <div
                         key={booking.id}
                         className="flex items-center justify-between p-4 bg-muted/30 rounded-xl"
@@ -506,21 +592,34 @@ export default function Dashboard() {
                             <Clock className="w-5 h-5 text-primary" />
                           </div>
                           <div>
-                            <p className="font-medium text-foreground">
-                              {booking.service_name}
-                            </p>
+                            <p className="font-medium text-foreground">{booking.service_name}</p>
                             <p className="text-sm text-muted-foreground">
-                              {format(new Date(booking.scheduled_at), "EEEE d MMM, HH:mm", { locale: es })}
+                              {format(new Date(`${booking.booking_date}T${booking.booking_time}`), "EEEE d MMM, HH:mm", { locale: es })}
                             </p>
+                            {booking.address && (
+                              <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                {booking.address}
+                              </p>
+                            )}
                           </div>
                         </div>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          booking.status === "confirmed" 
-                            ? "bg-washero-eco/20 text-washero-eco" 
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}>
-                          {booking.status === "confirmed" ? "Confirmado" : "Pendiente"}
-                        </span>
+                        <div className="text-right">
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium ${
+                              booking.status === "confirmed"
+                                ? "bg-washero-eco/20 text-washero-eco"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
+                          >
+                            {booking.status === "confirmed" ? "Confirmado" : "Pendiente"}
+                          </span>
+                          {booking.is_subscription_booking && (
+                            <p className="text-xs text-primary mt-1 flex items-center justify-end gap-1">
+                              <Sparkles className="w-3 h-3" />
+                              De mi plan
+                            </p>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -528,62 +627,121 @@ export default function Dashboard() {
                   <div className="text-center py-8 text-muted-foreground">
                     <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
                     <p>No tenés lavados programados</p>
+                    <Button variant="outline" className="mt-4" onClick={() => navigate("/reservar")}>
+                      Agendar un lavado
+                    </Button>
                   </div>
                 )}
               </motion.div>
-            </div>
+            </TabsContent>
 
-            {/* Right Column - Cars & Addresses */}
-            <div className="space-y-6">
-              {/* Cars */}
+            {/* History Tab */}
+            <TabsContent value="history" className="space-y-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
+                className="bg-card border border-border rounded-2xl p-6"
+              >
+                <h2 className="font-display text-xl font-bold flex items-center gap-2 mb-4">
+                  <History className="w-5 h-5 text-primary" />
+                  Historial de Lavados
+                </h2>
+
+                {pastBookings.length > 0 ? (
+                  <div className="space-y-3">
+                    {pastBookings.map((booking) => (
+                      <div
+                        key={booking.id}
+                        className="flex items-center justify-between p-4 bg-muted/30 rounded-xl"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                            <CheckCircle className="w-5 h-5 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">{booking.service_name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {format(new Date(`${booking.booking_date}T${booking.booking_time}`), "d MMM yyyy, HH:mm", { locale: es })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {booking.total_cents && !booking.is_subscription_booking && (
+                            <p className="font-medium text-foreground">
+                              ${(booking.total_cents / 100).toLocaleString("es-AR")}
+                            </p>
+                          )}
+                          {booking.is_subscription_booking && (
+                            <p className="text-xs text-primary flex items-center justify-end gap-1">
+                              <Sparkles className="w-3 h-3" />
+                              Plan
+                            </p>
+                          )}
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium ${
+                              booking.status === "completed"
+                                ? "bg-washero-eco/20 text-washero-eco"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {booking.status === "completed" ? "Completado" : booking.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <History className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>No tenés lavados anteriores</p>
+                  </div>
+                )}
+              </motion.div>
+            </TabsContent>
+
+            {/* Cars Tab */}
+            <TabsContent value="cars" className="space-y-6">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
                 className="bg-card border border-border rounded-2xl p-6"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                  <h2 className="font-display text-xl font-bold flex items-center gap-2">
                     <Car className="w-5 h-5 text-primary" />
                     Mis Autos
                   </h2>
-                  <Button variant="ghost" size="sm" onClick={() => openCarModal()}>
-                    <Plus className="w-4 h-4" />
+                  <Button variant="outline" size="sm" onClick={() => openCarModal()}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Agregar
                   </Button>
                 </div>
 
                 {cars.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="grid gap-3 md:grid-cols-2">
                     {cars.map((car) => (
-                      <div
-                        key={car.id}
-                        className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium text-foreground text-sm">
-                            {car.nickname || `${car.brand} ${car.model}`}
-                          </p>
-                          {car.plate && (
-                            <p className="text-xs text-muted-foreground">{car.plate}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => openCarModal(car)}
-                          >
-                            <Edit className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive"
-                            onClick={() => deleteCar(car.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                      <div key={car.id} className="p-4 bg-muted/30 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-foreground">
+                              {car.nickname || `${car.brand || ""} ${car.model || ""}`.trim() || "Mi auto"}
+                            </p>
+                            {car.plate && <p className="text-sm text-muted-foreground">{car.plate}</p>}
+                            {car.color && <p className="text-xs text-muted-foreground">{car.color}</p>}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openCarModal(car)}>
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => deleteCar(car.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -591,63 +749,58 @@ export default function Dashboard() {
                 ) : (
                   <button
                     onClick={() => openCarModal()}
-                    className="w-full py-6 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                    className="w-full py-8 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors"
                   >
-                    <Plus className="w-5 h-5 mx-auto mb-1" />
-                    <span className="text-sm">Agregar auto</span>
+                    <Plus className="w-6 h-6 mx-auto mb-2" />
+                    <span>Agregar mi primer auto</span>
                   </button>
                 )}
               </motion.div>
+            </TabsContent>
 
-              {/* Addresses */}
+            {/* Addresses Tab */}
+            <TabsContent value="addresses" className="space-y-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
                 className="bg-card border border-border rounded-2xl p-6"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                  <h2 className="font-display text-xl font-bold flex items-center gap-2">
                     <MapPin className="w-5 h-5 text-primary" />
                     Mis Direcciones
                   </h2>
-                  <Button variant="ghost" size="sm" onClick={() => openAddressModal()}>
-                    <Plus className="w-4 h-4" />
+                  <Button variant="outline" size="sm" onClick={() => openAddressModal()}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Agregar
                   </Button>
                 </div>
 
                 {addresses.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="grid gap-3 md:grid-cols-2">
                     {addresses.map((address) => (
-                      <div
-                        key={address.id}
-                        className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium text-foreground text-sm">
-                            {address.label}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate max-w-[180px]">
-                            {address.line1}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => openAddressModal(address)}
-                          >
-                            <Edit className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive"
-                            onClick={() => deleteAddress(address.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                      <div key={address.id} className="p-4 bg-muted/30 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-foreground">{address.label}</p>
+                            <p className="text-sm text-muted-foreground truncate">{address.line1}</p>
+                            {address.neighborhood && (
+                              <p className="text-xs text-muted-foreground">{address.neighborhood}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAddressModal(address)}>
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => deleteAddress(address.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -655,15 +808,68 @@ export default function Dashboard() {
                 ) : (
                   <button
                     onClick={() => openAddressModal()}
-                    className="w-full py-6 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                    className="w-full py-8 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors"
                   >
-                    <Plus className="w-5 h-5 mx-auto mb-1" />
-                    <span className="text-sm">Agregar dirección</span>
+                    <Plus className="w-6 h-6 mx-auto mb-2" />
+                    <span>Agregar mi primera dirección</span>
                   </button>
                 )}
               </motion.div>
-            </div>
-          </div>
+            </TabsContent>
+
+            {/* Invoices Tab */}
+            <TabsContent value="invoices" className="space-y-6">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-card border border-border rounded-2xl p-6"
+              >
+                <h2 className="font-display text-xl font-bold flex items-center gap-2 mb-4">
+                  <FileText className="w-5 h-5 text-primary" />
+                  Facturas
+                </h2>
+
+                {pastBookings.filter(b => b.total_cents && !b.is_subscription_booking).length > 0 ? (
+                  <div className="space-y-3">
+                    {pastBookings
+                      .filter(b => b.total_cents && !b.is_subscription_booking)
+                      .map((booking) => (
+                        <div
+                          key={booking.id}
+                          className="flex items-center justify-between p-4 bg-muted/30 rounded-xl"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                              <FileText className="w-5 h-5 text-muted-foreground" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{booking.service_name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {format(new Date(`${booking.booking_date}T${booking.booking_time}`), "d MMM yyyy", { locale: es })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <p className="font-medium text-foreground">
+                              ${(booking.total_cents! / 100).toLocaleString("es-AR")}
+                            </p>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" disabled>
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>No tenés facturas disponibles</p>
+                    <p className="text-xs mt-1">Las facturas aparecerán después de completar servicios pagos</p>
+                  </div>
+                )}
+              </motion.div>
+            </TabsContent>
+          </Tabs>
         </div>
       </section>
 
@@ -671,12 +877,8 @@ export default function Dashboard() {
       <Dialog open={isCarModalOpen} onOpenChange={setIsCarModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {editingCar ? "Editar auto" : "Agregar auto"}
-            </DialogTitle>
-            <DialogDescription>
-              Agregá los datos de tu vehículo
-            </DialogDescription>
+            <DialogTitle>{editingCar ? "Editar auto" : "Agregar auto"}</DialogTitle>
+            <DialogDescription>Agregá los datos de tu vehículo</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
@@ -735,16 +937,12 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Address Modal */}
+      {/* Address Modal with Google Places */}
       <Dialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              {editingAddress ? "Editar dirección" : "Agregar dirección"}
-            </DialogTitle>
-            <DialogDescription>
-              Agregá una dirección para tus lavados
-            </DialogDescription>
+            <DialogTitle>{editingAddress ? "Editar dirección" : "Agregar dirección"}</DialogTitle>
+            <DialogDescription>Agregá una dirección para tus lavados</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
@@ -757,10 +955,12 @@ export default function Dashboard() {
             </div>
             <div>
               <Label>Dirección</Label>
-              <Input
-                placeholder="Av. Libertador 1234"
-                value={addressForm.line1}
-                onChange={(e) => setAddressForm({ ...addressForm, line1: e.target.value })}
+              <AddressAutocomplete
+                key={isAddressModalOpen ? "open" : "closed"}
+                initialValue={addressForm.line1}
+                placeholder="Av. Libertador 1234, Buenos Aires"
+                onTextChange={(text) => setAddressForm({ ...addressForm, line1: text })}
+                onSelect={handleAddressSelect}
               />
             </div>
             <div>
@@ -776,11 +976,7 @@ export default function Dashboard() {
             <Button variant="outline" className="flex-1" onClick={() => setIsAddressModalOpen(false)}>
               Cancelar
             </Button>
-            <Button 
-              className="flex-1" 
-              onClick={handleSaveAddress} 
-              disabled={isSubmitting || !addressForm.line1}
-            >
+            <Button className="flex-1" onClick={handleSaveAddress} disabled={isSubmitting || !addressForm.line1}>
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
             </Button>
           </div>
