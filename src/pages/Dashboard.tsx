@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { AddressAutocomplete, PlaceSelection } from "@/components/booking/AddressAutocomplete";
+import { SubscriptionCalendarScheduler } from "@/components/booking/SubscriptionCalendarScheduler";
 import {
   Loader2,
   Calendar,
@@ -35,6 +36,7 @@ import {
   CheckCircle,
   AlertCircle,
   Download,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -110,6 +112,7 @@ export default function Dashboard() {
   const [isCarModalOpen, setIsCarModalOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [isSubscriptionSchedulerOpen, setIsSubscriptionSchedulerOpen] = useState(false);
   const [editingCar, setEditingCar] = useState<UserCar | null>(null);
   const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -533,7 +536,7 @@ export default function Dashboard() {
                     </div>
 
                     {subscription.status === "active" && washesRemaining > 0 && (
-                      <Button className="w-full" onClick={() => navigate("/reservar")}>
+                      <Button className="w-full" onClick={() => setIsSubscriptionSchedulerOpen(true)}>
                         <Calendar className="w-4 h-4 mr-2" />
                         Agendar un lavado de mi plan
                       </Button>
@@ -982,6 +985,88 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Subscription Scheduler Modal */}
+      <AnimatePresence>
+        {isSubscriptionSchedulerOpen && subscription && user && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+            onClick={(e) => e.target === e.currentTarget && setIsSubscriptionSchedulerOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-background rounded-2xl shadow-xl border border-border"
+            >
+              {/* Header */}
+              <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center justify-between z-10">
+                <div>
+                  <h2 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-primary" />
+                    Agendar lavado de mi plan
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Seleccioná una fecha y horario
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsSubscriptionSchedulerOpen(false)}>
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+
+              {/* Subscription Info */}
+              <div className="p-4 border-b border-border bg-primary/5">
+                <div className="flex items-center justify-between">
+                  <span className="font-display font-bold text-foreground">{planInfo?.name}</span>
+                  <span className="text-sm text-primary font-medium">
+                    {washesRemaining} lavado{washesRemaining !== 1 ? "s" : ""} restante{washesRemaining !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                  <CheckCircle className="w-4 h-4 text-primary" />
+                  <span>Incluye: {planInfo?.serviceIncluded}</span>
+                </div>
+              </div>
+
+              {/* Calendar */}
+              <div className="p-4">
+                <SubscriptionCalendarScheduler
+                  subscription={{
+                    id: subscription.id,
+                    plan_id: subscription.plan_id,
+                    status: subscription.status,
+                    washes_remaining: subscription.washes_remaining,
+                    washes_used_this_month: subscription.washes_used_this_month,
+                  }}
+                  cars={cars}
+                  addresses={addresses}
+                  userId={user.id}
+                  onBookingComplete={() => {
+                    setIsSubscriptionSchedulerOpen(false);
+                    fetchUserData(user.id);
+                    toast({
+                      title: "¡Lavado agendado!",
+                      description: "Tu lavado fue programado correctamente.",
+                    });
+                  }}
+                  onNeedsCar={() => {
+                    setIsSubscriptionSchedulerOpen(false);
+                    openCarModal();
+                  }}
+                  onNeedsAddress={() => {
+                    setIsSubscriptionSchedulerOpen(false);
+                    openAddressModal();
+                  }}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Layout>
   );
 }
