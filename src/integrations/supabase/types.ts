@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      addresses: {
+        Row: {
+          city: string | null
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          label: string | null
+          line1: string
+          line2: string | null
+          neighborhood: string | null
+          notes: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          city?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          label?: string | null
+          line1: string
+          line2?: string | null
+          neighborhood?: string | null
+          notes?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          city?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          label?: string | null
+          line1?: string
+          line2?: string | null
+          neighborhood?: string | null
+          notes?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       availability_override_slots: {
         Row: {
           date: string
@@ -233,6 +275,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      cars: {
+        Row: {
+          brand: string | null
+          color: string | null
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          model: string | null
+          nickname: string | null
+          plate: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          brand?: string | null
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          model?: string | null
+          nickname?: string | null
+          plate?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          brand?: string | null
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          model?: string | null
+          nickname?: string | null
+          plate?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       customers: {
         Row: {
@@ -957,6 +1038,78 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_managed_subscriptions: {
+        Row: {
+          created_at: string | null
+          default_address_id: string | null
+          default_car_id: string | null
+          id: string
+          next_wash_at: string | null
+          pause_until: string | null
+          payment_provider: string | null
+          payment_reference: string | null
+          payment_status: string | null
+          plan_id: string
+          start_date: string | null
+          status: string
+          updated_at: string | null
+          user_id: string
+          washes_remaining: number | null
+          washes_used_this_month: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_address_id?: string | null
+          default_car_id?: string | null
+          id?: string
+          next_wash_at?: string | null
+          pause_until?: string | null
+          payment_provider?: string | null
+          payment_reference?: string | null
+          payment_status?: string | null
+          plan_id: string
+          start_date?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id: string
+          washes_remaining?: number | null
+          washes_used_this_month?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          default_address_id?: string | null
+          default_car_id?: string | null
+          id?: string
+          next_wash_at?: string | null
+          pause_until?: string | null
+          payment_provider?: string | null
+          payment_reference?: string | null
+          payment_status?: string | null
+          plan_id?: string
+          start_date?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+          washes_remaining?: number | null
+          washes_used_this_month?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_managed_subscriptions_default_address_id_fkey"
+            columns: ["default_address_id"]
+            isOneToOne: false
+            referencedRelation: "addresses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_managed_subscriptions_default_car_id_fkey"
+            columns: ["default_car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
             referencedColumns: ["id"]
           },
         ]
