@@ -901,6 +901,66 @@ export type Database = {
           },
         ]
       }
+      user_bookings: {
+        Row: {
+          address_text: string
+          car_details: Json | null
+          created_at: string
+          id: string
+          neighborhood: string | null
+          price_ars: number | null
+          scheduled_at: string
+          service_code: string
+          status: string
+          subscription_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address_text: string
+          car_details?: Json | null
+          created_at?: string
+          id?: string
+          neighborhood?: string | null
+          price_ars?: number | null
+          scheduled_at: string
+          service_code: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address_text?: string
+          car_details?: Json | null
+          created_at?: string
+          id?: string
+          neighborhood?: string | null
+          price_ars?: number | null
+          scheduled_at?: string
+          service_code?: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_bookings_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "user_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_bookings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -919,6 +979,86 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      user_subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          mp_preference_id: string | null
+          next_billing_date: string | null
+          payment_provider: string | null
+          plan_code: string
+          price_ars: number
+          start_date: string
+          status: string
+          updated_at: string
+          user_id: string
+          washes_per_month: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mp_preference_id?: string | null
+          next_billing_date?: string | null
+          payment_provider?: string | null
+          plan_code: string
+          price_ars: number
+          start_date?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          washes_per_month: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mp_preference_id?: string | null
+          next_billing_date?: string | null
+          payment_provider?: string | null
+          plan_code?: string
+          price_ars?: number
+          start_date?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          washes_per_month?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          name: string | null
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          phone: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          phone?: string
+          updated_at?: string
         }
         Relationships: []
       }
