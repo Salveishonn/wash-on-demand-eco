@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -17,16 +16,14 @@ import {
   Star,
   Check
 } from "lucide-react";
-import { useServiceAddons } from "@/hooks/useServiceAddons";
 import { getWhatsAppUrl } from "@/config/whatsapp";
-
-const formatPrice = (cents: number) => {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 0,
-  }).format(cents / 100);
-};
+import { 
+  SERVICES, 
+  VEHICLE_SIZES, 
+  EXTRAS, 
+  SUBSCRIPTION_PLANS, 
+  formatPrice 
+} from "@/config/services";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -42,70 +39,6 @@ const staggerContainer = {
   },
 };
 
-// Individual services data
-const serviciosIndividuales = [
-  {
-    name: "Lavado Básico",
-    description: "Exterior + interior básico",
-    price: "$25.000",
-    icon: Car,
-  },
-  {
-    name: "Lavado Completo",
-    description: "Exterior + interior detallado",
-    price: "$32.000",
-    icon: Sparkles,
-  },
-  {
-    name: "SUV / Camioneta",
-    description: "Cargo adicional",
-    price: "+ $5.000",
-    icon: Truck,
-    isExtra: true,
-  },
-];
-
-// Plans data - Updated prices
-const planes = [
-  {
-    id: "basico",
-    name: "Plan Básico",
-    price: "$55.000",
-    period: "/ mes",
-    features: [
-      "2 lavados / mes",
-      "Exterior + interior",
-    ],
-    popular: false,
-  },
-  {
-    id: "confort",
-    name: "Plan Confort",
-    price: "$95.000",
-    period: "/ mes",
-    features: [
-      "4 lavados / mes (1 por semana)",
-      "Exterior + interior",
-      "Prioridad en agenda",
-    ],
-    popular: true,
-    badge: "Más elegido",
-  },
-  {
-    id: "premium",
-    name: "Plan Premium",
-    price: "$125.000",
-    period: "/ mes",
-    features: [
-      "4 lavados / mes",
-      "Incluye encerado rápido (1 vez por mes)",
-      "Detallado interior liviano",
-      "Máxima prioridad",
-    ],
-    popular: false,
-  },
-];
-
 // Payment methods
 const metodosPago = [
   { name: "Efectivo", icon: Banknote },
@@ -114,10 +47,13 @@ const metodosPago = [
   { name: "Débito / Crédito", icon: CreditCard },
 ];
 
+// Map icons to services
+const serviceIcons: Record<string, typeof Car> = {
+  basico: Car,
+  completo: Sparkles,
+};
+
 const Servicios = () => {
-  const { addons } = useServiceAddons();
-  
-  // WhatsApp URL from centralized config
   const whatsappUrl = getWhatsAppUrl("Hola! Quiero reservar un lavado con Washero 🚗");
 
   const scrollToPlanes = () => {
@@ -126,7 +62,7 @@ const Servicios = () => {
   
   return (
     <Layout>
-      {/* Hero Section - Compact */}
+      {/* Hero Section */}
       <section className="py-12 md:py-20 bg-gradient-to-b from-washero-charcoal to-washero-charcoal/95">
         <div className="container mx-auto px-4">
           <motion.div
@@ -144,7 +80,7 @@ const Servicios = () => {
         </div>
       </section>
 
-      {/* Individual Services */}
+      {/* Individual Services - From Config */}
       <section className="py-12 bg-background">
         <div className="container mx-auto px-4">
           <motion.h2
@@ -163,33 +99,58 @@ const Servicios = () => {
             variants={staggerContainer}
             className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto"
           >
-            {serviciosIndividuales.map((servicio) => (
+            {/* Base Services */}
+            {SERVICES.map((service) => {
+              const Icon = serviceIcons[service.id] || Car;
+              return (
+                <motion.div
+                  key={service.id}
+                  variants={fadeInUp}
+                  className="p-6 rounded-xl border-2 border-border bg-card hover:border-primary/50 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-primary/10">
+                      <Icon className="w-6 h-6 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display text-lg font-bold text-foreground">
+                        {service.name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {service.description}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {service.durationMinutes} min
+                      </p>
+                      <p className="font-display text-2xl font-black mt-2 text-primary">
+                        {formatPrice(service.priceCents)}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+
+            {/* Vehicle Size Extra - From Config */}
+            {VEHICLE_SIZES.filter(v => v.extraCents > 0).map((size) => (
               <motion.div
-                key={servicio.name}
+                key={size.id}
                 variants={fadeInUp}
-                className={`p-6 rounded-xl border-2 transition-all ${
-                  servicio.isExtra 
-                    ? 'border-dashed border-muted-foreground/30 bg-muted/30' 
-                    : 'border-border bg-card hover:border-primary/50 hover:shadow-md'
-                }`}
+                className="p-6 rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/30"
               >
                 <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                    servicio.isExtra ? 'bg-muted' : 'bg-primary/10'
-                  }`}>
-                    <servicio.icon className={`w-6 h-6 ${servicio.isExtra ? 'text-muted-foreground' : 'text-primary'}`} />
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-muted">
+                    <Truck className="w-6 h-6 text-muted-foreground" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-display text-lg font-bold text-foreground">
-                      {servicio.name}
+                      {size.name}
                     </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {servicio.description}
+                      Cargo adicional
                     </p>
-                    <p className={`font-display text-2xl font-black mt-2 ${
-                      servicio.isExtra ? 'text-muted-foreground' : 'text-primary'
-                    }`}>
-                      {servicio.price}
+                    <p className="font-display text-2xl font-black mt-2 text-muted-foreground">
+                      + {formatPrice(size.extraCents)}
                     </p>
                   </div>
                 </div>
@@ -199,7 +160,7 @@ const Servicios = () => {
         </div>
       </section>
 
-      {/* Extras Section */}
+      {/* Extras Section - From Config */}
       <section className="py-12 bg-muted/30">
         <div className="container mx-auto px-4">
           <motion.h2
@@ -221,32 +182,21 @@ const Servicios = () => {
             variants={staggerContainer}
             className="flex flex-wrap justify-center gap-3 max-w-3xl mx-auto"
           >
-            {/* Static extras from spec */}
-            <motion.div variants={fadeInUp} className="px-4 py-3 rounded-full bg-background border border-border">
-              <span className="font-medium text-foreground">Encerado rápido</span>
-              <span className="ml-2 text-primary font-bold">$8.000</span>
-            </motion.div>
-            <motion.div variants={fadeInUp} className="px-4 py-3 rounded-full bg-background border border-border">
-              <span className="font-medium text-foreground">Detallado interior</span>
-              <span className="ml-2 text-primary font-bold">$8.000 – $10.000</span>
-            </motion.div>
-            
-            {/* Dynamic extras from DB (Pelo de Mascotas, Eliminación de Olores) */}
-            {addons.filter(a => ['Pelo de Mascotas', 'Eliminación de Olores'].includes(a.name)).map((addon) => (
+            {EXTRAS.map((extra) => (
               <motion.div 
-                key={addon.id} 
+                key={extra.id} 
                 variants={fadeInUp} 
                 className="px-4 py-3 rounded-full bg-background border border-border"
               >
-                <span className="font-medium text-foreground">{addon.name}</span>
-                <span className="ml-2 text-primary font-bold">{formatPrice(addon.price_cents)}</span>
+                <span className="font-medium text-foreground">{extra.name}</span>
+                <span className="ml-2 text-primary font-bold">{formatPrice(extra.priceCents)}</span>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Monthly Plans */}
+      {/* Monthly Plans - From Config */}
       <section id="planes" className="py-16 bg-background scroll-mt-16">
         <div className="container mx-auto px-4">
           <motion.div
@@ -270,7 +220,7 @@ const Servicios = () => {
             variants={staggerContainer}
             className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto"
           >
-            {planes.map((plan) => (
+            {SUBSCRIPTION_PLANS.map((plan) => (
               <motion.div
                 key={plan.id}
                 variants={fadeInUp}
@@ -280,10 +230,10 @@ const Servicios = () => {
                     : 'border-border bg-card hover:border-primary/50'
                 }`}
               >
-                {plan.badge && (
+                {plan.popular && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full whitespace-nowrap flex items-center gap-1">
                     <Star className="w-3 h-3" />
-                    {plan.badge}
+                    Más elegido
                   </span>
                 )}
                 
@@ -293,9 +243,9 @@ const Servicios = () => {
                 
                 <div className="flex items-baseline gap-1 mb-6">
                   <span className="font-display text-3xl md:text-4xl font-black text-primary">
-                    {plan.price}
+                    {formatPrice(plan.priceCents)}
                   </span>
-                  <span className="text-muted-foreground text-sm">{plan.period}</span>
+                  <span className="text-muted-foreground text-sm">/ mes</span>
                 </div>
                 
                 <ul className="space-y-3 mb-6">
@@ -313,7 +263,7 @@ const Servicios = () => {
                   size="lg"
                   asChild
                 >
-                  <Link to="/suscripciones">
+                  <Link to={`/suscripciones?plan=${plan.id}`}>
                     Suscribirme <ChevronRight className="w-4 h-4 ml-1" />
                   </Link>
                 </Button>

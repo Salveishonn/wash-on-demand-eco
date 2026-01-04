@@ -12,6 +12,7 @@ import { useServiceAddons } from "@/hooks/useServiceAddons";
 import { KipperOptIn } from "@/components/kipper/KipperOptIn";
 import { AddressAutocomplete, PlaceSelection } from "./AddressAutocomplete";
 import { formatDateKey } from "@/lib/dateUtils";
+import { SERVICES, VEHICLE_SIZES, formatPrice } from "@/config/services";
 
 interface SlotInfo {
   time: string;
@@ -26,22 +27,6 @@ interface SlotModalProps {
   bookingSource?: string;
 }
 
-interface Service {
-  id: string;
-  name: string;
-  price: string;
-  priceCents: number;
-  time: string;
-  popular?: boolean;
-}
-
-interface CarType {
-  id: string;
-  name: string;
-  extra: string;
-  extraCents: number;
-}
-
 interface SubscriptionInfo {
   id: string;
   planName: string;
@@ -53,27 +38,6 @@ interface SubscriptionInfo {
 
 type PaymentMethod = "transfer" | "pay_later" | "subscription";
 
-const services: Service[] = [
-  { id: "exterior", name: "Lavado Exterior", price: "$25.000", priceCents: 2500000, time: "45 min" },
-  { id: "interior", name: "Limpieza Interior", price: "$35.000", priceCents: 3500000, time: "60 min" },
-  { id: "full-detail", name: "Detailing Completo", price: "$75.000", priceCents: 7500000, time: "2-3 horas", popular: true },
-];
-
-const carTypes: CarType[] = [
-  { id: "sedan", name: "Sedán", extra: "$0", extraCents: 0 },
-  { id: "suv", name: "SUV / Crossover", extra: "+$7.000", extraCents: 700000 },
-  { id: "camioneta", name: "Camioneta / Van", extra: "+$12.000", extraCents: 1200000 },
-  { id: "premium", name: "Premium / Deportivo", extra: "+$10.000", extraCents: 1000000 },
-];
-
-const formatPrice = (cents: number) => {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 0,
-  }).format(cents / 100);
-};
-
 const DAYS_FULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const MONTHS_FULL = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -84,11 +48,8 @@ function formatDateLong(date: Date): string {
   return `${DAYS_FULL[date.getDay()]} ${date.getDate()} de ${MONTHS_FULL[date.getMonth()]}`;
 }
 
-// formatDateKey is now imported from @/lib/dateUtils
-
 export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bookingSource = "direct" }: SlotModalProps) {
   const { toast } = useToast();
-  // If preselectedTime is provided, skip directly to form
   const [step, setStep] = useState<"slots" | "form">(preselectedTime ? "form" : "slots");
   const [slots, setSlots] = useState<SlotInfo[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(!preselectedTime);
@@ -98,7 +59,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
   // Form state
   const [formData, setFormData] = useState({
     service: "",
-    carType: "",
+    vehicleSize: "",
     address: "",
     name: "",
     email: "",
@@ -152,7 +113,6 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
   }, [date, toast]);
 
   useEffect(() => {
-    // Only fetch slots if we don't have a preselected time
     if (!preselectedTime) {
       fetchSlots();
     }
@@ -212,7 +172,6 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     }
   };
 
-  // Auto-check subscription when email and phone are filled
   useEffect(() => {
     if (formData.email && formData.phone && !hasCheckedSubscription && step === "form") {
       const timer = setTimeout(() => {
@@ -222,20 +181,20 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     }
   }, [formData.email, formData.phone, step, hasCheckedSubscription]);
 
-  const getSelectedService = () => services.find(s => s.id === formData.service);
-  const getSelectedCarType = () => carTypes.find(c => c.id === formData.carType);
+  const getSelectedService = () => SERVICES.find(s => s.id === formData.service);
+  const getSelectedVehicleSize = () => VEHICLE_SIZES.find(v => v.id === formData.vehicleSize);
 
   const getTotalPrice = () => {
     const service = getSelectedService();
-    const carType = getSelectedCarType();
+    const vehicleSize = getSelectedVehicleSize();
     if (!service) return 0;
-    return service.priceCents + (carType?.extraCents || 0) + getAddonsTotal();
+    return service.priceCents + (vehicleSize?.extraCents || 0) + getAddonsTotal();
   };
 
   const canSubmit = () => {
     return (
       formData.service &&
-      formData.carType &&
+      formData.vehicleSize &&
       formData.address.trim() &&
       formData.name.trim() &&
       formData.email.trim() &&
@@ -250,7 +209,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     setIsSubmitting(true);
     try {
       const service = getSelectedService();
-      const carType = getSelectedCarType();
+      const vehicleSize = getSelectedVehicleSize();
 
       if (!service || !selectedTime) {
         throw new Error("Faltan datos requeridos");
@@ -268,8 +227,8 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
             customerPhone: formData.phone.trim(),
             serviceName: service.name,
             servicePriceCents: service.priceCents,
-            carType: carType?.name || "",
-            carTypeExtraCents: carType?.extraCents || 0,
+            carType: vehicleSize?.name || "Auto Chico",
+            carTypeExtraCents: vehicleSize?.extraCents || 0,
             bookingDate: formatDateKey(date),
             bookingTime: selectedTime,
             address: formData.address.trim(),
@@ -289,14 +248,12 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
         throw new Error(bookingError.message || "Error al crear la reserva");
       }
 
-      // Check for slot taken error
       if (bookingResponse?.slotTaken) {
         toast({
           variant: "destructive",
           title: "Horario no disponible",
           description: "Ese horario ya fue reservado. Elegí otro.",
         });
-        // Refresh slots and go back
         await fetchSlots();
         setStep("slots");
         setSelectedTime(null);
@@ -307,7 +264,6 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
         throw new Error(bookingResponse.message || bookingResponse.error);
       }
 
-      // If Kipper opt-in, create lead
       if (kipperOptIn && bookingResponse?.booking?.id) {
         try {
           await supabase.functions.invoke("create-kipper-lead", {
@@ -315,7 +271,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
               customerName: formData.name,
               customerPhone: formData.phone,
               customerEmail: formData.email,
-              vehicleType: carType?.name,
+              vehicleType: vehicleSize?.name,
               bookingId: bookingResponse.booking.id,
               source: "booking",
             },
@@ -423,11 +379,11 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                 ← Cambiar horario
               </Button>
 
-              {/* Service Selection */}
+              {/* Service Selection - From unified config */}
               <div className="space-y-3">
                 <Label className="text-base font-semibold">Servicio</Label>
                 <div className="grid gap-2">
-                  {services.map((service) => (
+                  {SERVICES.map((service) => (
                     <button
                       key={service.id}
                       type="button"
@@ -441,32 +397,35 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                       <div className="flex justify-between items-center">
                         <div>
                           <span className="font-semibold text-foreground">{service.name}</span>
-                          <span className="text-sm text-muted-foreground ml-2">({service.time})</span>
+                          <span className="text-sm text-muted-foreground ml-2">({service.durationMinutes} min)</span>
                         </div>
-                        <span className="font-bold text-primary">{service.price}</span>
+                        <span className="font-bold text-primary">{formatPrice(service.priceCents)}</span>
                       </div>
+                      <p className="text-sm text-muted-foreground mt-1">{service.description}</p>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Car Type Selection */}
+              {/* Vehicle Size Selection - From unified config */}
               <div className="space-y-3">
-                <Label className="text-base font-semibold">Tipo de vehículo</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {carTypes.map((carType) => (
+                <Label className="text-base font-semibold">Tamaño del vehículo</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {VEHICLE_SIZES.map((size) => (
                     <button
-                      key={carType.id}
+                      key={size.id}
                       type="button"
-                      onClick={() => handleInputChange("carType", carType.id)}
+                      onClick={() => handleInputChange("vehicleSize", size.id)}
                       className={`p-3 rounded-xl border-2 text-left transition-all ${
-                        formData.carType === carType.id
+                        formData.vehicleSize === size.id
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
                       }`}
                     >
-                      <div className="font-medium text-foreground text-sm">{carType.name}</div>
-                      <div className="text-xs text-muted-foreground">{carType.extra}</div>
+                      <div className="font-medium text-foreground text-sm">{size.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {size.extraCents > 0 ? `+ ${formatPrice(size.extraCents)}` : "Sin cargo"}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -494,196 +453,173 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                 />
               </div>
 
-              {/* Contact Info */}
+              {/* Contact Information */}
               <div className="space-y-4">
+                <Label className="text-base font-semibold">Datos de contacto</Label>
+                
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="flex items-center gap-2">
-                    <User className="w-4 h-4" /> Nombre completo
-                  </Label>
-                  <Input
-                    id="name"
-                    placeholder="Tu nombre"
-                    value={formData.name}
-                    onChange={(e) => handleInputChange("name", e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="flex items-center gap-2">
-                    <Mail className="w-4 h-4" /> Email
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="tu@email.com"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="flex items-center gap-2">
-                    <Phone className="w-4 h-4" /> Teléfono / WhatsApp
-                  </Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="+54 11 1234-5678"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange("phone", e.target.value)}
-                  />
-                </div>
-
-                {isCheckingSubscription && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Verificando suscripción...
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Nombre completo"
+                      value={formData.name}
+                      onChange={(e) => handleInputChange("name", e.target.value)}
+                      className="pl-10"
+                    />
                   </div>
-                )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Teléfono (ej: 11 2345-6789)"
+                      value={formData.phone}
+                      onChange={(e) => handleInputChange("phone", e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      type="email"
+                      placeholder="Email"
+                      value={formData.email}
+                      onChange={(e) => handleInputChange("email", e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Notes */}
               <div className="space-y-2">
-                <Label htmlFor="notes">Notas adicionales (opcional)</Label>
+                <Label className="text-base font-semibold">Notas (opcional)</Label>
                 <Textarea
-                  id="notes"
-                  placeholder="Instrucciones especiales, código de acceso, etc."
+                  placeholder="Indicaciones especiales, color del auto, etc."
                   value={formData.notes}
                   onChange={(e) => handleInputChange("notes", e.target.value)}
                   rows={2}
                 />
               </div>
 
-              {/* WhatsApp Opt-in */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
+              {/* WhatsApp opt-in */}
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/30 border border-border">
                 <input
                   type="checkbox"
-                  id="whatsapp"
+                  id="whatsapp-optin"
                   checked={whatsappOptIn}
                   onChange={(e) => setWhatsappOptIn(e.target.checked)}
-                  className="mt-1 accent-green-600"
+                  className="mt-1"
                 />
-                <label htmlFor="whatsapp" className="text-sm text-foreground">
+                <label htmlFor="whatsapp-optin" className="text-sm text-muted-foreground cursor-pointer">
                   <MessageCircle className="w-4 h-4 inline mr-1 text-green-600" />
-                  <span className="font-medium">Quiero recibir confirmaciones por WhatsApp</span>
-                  <p className="text-xs text-muted-foreground mt-0.5">Te avisamos cuando confirmemos tu turno y cuando estemos en camino</p>
+                  Quiero recibir confirmación y recordatorios por WhatsApp
                 </label>
               </div>
 
               {/* Kipper Opt-in */}
-              <KipperOptIn 
-                checked={kipperOptIn} 
+              <KipperOptIn
+                checked={kipperOptIn}
                 onCheckedChange={setKipperOptIn}
               />
 
+              {/* Subscription Check */}
+              {isCheckingSubscription && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Verificando suscripción...
+                </div>
+              )}
+
+              {subscriptionInfo && (
+                <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Check className="w-5 h-5 text-primary" />
+                    <span className="font-semibold text-foreground">{subscriptionInfo.planName}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {subscriptionInfo.washesRemaining} lavado(s) disponible(s) este período
+                  </p>
+                </div>
+              )}
+
               {/* Payment Method */}
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">Método de pago</Label>
-                <div className="space-y-2">
-                  {subscriptionInfo && subscriptionInfo.washesRemaining > 0 && (
+              {!subscriptionInfo && (
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold">Forma de pago</Label>
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => setPaymentMethod("subscription")}
-                      className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
-                        paymentMethod === "subscription"
-                          ? "border-accent bg-accent/10"
-                          : "border-border hover:border-accent/50"
+                      onClick={() => setPaymentMethod("transfer")}
+                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                        paymentMethod === "transfer"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <RefreshCw className="w-5 h-5 text-accent" />
-                        <div>
-                          <div className="font-semibold text-foreground">Usar suscripción</div>
-                          <div className="text-sm text-muted-foreground">
-                            {subscriptionInfo.washesRemaining} lavado{subscriptionInfo.washesRemaining > 1 ? 's' : ''} disponible{subscriptionInfo.washesRemaining > 1 ? 's' : ''}
-                          </div>
-                        </div>
-                        {paymentMethod === "subscription" && (
-                          <Check className="w-5 h-5 text-accent ml-auto" />
-                        )}
-                      </div>
+                      <CreditCard className="w-5 h-5 text-primary mb-2" />
+                      <div className="font-medium text-foreground text-sm">Transferencia</div>
+                      <div className="text-xs text-muted-foreground">Pagar ahora</div>
                     </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("transfer")}
-                    className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
-                      paymentMethod === "transfer"
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <CreditCard className="w-5 h-5 text-primary" />
-                      <div>
-                        <div className="font-semibold text-foreground">Transferencia / MercadoPago</div>
-                        <div className="text-sm text-muted-foreground">Te enviamos los datos para pagar</div>
-                      </div>
-                      {paymentMethod === "transfer" && (
-                        <Check className="w-5 h-5 text-primary ml-auto" />
-                      )}
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("pay_later")}
-                    className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
-                      paymentMethod === "pay_later"
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Wallet className="w-5 h-5 text-primary" />
-                      <div>
-                        <div className="font-semibold text-foreground">Pago en persona</div>
-                        <div className="text-sm text-muted-foreground">Pagá cuando hagamos el lavado</div>
-                      </div>
-                      {paymentMethod === "pay_later" && (
-                        <Check className="w-5 h-5 text-primary ml-auto" />
-                      )}
-                    </div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("pay_later")}
+                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                        paymentMethod === "pay_later"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      <Wallet className="w-5 h-5 text-primary mb-2" />
+                      <div className="font-medium text-foreground text-sm">Pagar después</div>
+                      <div className="text-xs text-muted-foreground">Efectivo / MercadoPago</div>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Total */}
-              {formData.service && paymentMethod !== "subscription" && (
-                <div className="p-4 rounded-xl bg-muted/50 border border-border">
-                  <div className="flex justify-between items-center">
-                    <span className="text-foreground font-medium">Total a pagar</span>
-                    <span className="text-2xl font-bold text-primary">
-                      {formatPrice(getTotalPrice())}
-                    </span>
-                  </div>
+              <div className="p-4 rounded-xl bg-washero-charcoal text-background">
+                <div className="flex justify-between items-center">
+                  <span className="font-display text-lg font-bold">Total</span>
+                  <span className="font-display text-2xl font-black text-primary">
+                    {paymentMethod === "subscription" && subscriptionInfo
+                      ? getAddonsTotal() > 0
+                        ? formatPrice(getAddonsTotal())
+                        : "Incluido"
+                      : formatPrice(getTotalPrice())
+                    }
+                  </span>
                 </div>
-              )}
+                {paymentMethod === "subscription" && subscriptionInfo && getAddonsTotal() > 0 && (
+                  <p className="text-sm text-background/70 mt-1">
+                    Servicio base incluido · Extras: {formatPrice(getAddonsTotal())}
+                  </p>
+                )}
+              </div>
 
-              {paymentMethod === "subscription" && (
-                <div className="p-4 rounded-xl bg-accent/10 border border-accent/20">
-                  <div className="flex justify-between items-center">
-                    <span className="text-foreground font-medium">Incluido en tu suscripción</span>
-                    <span className="text-lg font-bold text-accent">$0</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Submit Button */}
+              {/* Submit */}
               <Button
-                className="w-full h-14 text-lg font-bold"
+                variant="hero"
                 size="lg"
+                className="w-full"
                 onClick={handleSubmit}
                 disabled={!canSubmit() || isSubmitting}
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Reservando...
+                    Confirmando...
                   </>
                 ) : (
-                  "Confirmar Reserva"
+                  <>
+                    <Check className="w-5 h-5 mr-2" />
+                    Confirmar reserva
+                  </>
                 )}
               </Button>
             </>
