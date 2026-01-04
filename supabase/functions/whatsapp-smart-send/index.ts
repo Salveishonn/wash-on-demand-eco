@@ -97,9 +97,14 @@ serve(async (req) => {
   const metaAccessToken = Deno.env.get('META_WA_ACCESS_TOKEN');
   const metaPhoneNumberId = Deno.env.get('META_WA_PHONE_NUMBER_ID');
   const whatsappMode = Deno.env.get('WHATSAPP_MODE') || 'meta';
+  
+  // Meta is configured if we have both token and phone number ID
+  const metaConfigured = !!(metaAccessToken && metaPhoneNumberId);
 
   console.log('[whatsapp-smart-send] Config:', {
-    metaConfigured: !!(metaAccessToken && metaPhoneNumberId),
+    metaConfigured,
+    metaPhoneNumberId: metaPhoneNumberId ? `${metaPhoneNumberId.substring(0, 8)}...` : 'NOT SET',
+    metaAccessToken: metaAccessToken ? 'SET (hidden)' : 'NOT SET',
     whatsappMode,
   });
 
@@ -300,7 +305,8 @@ serve(async (req) => {
     let sendError: string | null = null;
     let finalStatus = 'sent';
 
-    if (metaAccessToken && metaPhoneNumberId && whatsappMode === 'meta') {
+    // Send via Meta Cloud API if configured (default provider)
+    if (metaConfigured) {
       try {
         let metaPayload: any;
 
@@ -319,7 +325,7 @@ serve(async (req) => {
               }] : [],
             },
           };
-          console.log('[whatsapp-smart-send] Sending TEMPLATE:', templateName);
+          console.log('[whatsapp-smart-send] Sending TEMPLATE:', templateName, 'to:', phoneForMeta);
         } else {
           // Send text message (within 24h window)
           metaPayload = {
@@ -328,10 +334,14 @@ serve(async (req) => {
             type: 'text',
             text: { body: messageBody },
           };
-          console.log('[whatsapp-smart-send] Sending FREE TEXT (within 24h window)');
+          console.log('[whatsapp-smart-send] Sending FREE TEXT to:', phoneForMeta);
         }
 
-        console.log('[whatsapp-smart-send] Meta payload:', JSON.stringify(metaPayload));
+        console.log('[whatsapp-smart-send] Meta API call:', {
+          url: `https://graph.facebook.com/v20.0/${metaPhoneNumberId}/messages`,
+          type: metaPayload.type,
+          template: metaPayload.template?.name,
+        });
 
         const metaResponse = await fetch(
           `https://graph.facebook.com/v20.0/${metaPhoneNumberId}/messages`,
@@ -349,30 +359,35 @@ serve(async (req) => {
         console.log('[whatsapp-smart-send] Meta response:', {
           status: metaResponse.status,
           ok: metaResponse.ok,
-          hasMessageId: !!metaResult.messages?.[0]?.id,
+          messageId: metaResult.messages?.[0]?.id,
           error: metaResult.error,
         });
 
         if (metaResponse.ok && metaResult.messages?.[0]?.id) {
           externalMessageId = metaResult.messages[0].id;
           finalStatus = 'sent';
-          console.log('[whatsapp-smart-send] SUCCESS:', externalMessageId);
+          console.log('[whatsapp-smart-send] SUCCESS - Message ID:', externalMessageId);
         } else {
           const errorMsg = metaResult.error?.message || 'Meta API error';
           const errorCode = metaResult.error?.code || metaResponse.status;
           sendError = `META_${errorCode}: ${errorMsg}`;
           finalStatus = 'failed';
-          console.error('[whatsapp-smart-send] FAILED:', metaResult);
+          console.error('[whatsapp-smart-send] FAILED:', JSON.stringify(metaResult));
         }
       } catch (err: any) {
         sendError = `META_ERROR: ${err.message}`;
         finalStatus = 'failed';
-        console.error('[whatsapp-smart-send] Exception:', err);
+        console.error('[whatsapp-smart-send] Exception:', err.message);
       }
     } else {
-      sendError = 'Meta WhatsApp not configured';
+      // No provider configured - log clearly what's missing
+      const missing = [];
+      if (!metaAccessToken) missing.push('META_WA_ACCESS_TOKEN');
+      if (!metaPhoneNumberId) missing.push('META_WA_PHONE_NUMBER_ID');
+      
+      sendError = `NO_PROVIDER_CONFIGURED: Missing ${missing.join(', ')}`;
       finalStatus = 'failed';
-      console.warn('[whatsapp-smart-send] Meta not configured');
+      console.error('[whatsapp-smart-send] Provider not configured. Missing:', missing);
     }
 
     // Update message with final status

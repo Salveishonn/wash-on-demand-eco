@@ -34,6 +34,13 @@ serve(async (req) => {
   // Meta WhatsApp credentials
   const accessToken = Deno.env.get("META_WA_ACCESS_TOKEN");
   const phoneNumberId = Deno.env.get("META_WA_PHONE_NUMBER_ID");
+  const metaConfigured = !!(accessToken && phoneNumberId);
+
+  console.log("[whatsapp-send] Config:", {
+    metaConfigured,
+    phoneNumberId: phoneNumberId ? `${phoneNumberId.substring(0, 8)}...` : 'NOT SET',
+    accessToken: accessToken ? 'SET (hidden)' : 'NOT SET',
+  });
 
   try {
     // Verify admin if Authorization header present
@@ -92,8 +99,12 @@ serve(async (req) => {
     }
 
     // Check if Meta WhatsApp is configured
-    if (!accessToken || !phoneNumberId) {
-      console.log("[whatsapp-send] Meta WhatsApp not configured, storing in outbox");
+    if (!metaConfigured) {
+      const missing = [];
+      if (!accessToken) missing.push('META_WA_ACCESS_TOKEN');
+      if (!phoneNumberId) missing.push('META_WA_PHONE_NUMBER_ID');
+      
+      console.error("[whatsapp-send] Meta WhatsApp not configured. Missing:", missing);
       
       // Store in outbox for later processing
       const { data: outboxEntry, error: outboxError } = await supabase
@@ -107,6 +118,7 @@ serve(async (req) => {
           language_code: languageCode,
           template_vars: templateVars,
           status: "queued",
+          last_error: `NO_PROVIDER_CONFIGURED: Missing ${missing.join(', ')}`,
         })
         .select()
         .single();
@@ -117,12 +129,13 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ 
-          ok: true, 
+          ok: false, 
           stub: true, 
+          error: `NO_PROVIDER_CONFIGURED: Missing ${missing.join(', ')}`,
           message: "Meta WhatsApp not configured - queued for later",
           outbox_id: outboxEntry?.id
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
