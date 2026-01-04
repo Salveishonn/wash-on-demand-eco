@@ -9,6 +9,7 @@ import { AddonsSelector } from "./AddonsSelector";
 import { useServiceAddons } from "@/hooks/useServiceAddons";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { resolvePlanId, formatPrice, getIncludedServiceForPlan, getIncludedVehicleSizeForPlan } from "@/config/services";
 
 interface UserCar {
   id: string;
@@ -47,13 +48,6 @@ interface SubscriptionWashBookingModalProps {
   onNeedsAddress: () => void;
 }
 
-// Plan info mapping
-const PLAN_INFO: Record<string, { name: string; washes: number; baseService: string }> = {
-  basic: { name: "Plan Básico", washes: 2, baseService: "Lavado Exterior + Interior" },
-  confort: { name: "Plan Confort", washes: 4, baseService: "Lavado Exterior + Interior" },
-  premium: { name: "Plan Premium", washes: 4, baseService: "Detailing Completo" },
-};
-
 export function SubscriptionWashBookingModal({
   scheduledDate,
   scheduledTime,
@@ -74,8 +68,13 @@ export function SubscriptionWashBookingModal({
   // Addons
   const { addons, selectedAddons, toggleAddon, isSelected, getAddonsTotal } = useServiceAddons();
 
-  const planInfo = PLAN_INFO[subscription.plan_id] || PLAN_INFO.basic;
-  const washesRemaining = subscription.washes_remaining ?? planInfo.washes;
+  // Resolve plan from unified config
+  const resolvedPlan = resolvePlanId(subscription.plan_id);
+  const planName = resolvedPlan?.name || "Plan";
+  const includedService = resolvedPlan ? getIncludedServiceForPlan(resolvedPlan.id) : null;
+  const includedVehicleSize = resolvedPlan ? getIncludedVehicleSizeForPlan(resolvedPlan.id) : null;
+  const washesPerMonth = resolvedPlan?.washesPerMonth || 2;
+  const washesRemaining = subscription.washes_remaining ?? washesPerMonth;
 
   // Auto-select default car/address if only one exists
   useEffect(() => {
@@ -87,7 +86,7 @@ export function SubscriptionWashBookingModal({
     }
   }, [cars, addresses]);
 
-  // Check if user has cars and addresses
+  // Check if user has cars
   if (cars.length === 0) {
     return (
       <motion.div
@@ -121,6 +120,7 @@ export function SubscriptionWashBookingModal({
     );
   }
 
+  // Check if user has addresses
   if (addresses.length === 0) {
     return (
       <motion.div
@@ -180,7 +180,7 @@ export function SubscriptionWashBookingModal({
     );
   }
 
-  if (subscription.status !== "active") {
+  if (subscription.status !== "active" && subscription.status !== "pending") {
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -268,11 +268,12 @@ export function SubscriptionWashBookingModal({
     if (existingError) throw existingError;
     if (existing) return existing as ActiveSubscriptionRow;
 
-    // No FK-target subscription found. Create one based on the plan shown in dashboard.
+    // No FK-target subscription found. Create one based on the plan.
     const { data: planRow, error: planError } = await supabase
       .from("subscription_plans")
       .select("id, washes_per_month")
-      .eq("name", planInfo.name)
+      .eq("name", planName)
+      .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -304,14 +305,14 @@ export function SubscriptionWashBookingModal({
 
     setIsSubmitting(true);
     try {
-      // Get user profile for customer info (may not exist yet)
+      // Get user profile for customer info
       const { data: profile } = await supabase
         .from("profiles")
         .select("full_name, email, phone")
         .eq("user_id", userId)
         .maybeSingle();
 
-      // Defensive: ensure we reference the FK target table (subscriptions.id)
+      // Ensure we reference the FK target table (subscriptions.id)
       const activeSub = await getOrCreateActiveSubscriptionForBooking(profile);
       console.log("[SubscriptionWashBookingModal] activeSub:", activeSub);
 
@@ -330,25 +331,28 @@ export function SubscriptionWashBookingModal({
       // Subscription bookings: base is prepaid. Extras may require payment.
       const paymentStatus = (getAddonsTotal() > 0 ? "pending" : "approved") as "pending" | "approved";
 
+      // Use data from unified config
+      const baseServiceName = includedService?.name || "Lavado Básico";
+      const vehicleSizeName = includedVehicleSize?.name || "Auto Chico";
+
       const payload = {
         user_id: userId,
         customer_name: profile?.full_name || "Suscriptor",
         customer_email: profile?.email || "",
         customer_phone: profile?.phone || "",
-        service_name: planInfo.baseService,
-        service_price_cents: 0, // Subscription booking - no additional cost
-        car_type: getCarDisplay(selectedCar),
-        car_type_extra_cents: 0,
+        service_name: baseServiceName,
+        service_price_cents: 0, // Subscription booking - no additional cost for base
+        car_type: vehicleSizeName,
+        car_type_extra_cents: 0, // Vehicle size included in subscription
         booking_date: bookingDate,
         booking_time: scheduledTime,
         address: getAddressDisplay(selectedAddress),
-        notes: `Auto: ${getCarDisplay(selectedCar)}`,
+        notes: `Auto: ${getCarDisplay(selectedCar)} | Plan: ${planName}`,
         payment_method: "subscription",
         is_subscription_booking: true,
-        subscription_id: activeSub.id, // IMPORTANT: must reference subscriptions.id (FK)
+        subscription_id: activeSub.id,
         addons: selectedAddons as unknown as import("@/integrations/supabase/types").Json,
         addons_total_cents: getAddonsTotal(),
-        // Note: total_cents is computed by the database, do not include it here
         payment_status: paymentStatus,
         status: "pending" as const,
         booking_source: "subscription",
@@ -374,7 +378,7 @@ export function SubscriptionWashBookingModal({
 
       // Update subscription usage (dashboard table)
       const newUsed = (subscription.washes_used_this_month || 0) + 1;
-      const newRemaining = Math.max((subscription.washes_remaining ?? planInfo.washes) - 1, 0);
+      const newRemaining = Math.max((subscription.washes_remaining ?? washesPerMonth) - 1, 0);
 
       const { error: updateError } = await supabase
         .from("user_managed_subscriptions")
@@ -390,7 +394,7 @@ export function SubscriptionWashBookingModal({
 
       toast({
         title: "¡Lavado agendado!",
-        description: `Tu lavado de ${planInfo.name} fue programado para el ${format(scheduledDate, "EEEE d 'de' MMMM", { locale: es })} a las ${scheduledTime} hs.`,
+        description: `Tu lavado de ${planName} fue programado para el ${format(scheduledDate, "EEEE d 'de' MMMM", { locale: es })} a las ${scheduledTime} hs.`,
       });
 
       onBookingSuccess();
@@ -438,17 +442,23 @@ export function SubscriptionWashBookingModal({
 
         {/* Content */}
         <div className="p-4 space-y-6">
-          {/* Plan Info Card */}
+          {/* Plan Info Card - From unified config */}
           <div className="p-4 bg-primary/5 rounded-xl border border-primary/20">
             <div className="flex items-center justify-between mb-2">
-              <span className="font-display font-bold text-foreground">{planInfo.name}</span>
+              <span className="font-display font-bold text-foreground">{planName}</span>
               <span className="text-sm text-primary font-medium">
                 {washesRemaining} lavado{washesRemaining !== 1 ? "s" : ""} restante{washesRemaining !== 1 ? "s" : ""}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <CheckCircle className="w-4 h-4 text-primary" />
-              <span>Incluye: {planInfo.baseService}</span>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle className="w-4 h-4 text-primary" />
+                <span>Servicio: {includedService?.name || "Lavado Básico"}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle className="w-4 h-4 text-primary" />
+                <span>Vehículo: {includedVehicleSize?.name || "Auto Chico"} incluido</span>
+              </div>
             </div>
           </div>
 
@@ -466,7 +476,7 @@ export function SubscriptionWashBookingModal({
             </div>
           </div>
 
-          {/* Car Selection */}
+          {/* Car Selection - NO service/vehicle size selector */}
           <div className="space-y-3">
             <Label className="text-base font-semibold flex items-center gap-2">
               <Car className="w-4 h-4 text-primary" />
@@ -486,7 +496,7 @@ export function SubscriptionWashBookingModal({
                 >
                   <div className="font-medium text-foreground">{getCarDisplay(car)}</div>
                   {car.plate && (
-                    <div className="text-sm text-muted-foreground">Patente: {car.plate}</div>
+                    <div className="text-sm text-muted-foreground">{car.plate}</div>
                   )}
                 </button>
               ))}
@@ -514,55 +524,59 @@ export function SubscriptionWashBookingModal({
                   <div className="font-medium text-foreground">
                     {address.label || "Dirección"}
                   </div>
-                  <div className="text-sm text-muted-foreground">{address.line1}</div>
-                  {address.neighborhood && (
-                    <div className="text-xs text-muted-foreground">{address.neighborhood}</div>
-                  )}
+                  <div className="text-sm text-muted-foreground">
+                    {getAddressDisplay(address)}
+                    {address.neighborhood && ` · ${address.neighborhood}`}
+                  </div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Optional Extras */}
+          {/* Extras (optional - paid) */}
           {addons.length > 0 && (
             <div className="space-y-3">
-              <Label className="text-base font-semibold flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                Extras opcionales
-                <span className="text-xs text-muted-foreground font-normal">(con costo adicional)</span>
-              </Label>
+              <Label className="text-base font-semibold">Extras opcionales (con costo)</Label>
               <AddonsSelector
                 addons={addons}
                 selectedAddons={selectedAddons}
                 onToggle={toggleAddon}
                 isSelected={isSelected}
               />
-              {getAddonsTotal() > 0 && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-sm text-yellow-800">
-                    <strong>Extras:</strong> ${(getAddonsTotal() / 100).toLocaleString("es-AR")} (pago pendiente)
-                  </p>
-                </div>
-              )}
             </div>
           )}
-        </div>
 
-        {/* Footer */}
-        <div className="sticky bottom-0 bg-background border-t border-border p-4">
+          {/* Total */}
+          <div className="p-4 rounded-xl bg-washero-charcoal text-background">
+            <div className="flex justify-between items-center">
+              <span className="font-display text-lg font-bold">Total</span>
+              <span className="font-display text-2xl font-black text-primary">
+                {getAddonsTotal() > 0 ? formatPrice(getAddonsTotal()) : "Incluido en tu plan"}
+              </span>
+            </div>
+            {getAddonsTotal() > 0 && (
+              <p className="text-sm text-background/70 mt-1">
+                Servicio base incluido · Extras: {formatPrice(getAddonsTotal())}
+              </p>
+            )}
+          </div>
+
+          {/* Submit */}
           <Button
-            className="w-full h-12"
-            disabled={!canSubmit || isSubmitting}
+            variant="hero"
+            size="lg"
+            className="w-full"
             onClick={handleSubmit}
+            disabled={!canSubmit || isSubmitting}
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                 Agendando...
               </>
             ) : (
               <>
-                <CheckCircle className="w-4 h-4 mr-2" />
+                <CheckCircle className="w-5 h-5 mr-2" />
                 Confirmar lavado de mi plan
               </>
             )}
