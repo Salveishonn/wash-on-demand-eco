@@ -142,9 +142,11 @@ export type Database = {
           addons: Json | null
           addons_total_cents: number | null
           address: string | null
+          base_price_ars: number | null
           booking_date: string
           booking_source: string | null
           booking_time: string
+          booking_type: string | null
           car_type: string | null
           car_type_extra_cents: number | null
           confirmed_at: string | null
@@ -153,6 +155,7 @@ export type Database = {
           customer_id: string | null
           customer_name: string
           customer_phone: string
+          extras_total_ars: number | null
           id: string
           is_subscription_booking: boolean | null
           mercadopago_payment_id: string | null
@@ -162,14 +165,19 @@ export type Database = {
           payment_intent_id: string | null
           payment_method: string | null
           payment_status: Database["public"]["Enums"]["payment_status"]
+          pricing_version_id: string | null
           requires_payment: boolean | null
+          service_code: string | null
           service_name: string
           service_price_cents: number
           status: Database["public"]["Enums"]["booking_status"]
           subscription_id: string | null
           total_cents: number | null
+          total_price_ars: number | null
           updated_at: string
           user_id: string | null
+          vehicle_extra_ars: number | null
+          vehicle_size: string | null
           webhook_processed_at: string | null
           whatsapp_last_error: string | null
           whatsapp_last_message_type: string | null
@@ -180,9 +188,11 @@ export type Database = {
           addons?: Json | null
           addons_total_cents?: number | null
           address?: string | null
+          base_price_ars?: number | null
           booking_date: string
           booking_source?: string | null
           booking_time: string
+          booking_type?: string | null
           car_type?: string | null
           car_type_extra_cents?: number | null
           confirmed_at?: string | null
@@ -191,6 +201,7 @@ export type Database = {
           customer_id?: string | null
           customer_name: string
           customer_phone: string
+          extras_total_ars?: number | null
           id?: string
           is_subscription_booking?: boolean | null
           mercadopago_payment_id?: string | null
@@ -200,14 +211,19 @@ export type Database = {
           payment_intent_id?: string | null
           payment_method?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
+          pricing_version_id?: string | null
           requires_payment?: boolean | null
+          service_code?: string | null
           service_name: string
           service_price_cents: number
           status?: Database["public"]["Enums"]["booking_status"]
           subscription_id?: string | null
           total_cents?: number | null
+          total_price_ars?: number | null
           updated_at?: string
           user_id?: string | null
+          vehicle_extra_ars?: number | null
+          vehicle_size?: string | null
           webhook_processed_at?: string | null
           whatsapp_last_error?: string | null
           whatsapp_last_message_type?: string | null
@@ -218,9 +234,11 @@ export type Database = {
           addons?: Json | null
           addons_total_cents?: number | null
           address?: string | null
+          base_price_ars?: number | null
           booking_date?: string
           booking_source?: string | null
           booking_time?: string
+          booking_type?: string | null
           car_type?: string | null
           car_type_extra_cents?: number | null
           confirmed_at?: string | null
@@ -229,6 +247,7 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string
           customer_phone?: string
+          extras_total_ars?: number | null
           id?: string
           is_subscription_booking?: boolean | null
           mercadopago_payment_id?: string | null
@@ -238,14 +257,19 @@ export type Database = {
           payment_intent_id?: string | null
           payment_method?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
+          pricing_version_id?: string | null
           requires_payment?: boolean | null
+          service_code?: string | null
           service_name?: string
           service_price_cents?: number
           status?: Database["public"]["Enums"]["booking_status"]
           subscription_id?: string | null
           total_cents?: number | null
+          total_price_ars?: number | null
           updated_at?: string
           user_id?: string | null
+          vehicle_extra_ars?: number | null
+          vehicle_size?: string | null
           webhook_processed_at?: string | null
           whatsapp_last_error?: string | null
           whatsapp_last_message_type?: string | null
@@ -265,6 +289,13 @@ export type Database = {
             columns: ["payment_intent_id"]
             isOneToOne: false
             referencedRelation: "payment_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_pricing_version_id_fkey"
+            columns: ["pricing_version_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_versions"
             referencedColumns: ["id"]
           },
           {
@@ -735,6 +766,77 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing_items: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          item_code: string
+          item_type: string
+          metadata: Json | null
+          price_ars: number
+          pricing_version_id: string
+          sort_order: number | null
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id?: string
+          item_code: string
+          item_type: string
+          metadata?: Json | null
+          price_ars?: number
+          pricing_version_id: string
+          sort_order?: number | null
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          item_code?: string
+          item_type?: string
+          metadata?: Json | null
+          price_ars?: number
+          pricing_version_id?: string
+          sort_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_items_pricing_version_id_fkey"
+            columns: ["pricing_version_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_versions: {
+        Row: {
+          activated_at: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          version_number: number
+        }
+        Insert: {
+          activated_at?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          version_number: number
+        }
+        Update: {
+          activated_at?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          version_number?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -914,8 +1016,12 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           id: string
+          included_service: string | null
+          included_vehicle_size: string | null
           mercadopago_subscription_id: string | null
+          plan_code: string | null
           plan_id: string
+          pricing_version_id: string | null
           status: Database["public"]["Enums"]["subscription_status"]
           updated_at: string
           user_id: string | null
@@ -934,8 +1040,12 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           id?: string
+          included_service?: string | null
+          included_vehicle_size?: string | null
           mercadopago_subscription_id?: string | null
+          plan_code?: string | null
           plan_id: string
+          pricing_version_id?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
           updated_at?: string
           user_id?: string | null
@@ -954,8 +1064,12 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           id?: string
+          included_service?: string | null
+          included_vehicle_size?: string | null
           mercadopago_subscription_id?: string | null
+          plan_code?: string | null
           plan_id?: string
+          pricing_version_id?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
           updated_at?: string
           user_id?: string | null
@@ -978,6 +1092,13 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_pricing_version_id_fkey"
+            columns: ["pricing_version_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_versions"
             referencedColumns: ["id"]
           },
         ]

@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 interface AddonItem {
-  addon_id: string;
+  code: string;
   name: string;
-  price_cents: number;
+  price_ars: number;
 }
 
 interface CreateBookingRequest {
@@ -17,9 +17,17 @@ interface CreateBookingRequest {
   customerEmail: string;
   customerPhone: string;
   serviceName: string;
-  servicePriceCents: number;
-  carType: string;
-  carTypeExtraCents: number;
+  serviceCode?: string;
+  vehicleSize?: string;
+  pricingVersionId?: string;
+  basePriceArs?: number;
+  vehicleExtraArs?: number;
+  extrasTotalArs?: number;
+  totalPriceArs?: number;
+  // Legacy fields for backwards compatibility
+  servicePriceCents?: number;
+  carType?: string;
+  carTypeExtraCents?: number;
   bookingDate: string;
   bookingTime: string;
   address: string;
@@ -27,8 +35,10 @@ interface CreateBookingRequest {
   userId?: string;
   subscriptionId?: string;
   isSubscriptionBooking?: boolean;
-  paymentMethod?: "transfer" | "pay_later" | "subscription";
+  bookingType?: "single" | "subscription";
+  paymentMethod?: "online" | "transfer" | "pay_later" | "subscription";
   whatsappOptIn?: boolean;
+  kipperOptIn?: boolean;
   addons?: AddonItem[];
   addonsTotalCents?: number;
   bookingSource?: string;
@@ -48,9 +58,9 @@ serve(async (req) => {
     
     console.log("[create-booking] Creating booking for:", data.customerName);
     console.log("[create-booking] Payment method:", data.paymentMethod);
-    console.log("[create-booking] Addons:", data.addons);
+    console.log("[create-booking] Booking type:", data.bookingType);
 
-    // Validate required fields with specific messages
+    // Validate required fields
     const validationErrors: string[] = [];
     if (!data.customerName?.trim()) validationErrors.push("Nombre es requerido");
     if (!data.customerEmail?.trim()) validationErrors.push("Email es requerido");
@@ -72,13 +82,16 @@ serve(async (req) => {
       );
     }
 
-    // CRITICAL: Ensure all boolean values are strictly boolean (not truthy/falsy values)
-    const isSubscription: boolean = Boolean(data.isSubscriptionBooking === true && data.subscriptionId);
+    // Determine booking type
+    const isSubscription: boolean = Boolean(
+      data.bookingType === "subscription" || 
+      (data.isSubscriptionBooking === true && data.subscriptionId)
+    );
     const isTransfer: boolean = data.paymentMethod === "transfer";
     const isPayLater: boolean = data.paymentMethod === "pay_later";
     const whatsappOptIn: boolean = Boolean(data.whatsappOptIn);
 
-    console.log("[create-booking] Boolean values - isSubscription:", isSubscription, "isTransfer:", isTransfer, "isPayLater:", isPayLater, "whatsappOptIn:", whatsappOptIn);
+    console.log("[create-booking] isSubscription:", isSubscription, "isTransfer:", isTransfer, "isPayLater:", isPayLater);
 
     // If subscription booking, verify subscription is active
     if (isSubscription && data.subscriptionId) {
@@ -92,7 +105,7 @@ serve(async (req) => {
         throw new Error("Suscripción no encontrada");
       }
 
-      if (subscription.status !== "active") {
+      if (subscription.status !== "active" && subscription.status !== "pending") {
         throw new Error("Tu suscripción no está activa");
       }
 
@@ -103,7 +116,10 @@ serve(async (req) => {
       // Decrement washes remaining
       await supabase
         .from("subscriptions")
-        .update({ washes_remaining: subscription.washes_remaining - 1 })
+        .update({ 
+          washes_remaining: subscription.washes_remaining - 1,
+          washes_used_in_cycle: (subscription.washes_used_in_cycle || 0) + 1
+        })
         .eq("id", data.subscriptionId);
 
       console.log("[create-booking] Subscription booking - washes remaining updated");
@@ -126,27 +142,30 @@ serve(async (req) => {
       requiresPayment = true;
       paymentMethodValue = "transfer";
     } else {
-      // Pay later / cash
       bookingStatus = "pending";
       paymentStatus = "pending";
       requiresPayment = false;
-      paymentMethodValue = "pay_later";
+      paymentMethodValue = data.paymentMethod || "pay_later";
     }
 
-    console.log("[create-booking] Status - booking:", bookingStatus, "payment:", paymentStatus);
-
-    // Prepare addons data
+    // Prepare addons data - support both new and legacy format
     const addonsData = data.addons || [];
-    const addonsTotalCents = data.addonsTotalCents || addonsData.reduce((sum, a) => sum + a.price_cents, 0);
+    const addonsTotalCents = data.addonsTotalCents || 
+      (data.extrasTotalArs ? data.extrasTotalArs * 100 : 
+        addonsData.reduce((sum, a) => sum + (a.price_ars ? a.price_ars * 100 : 0), 0));
+
+    // Calculate pricing - support both new (ARS) and legacy (cents) formats
+    const basePriceCents = data.basePriceArs ? data.basePriceArs * 100 : (data.servicePriceCents || 0);
+    const vehicleExtraCents = data.vehicleExtraArs ? data.vehicleExtraArs * 100 : (data.carTypeExtraCents || 0);
+    const totalPriceCents = data.totalPriceArs ? data.totalPriceArs * 100 : 
+      (basePriceCents + vehicleExtraCents + addonsTotalCents);
 
     // Normalize phone to E.164 for Argentina
     let phoneE164 = data.customerPhone.trim().replace(/[^0-9+]/g, "");
     if (!phoneE164.startsWith("+")) {
-      // Assume Argentina if no country code
       if (phoneE164.startsWith("54")) {
         phoneE164 = "+" + phoneE164;
       } else if (phoneE164.startsWith("11") || phoneE164.startsWith("15")) {
-        // Buenos Aires mobile
         phoneE164 = "+549" + phoneE164.replace(/^15/, "");
       } else {
         phoneE164 = "+54" + phoneE164;
@@ -164,7 +183,6 @@ serve(async (req) => {
 
       if (existingCustomer) {
         customerId = existingCustomer.id;
-        // Update customer with opt-in
         await supabase
           .from("customers")
           .update({
@@ -175,7 +193,6 @@ serve(async (req) => {
           })
           .eq("id", customerId);
       } else {
-        // Create new customer
         const { data: newCustomer } = await supabase
           .from("customers")
           .insert({
@@ -192,7 +209,7 @@ serve(async (req) => {
       console.log("[create-booking] Customer upserted:", customerId);
     }
 
-    // Create the booking - ensure all boolean fields are explicitly boolean
+    // Create the booking with new pricing structure
     const bookingInsertData = {
       user_id: data.userId || null,
       subscription_id: data.subscriptionId || null,
@@ -201,14 +218,18 @@ serve(async (req) => {
       customer_email: data.customerEmail.trim().toLowerCase(),
       customer_phone: data.customerPhone.trim(),
       service_name: data.serviceName,
-      service_price_cents: data.servicePriceCents || 0,
-      car_type: data.carType || null,
-      car_type_extra_cents: data.carTypeExtraCents || 0,
+      service_code: data.serviceCode || null,
+      vehicle_size: data.vehicleSize || null,
+      pricing_version_id: data.pricingVersionId || null,
+      service_price_cents: basePriceCents,
+      car_type: data.carType || data.vehicleSize || null,
+      car_type_extra_cents: vehicleExtraCents,
       booking_date: data.bookingDate,
       booking_time: data.bookingTime,
       address: data.address.trim(),
       notes: data.notes?.trim() || null,
-      is_subscription_booking: isSubscription, // Already cast to boolean above
+      booking_type: isSubscription ? "subscription" : "single",
+      is_subscription_booking: isSubscription,
       requires_payment: Boolean(requiresPayment),
       status: bookingStatus,
       payment_status: paymentStatus,
@@ -216,11 +237,15 @@ serve(async (req) => {
       confirmed_at: isSubscription ? new Date().toISOString() : null,
       addons: addonsData,
       addons_total_cents: addonsTotalCents,
+      base_price_ars: data.basePriceArs || Math.round(basePriceCents / 100),
+      vehicle_extra_ars: data.vehicleExtraArs || Math.round(vehicleExtraCents / 100),
+      extras_total_ars: data.extrasTotalArs || Math.round(addonsTotalCents / 100),
+      total_price_ars: data.totalPriceArs || Math.round(totalPriceCents / 100),
       booking_source: data.bookingSource || "direct",
-      whatsapp_opt_in: whatsappOptIn, // Already cast to boolean above
+      whatsapp_opt_in: whatsappOptIn,
     };
 
-    console.log("[create-booking] Insert payload - is_subscription_booking:", bookingInsertData.is_subscription_booking, "(type:", typeof bookingInsertData.is_subscription_booking, ") whatsapp_opt_in:", bookingInsertData.whatsapp_opt_in, "(type:", typeof bookingInsertData.whatsapp_opt_in, ")");
+    console.log("[create-booking] Insert payload:", JSON.stringify(bookingInsertData, null, 2));
 
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
@@ -229,16 +254,9 @@ serve(async (req) => {
       .single();
 
     if (bookingError) {
-      console.error("[create-booking] Error creating booking:", {
-        message: bookingError.message,
-        code: bookingError.code,
-        details: bookingError.details,
-        hint: bookingError.hint,
-      });
+      console.error("[create-booking] Error creating booking:", bookingError);
       
-      // Check for duplicate slot error (Postgres unique constraint violation)
       if (bookingError.code === "23505") {
-        console.log("[create-booking] Slot already booked - duplicate detected");
         return new Response(
           JSON.stringify({ 
             error: "Ese horario ya fue reservado. Elegí otro.",
@@ -247,26 +265,6 @@ serve(async (req) => {
           }),
           { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
-      }
-      
-      // Log error to database for debugging (fire and forget)
-      try {
-        await supabase.from("webhook_logs").insert({
-          source: "create-booking-error",
-          event_type: "booking_creation_failed",
-          payload: {
-            error_message: bookingError.message,
-            error_code: bookingError.code,
-            request_data: {
-              customerEmail: data.customerEmail,
-              serviceName: data.serviceName,
-              bookingDate: data.bookingDate,
-            }
-          },
-          processed: false,
-        });
-      } catch (logError) {
-        console.error("[create-booking] Failed to log error:", logError);
       }
       
       return new Response(
@@ -281,35 +279,31 @@ serve(async (req) => {
 
     console.log("[create-booking] Booking created:", booking.id);
 
-    // Create payment intent for transfer or pay_later bookings
+    // Create payment intent for non-subscription bookings
     let paymentIntent = null;
     let paymentUrl = null;
     
     if (!isSubscription) {
-      const totalAmount = data.servicePriceCents + (data.carTypeExtraCents || 0);
-      // Convert cents to ARS (divide by 100)
-      const amountArs = Math.round(totalAmount / 100);
+      const totalAmountArs = data.totalPriceArs || Math.round(totalPriceCents / 100);
       
       const { data: intentData, error: intentError } = await supabase
         .from("payment_intents")
         .insert({
           booking_id: booking.id,
           type: "one_time",
-          amount_ars: amountArs,
+          amount_ars: totalAmountArs,
           currency: "ARS",
           status: "pending",
-          expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(), // 72 hours
+          expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
         })
         .select()
         .single();
 
       if (intentError) {
         console.error("[create-booking] Payment intent error:", intentError);
-        // Non-fatal, continue
       } else {
         paymentIntent = intentData;
         
-        // Update booking with payment_intent_id
         await supabase
           .from("bookings")
           .update({ payment_intent_id: intentData.id })
@@ -323,32 +317,42 @@ serve(async (req) => {
     }
 
     // Queue admin notifications
-    const shouldNotifyAdmin = isSubscription || !isSubscription; // Always notify
+    console.log("[create-booking] Queueing admin notifications");
     
-    if (shouldNotifyAdmin) {
-      console.log("[create-booking] Queueing admin notifications");
-      
-      const queueUrl = `${supabaseUrl}/functions/v1/queue-notifications`;
-      
-      fetch(queueUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({ 
-          bookingId: booking.id,
-          isPayLater: isPayLater,
-          isTransfer: isTransfer,
-          isSubscription: isSubscription,
-          whatsappOptIn: data.whatsappOptIn || false
-        }),
-      }).catch(err => console.error("[create-booking] Queue error:", err));
+    const queueUrl = `${supabaseUrl}/functions/v1/queue-notifications`;
+    
+    fetch(queueUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({ 
+        bookingId: booking.id,
+        isPayLater: isPayLater,
+        isTransfer: isTransfer,
+        isSubscription: isSubscription,
+        whatsappOptIn: data.whatsappOptIn || false
+      }),
+    }).catch(err => console.error("[create-booking] Queue error:", err));
+
+    // Handle Kipper opt-in
+    if (data.kipperOptIn) {
+      console.log("[create-booking] Creating Kipper lead");
+      const { error: kipperError } = await supabase.from("kipper_leads").insert({
+        customer_name: data.customerName.trim(),
+        customer_email: data.customerEmail.trim().toLowerCase(),
+        customer_phone: data.customerPhone.trim(),
+        booking_id: booking.id,
+        source: "booking",
+        vehicle_type: data.carType || data.vehicleSize || null,
+      });
+      if (kipperError) console.error("[create-booking] Kipper lead error:", kipperError);
     }
 
-    // For transfer bookings, send payment instructions to customer with payment page link
+    // For transfer bookings, send payment instructions
     if (isTransfer && data.customerEmail && paymentIntent) {
-      console.log("[create-booking] Sending payment instructions to customer:", data.customerEmail);
+      console.log("[create-booking] Sending payment instructions to:", data.customerEmail);
       
       const sendNotificationsUrl = `${supabaseUrl}/functions/v1/send-notifications`;
       
@@ -380,8 +384,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
+        bookingId: booking.id,
         booking,
         paymentIntent,
+        paymentIntentId: paymentIntent?.id,
         paymentUrl,
         message,
         isTransfer,

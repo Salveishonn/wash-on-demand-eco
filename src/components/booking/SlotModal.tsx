@@ -1,18 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { X, Clock, Loader2, User, Phone, Mail, CreditCard, Wallet, RefreshCw, Check, AlertCircle, MessageCircle } from "lucide-react";
+import { X, Clock, Loader2, User, Phone, Mail, CreditCard, Wallet, RefreshCw, Check, AlertCircle, MessageCircle, Sparkles, Armchair, Wind, Waves, Car } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { AddonsSelector } from "./AddonsSelector";
-import { useServiceAddons } from "@/hooks/useServiceAddons";
 import { KipperOptIn } from "@/components/kipper/KipperOptIn";
 import { AddressAutocomplete, PlaceSelection } from "./AddressAutocomplete";
 import { formatDateKey } from "@/lib/dateUtils";
-import { SERVICES, VEHICLE_SIZES, formatPrice } from "@/config/services";
+import { usePricing, formatPrice, type PricingItem } from "@/hooks/usePricing";
 
 interface SlotInfo {
   time: string;
@@ -44,12 +43,21 @@ const MONTHS_FULL = [
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
 ];
 
+const iconMap: Record<string, React.ReactNode> = {
+  Sparkles: <Sparkles className="w-4 h-4" />,
+  Armchair: <Armchair className="w-4 h-4" />,
+  Wind: <Wind className="w-4 h-4" />,
+  Waves: <Waves className="w-4 h-4" />,
+};
+
 function formatDateLong(date: Date): string {
   return `${DAYS_FULL[date.getDay()]} ${date.getDate()} de ${MONTHS_FULL[date.getMonth()]}`;
 }
 
 export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bookingSource = "direct" }: SlotModalProps) {
   const { toast } = useToast();
+  const { data: pricing, isLoading: isPricingLoading } = usePricing();
+  
   const [step, setStep] = useState<"slots" | "form">(preselectedTime ? "form" : "slots");
   const [slots, setSlots] = useState<SlotInfo[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(!preselectedTime);
@@ -59,13 +67,16 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
   // Form state
   const [formData, setFormData] = useState({
     service: "",
-    vehicleSize: "",
+    vehicleSize: "small",
     address: "",
     name: "",
     email: "",
     phone: "",
     notes: "",
   });
+
+  // Selected extras
+  const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
 
   // Subscription state
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
@@ -75,10 +86,14 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
 
   // Opt-ins
   const [kipperOptIn, setKipperOptIn] = useState(false);
-  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
+  const [whatsappOptIn, setWhatsappOptIn] = useState(true);
 
-  // Addons
-  const { addons, selectedAddons, toggleAddon, isSelected, getAddonsTotal } = useServiceAddons();
+  // Set default service when pricing loads
+  useEffect(() => {
+    if (pricing?.services.length && !formData.service) {
+      setFormData(prev => ({ ...prev, service: pricing.services[0].item_code }));
+    }
+  }, [pricing, formData.service]);
 
   const fetchSlots = useCallback(async () => {
     setIsLoadingSlots(true);
@@ -134,6 +149,12 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     }
   };
 
+  const toggleExtra = (code: string) => {
+    setSelectedExtras(prev =>
+      prev.includes(code) ? prev.filter(e => e !== code) : [...prev, code]
+    );
+  };
+
   const checkSubscription = async () => {
     if (!formData.email || !formData.phone) return;
 
@@ -181,14 +202,22 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     }
   }, [formData.email, formData.phone, step, hasCheckedSubscription]);
 
-  const getSelectedService = () => SERVICES.find(s => s.id === formData.service);
-  const getSelectedVehicleSize = () => VEHICLE_SIZES.find(v => v.id === formData.vehicleSize);
+  const getSelectedService = () => pricing?.services.find(s => s.item_code === formData.service);
+  const getSelectedVehicleSize = () => pricing?.vehicleExtras.find(v => v.item_code === formData.vehicleSize);
+
+  const getExtrasTotal = () => {
+    if (!pricing) return 0;
+    return selectedExtras.reduce((sum, code) => {
+      const extra = pricing.extras.find(e => e.item_code === code);
+      return sum + (extra?.price_ars || 0);
+    }, 0);
+  };
 
   const getTotalPrice = () => {
     const service = getSelectedService();
     const vehicleSize = getSelectedVehicleSize();
     if (!service) return 0;
-    return service.priceCents + (vehicleSize?.extraCents || 0) + getAddonsTotal();
+    return service.price_ars + (vehicleSize?.price_ars || 0) + getExtrasTotal();
   };
 
   const canSubmit = () => {
@@ -204,7 +233,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit()) return;
+    if (!canSubmit() || !pricing) return;
 
     setIsSubmitting(true);
     try {
@@ -218,6 +247,15 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
       const isSubscriptionBooking = paymentMethod === "subscription" && subscriptionInfo;
       const bookingPaymentMethod = isSubscriptionBooking ? "subscription" : paymentMethod;
 
+      const extrasSnapshot = selectedExtras.map(code => {
+        const extra = pricing.extras.find(e => e.item_code === code);
+        return {
+          code,
+          name: extra?.display_name || code,
+          price_ars: extra?.price_ars || 0,
+        };
+      });
+
       const { data: bookingResponse, error: bookingError } = await supabase.functions.invoke(
         "create-booking",
         {
@@ -225,20 +263,26 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
             customerName: formData.name.trim(),
             customerEmail: formData.email.trim(),
             customerPhone: formData.phone.trim(),
-            serviceName: service.name,
-            servicePriceCents: service.priceCents,
-            carType: vehicleSize?.name || "Auto Chico",
-            carTypeExtraCents: vehicleSize?.extraCents || 0,
+            serviceName: service.display_name,
+            serviceCode: service.item_code,
+            vehicleSize: vehicleSize?.item_code || "small",
+            pricingVersionId: pricing.versionId,
+            basePriceArs: service.price_ars,
+            vehicleExtraArs: vehicleSize?.price_ars || 0,
+            extrasTotalArs: getExtrasTotal(),
+            totalPriceArs: getTotalPrice(),
             bookingDate: formatDateKey(date),
             bookingTime: selectedTime,
             address: formData.address.trim(),
             notes: formData.notes.trim(),
             paymentMethod: bookingPaymentMethod,
+            bookingType: isSubscriptionBooking ? "subscription" : "single",
             isSubscriptionBooking: !!isSubscriptionBooking,
             subscriptionId: isSubscriptionBooking ? subscriptionInfo.id : undefined,
             whatsappOptIn: whatsappOptIn,
-            addons: selectedAddons,
-            addonsTotalCents: getAddonsTotal(),
+            kipperOptIn: kipperOptIn,
+            addons: extrasSnapshot,
+            carType: vehicleSize?.display_name || "Auto chico",
             bookingSource: bookingSource,
           },
         }
@@ -264,29 +308,12 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
         throw new Error(bookingResponse.message || bookingResponse.error);
       }
 
-      if (kipperOptIn && bookingResponse?.booking?.id) {
-        try {
-          await supabase.functions.invoke("create-kipper-lead", {
-            body: {
-              customerName: formData.name,
-              customerPhone: formData.phone,
-              customerEmail: formData.email,
-              vehicleType: vehicleSize?.name,
-              bookingId: bookingResponse.booking.id,
-              source: "booking",
-            },
-          });
-        } catch (kipperErr) {
-          console.error("[SlotModal] Kipper lead error:", kipperErr);
-        }
-      }
-
       toast({
         title: "¡Reserva creada!",
         description: bookingResponse.message,
       });
 
-      onBookingSuccess(bookingResponse.booking.id, bookingPaymentMethod);
+      onBookingSuccess(bookingResponse.bookingId || bookingResponse.booking?.id, bookingPaymentMethod);
     } catch (error: any) {
       console.error("[SlotModal] Submit error:", error);
       toast({
@@ -298,6 +325,20 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
       setIsSubmitting(false);
     }
   };
+
+  if (isPricingLoading) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+      >
+        <div className="bg-card rounded-2xl p-8">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -364,7 +405,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
             </>
           )}
 
-          {step === "form" && (
+          {step === "form" && pricing && (
             <>
               {/* Back button */}
               <Button
@@ -379,65 +420,91 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                 ← Cambiar horario
               </Button>
 
-              {/* Service Selection - From unified config */}
+              {/* Service Selection */}
               <div className="space-y-3">
                 <Label className="text-base font-semibold">Servicio</Label>
                 <div className="grid gap-2">
-                  {SERVICES.map((service) => (
+                  {pricing.services.map((service) => (
                     <button
-                      key={service.id}
+                      key={service.item_code}
                       type="button"
-                      onClick={() => handleInputChange("service", service.id)}
+                      onClick={() => handleInputChange("service", service.item_code)}
                       className={`p-4 rounded-xl border-2 text-left transition-all ${
-                        formData.service === service.id
+                        formData.service === service.item_code
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
                       }`}
                     >
                       <div className="flex justify-between items-center">
                         <div>
-                          <span className="font-semibold text-foreground">{service.name}</span>
-                          <span className="text-sm text-muted-foreground ml-2">({service.durationMinutes} min)</span>
+                          <span className="font-semibold text-foreground">{service.display_name}</span>
+                          {service.metadata.duration_min && (
+                            <span className="text-sm text-muted-foreground ml-2">({service.metadata.duration_min} min)</span>
+                          )}
                         </div>
-                        <span className="font-bold text-primary">{formatPrice(service.priceCents)}</span>
+                        <span className="font-bold text-primary">{formatPrice(service.price_ars)}</span>
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1">{service.description}</p>
+                      {service.metadata.description && (
+                        <p className="text-sm text-muted-foreground mt-1">{service.metadata.description}</p>
+                      )}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Vehicle Size Selection - From unified config */}
+              {/* Vehicle Size Selection */}
               <div className="space-y-3">
                 <Label className="text-base font-semibold">Tamaño del vehículo</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {VEHICLE_SIZES.map((size) => (
+                  {pricing.vehicleExtras.map((size) => (
                     <button
-                      key={size.id}
+                      key={size.item_code}
                       type="button"
-                      onClick={() => handleInputChange("vehicleSize", size.id)}
+                      onClick={() => handleInputChange("vehicleSize", size.item_code)}
                       className={`p-3 rounded-xl border-2 text-left transition-all ${
-                        formData.vehicleSize === size.id
+                        formData.vehicleSize === size.item_code
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
                       }`}
                     >
-                      <div className="font-medium text-foreground text-sm">{size.name}</div>
+                      <div className="font-medium text-foreground text-sm">{size.display_name}</div>
                       <div className="text-xs text-muted-foreground">
-                        {size.extraCents > 0 ? `+ ${formatPrice(size.extraCents)}` : "Sin cargo"}
+                        {size.price_ars > 0 ? `+ ${formatPrice(size.price_ars)}` : "Sin cargo"}
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Addons */}
-              <AddonsSelector
-                addons={addons}
-                selectedAddons={selectedAddons}
-                onToggle={toggleAddon}
-                isSelected={isSelected}
-              />
+              {/* Extras Selection */}
+              <div className="space-y-3">
+                <Label className="text-base font-semibold">Extras opcionales</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {pricing.extras.map((extra) => (
+                    <button
+                      key={extra.item_code}
+                      type="button"
+                      onClick={() => toggleExtra(extra.item_code)}
+                      className={`p-3 rounded-xl border-2 text-left transition-all ${
+                        selectedExtras.includes(extra.item_code)
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-primary">
+                          {iconMap[extra.metadata.icon || 'Sparkles'] || <Sparkles className="w-4 h-4" />}
+                        </span>
+                        {selectedExtras.includes(extra.item_code) && (
+                          <Check className="w-4 h-4 text-primary ml-auto" />
+                        )}
+                      </div>
+                      <span className="text-sm font-medium block">{extra.display_name}</span>
+                      <span className="text-xs text-primary">{formatPrice(extra.price_ars)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Address with Google Places Autocomplete */}
               <div className="space-y-2">
@@ -493,56 +560,43 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                     />
                   </div>
                 </div>
-              </div>
 
-              {/* Notes */}
-              <div className="space-y-2">
-                <Label className="text-base font-semibold">Notas (opcional)</Label>
                 <Textarea
-                  placeholder="Indicaciones especiales, color del auto, etc."
+                  placeholder="Notas adicionales (opcional)"
                   value={formData.notes}
                   onChange={(e) => handleInputChange("notes", e.target.value)}
                   rows={2}
                 />
               </div>
 
-              {/* WhatsApp opt-in */}
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/30 border border-border">
-                <input
-                  type="checkbox"
-                  id="whatsapp-optin"
-                  checked={whatsappOptIn}
-                  onChange={(e) => setWhatsappOptIn(e.target.checked)}
-                  className="mt-1"
+              {/* Opt-ins */}
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="whatsapp"
+                    checked={whatsappOptIn}
+                    onCheckedChange={(checked) => setWhatsappOptIn(checked === true)}
+                  />
+                  <label htmlFor="whatsapp" className="text-sm text-muted-foreground">
+                    Recibir recordatorios por WhatsApp
+                  </label>
+                </div>
+
+                <KipperOptIn
+                  checked={kipperOptIn}
+                  onCheckedChange={setKipperOptIn}
                 />
-                <label htmlFor="whatsapp-optin" className="text-sm text-muted-foreground cursor-pointer">
-                  <MessageCircle className="w-4 h-4 inline mr-1 text-green-600" />
-                  Quiero recibir confirmación y recordatorios por WhatsApp
-                </label>
               </div>
 
-              {/* Kipper Opt-in */}
-              <KipperOptIn
-                checked={kipperOptIn}
-                onCheckedChange={setKipperOptIn}
-              />
-
-              {/* Subscription Check */}
-              {isCheckingSubscription && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Verificando suscripción...
-                </div>
-              )}
-
+              {/* Subscription Info */}
               {subscriptionInfo && (
                 <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
                   <div className="flex items-center gap-2 mb-2">
                     <Check className="w-5 h-5 text-primary" />
-                    <span className="font-semibold text-foreground">{subscriptionInfo.planName}</span>
+                    <span className="font-semibold text-foreground">Suscripción activa</span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {subscriptionInfo.washesRemaining} lavado(s) disponible(s) este período
+                    {subscriptionInfo.planName} · {subscriptionInfo.washesRemaining} lavados restantes
                   </p>
                 </div>
               )}
@@ -550,76 +604,78 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
               {/* Payment Method */}
               {!subscriptionInfo && (
                 <div className="space-y-3">
-                  <Label className="text-base font-semibold">Forma de pago</Label>
+                  <Label className="text-base font-semibold">Método de pago</Label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setPaymentMethod("transfer")}
-                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      className={`p-3 rounded-xl border-2 text-left transition-all ${
                         paymentMethod === "transfer"
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
                       }`}
                     >
-                      <CreditCard className="w-5 h-5 text-primary mb-2" />
-                      <div className="font-medium text-foreground text-sm">Transferencia</div>
-                      <div className="text-xs text-muted-foreground">Pagar ahora</div>
+                      <CreditCard className={`w-5 h-5 mb-1 ${paymentMethod === "transfer" ? "text-primary" : "text-muted-foreground"}`} />
+                      <div className="font-medium text-sm">Transferencia</div>
+                      <div className="text-xs text-muted-foreground">Te enviamos los datos</div>
                     </button>
                     <button
                       type="button"
                       onClick={() => setPaymentMethod("pay_later")}
-                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      className={`p-3 rounded-xl border-2 text-left transition-all ${
                         paymentMethod === "pay_later"
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
                       }`}
                     >
-                      <Wallet className="w-5 h-5 text-primary mb-2" />
-                      <div className="font-medium text-foreground text-sm">Pagar después</div>
-                      <div className="text-xs text-muted-foreground">Efectivo / MercadoPago</div>
+                      <Wallet className={`w-5 h-5 mb-1 ${paymentMethod === "pay_later" ? "text-primary" : "text-muted-foreground"}`} />
+                      <div className="font-medium text-sm">Pagar después</div>
+                      <div className="text-xs text-muted-foreground">En el lugar</div>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Total */}
-              <div className="p-4 rounded-xl bg-washero-charcoal text-background">
-                <div className="flex justify-between items-center">
-                  <span className="font-display text-lg font-bold">Total</span>
-                  <span className="font-display text-2xl font-black text-primary">
-                    {paymentMethod === "subscription" && subscriptionInfo
-                      ? getAddonsTotal() > 0
-                        ? formatPrice(getAddonsTotal())
-                        : "Incluido"
-                      : formatPrice(getTotalPrice())
-                    }
-                  </span>
+              {/* Price Summary */}
+              <div className="p-4 rounded-xl bg-muted/50">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Servicio base</span>
+                    <span>{formatPrice(getSelectedService()?.price_ars || 0)}</span>
+                  </div>
+                  {(getSelectedVehicleSize()?.price_ars || 0) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Extra vehículo</span>
+                      <span>+{formatPrice(getSelectedVehicleSize()?.price_ars || 0)}</span>
+                    </div>
+                  )}
+                  {getExtrasTotal() > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Extras</span>
+                      <span>+{formatPrice(getExtrasTotal())}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-2 border-t border-border font-bold text-lg">
+                    <span>Total</span>
+                    <span className="text-primary">{formatPrice(getTotalPrice())}</span>
+                  </div>
                 </div>
-                {paymentMethod === "subscription" && subscriptionInfo && getAddonsTotal() > 0 && (
-                  <p className="text-sm text-background/70 mt-1">
-                    Servicio base incluido · Extras: {formatPrice(getAddonsTotal())}
-                  </p>
-                )}
               </div>
 
-              {/* Submit */}
+              {/* Submit Button */}
               <Button
-                variant="hero"
-                size="lg"
                 className="w-full"
+                size="lg"
                 onClick={handleSubmit}
                 disabled={!canSubmit() || isSubmitting}
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Confirmando...
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Procesando...
                   </>
                 ) : (
-                  <>
-                    <Check className="w-5 h-5 mr-2" />
-                    Confirmar reserva
-                  </>
+                  "Confirmar reserva"
                 )}
               </Button>
             </>
