@@ -101,16 +101,15 @@ serve(async (req) => {
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   
-  // Provider configuration - default to meta (production)
-  // Production number: +54 9 11 2679 9335
-  const whatsappMode = Deno.env.get('WHATSAPP_MODE') || 'meta'; // meta | twilio | stub
+  // Provider configuration - Meta is the primary provider
+  const whatsappMode = Deno.env.get('WHATSAPP_MODE') || 'meta';
   
   // Meta WhatsApp API credentials
   const metaAccessToken = Deno.env.get('META_WA_ACCESS_TOKEN');
   const metaPhoneNumberId = Deno.env.get('META_WA_PHONE_NUMBER_ID');
   const metaConfigured = !!(metaAccessToken && metaPhoneNumberId);
   
-  // Twilio credentials (fallback)
+  // Twilio credentials (fallback only)
   const twilioSid = Deno.env.get('TWILIO_ACCOUNT_SID');
   const twilioAuth = Deno.env.get('TWILIO_AUTH_TOKEN');
   const twilioWhatsappFrom = Deno.env.get('TWILIO_WHATSAPP_NUMBER');
@@ -119,6 +118,8 @@ serve(async (req) => {
   console.log('[admin-whatsapp-send] Config:', {
     whatsappMode,
     metaConfigured,
+    metaPhoneNumberId: metaPhoneNumberId ? `${metaPhoneNumberId.substring(0, 8)}...` : 'NOT SET',
+    metaAccessToken: metaAccessToken ? 'SET (hidden)' : 'NOT SET',
     twilioConfigured,
   });
 
@@ -241,9 +242,9 @@ serve(async (req) => {
     let provider = 'none';
 
     // ============================================================
-    // TRY META CLOUD API FIRST (if mode is meta or auto)
+    // SEND VIA META CLOUD API (primary provider)
     // ============================================================
-    if ((whatsappMode === 'meta' || !twilioConfigured) && metaConfigured) {
+    if (metaConfigured) {
       provider = 'meta';
       try {
         let metaPayload: any;
@@ -260,6 +261,7 @@ serve(async (req) => {
               components: template_params || [],
             },
           };
+          console.log('[admin-whatsapp-send] Sending template:', template_name, 'to:', phoneForMeta);
         } else {
           // Send text message
           metaPayload = {
@@ -270,9 +272,14 @@ serve(async (req) => {
               body: messageBody,
             },
           };
+          console.log('[admin-whatsapp-send] Sending text to:', phoneForMeta);
         }
 
-        console.log('[admin-whatsapp-send] Sending via Meta API to:', phoneForMeta);
+        console.log('[admin-whatsapp-send] Meta API call:', {
+          url: `https://graph.facebook.com/v20.0/${metaPhoneNumberId}/messages`,
+          type: metaPayload.type,
+          template: metaPayload.template?.name,
+        });
 
         const metaResponse = await fetch(
           `https://graph.facebook.com/v20.0/${metaPhoneNumberId}/messages`,
@@ -287,30 +294,35 @@ serve(async (req) => {
         );
 
         const metaResult = await metaResponse.json();
-        console.log('[admin-whatsapp-send] Meta response:', metaResponse.status);
+        console.log('[admin-whatsapp-send] Meta response:', {
+          status: metaResponse.status,
+          ok: metaResponse.ok,
+          messageId: metaResult.messages?.[0]?.id,
+          error: metaResult.error,
+        });
 
         if (metaResponse.ok && metaResult.messages?.[0]?.id) {
           externalMessageId = metaResult.messages[0].id;
           finalStatus = 'sent';
           stub = false;
-          console.log('[admin-whatsapp-send] Meta success:', externalMessageId);
+          console.log('[admin-whatsapp-send] SUCCESS - Message ID:', externalMessageId);
         } else {
           const errorMsg = metaResult.error?.message || 'Meta API error';
           const errorCode = metaResult.error?.code || metaResponse.status;
           sendError = `META_${errorCode}: ${errorMsg}`;
           finalStatus = 'failed';
-          console.error('[admin-whatsapp-send] Meta error:', metaResult);
+          console.error('[admin-whatsapp-send] FAILED:', JSON.stringify(metaResult));
         }
       } catch (err: any) {
         sendError = `META_ERROR: ${err.message}`;
         finalStatus = 'failed';
-        console.error('[admin-whatsapp-send] Meta exception:', err);
+        console.error('[admin-whatsapp-send] Exception:', err.message);
       }
     }
     // ============================================================
-    // FALLBACK TO TWILIO (if Meta failed or mode is twilio)
+    // FALLBACK TO TWILIO (only if Meta is not configured)
     // ============================================================
-    else if ((whatsappMode === 'twilio' || !metaConfigured) && twilioConfigured) {
+    else if (twilioConfigured && whatsappMode === 'twilio') {
       provider = 'twilio';
       try {
         const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
@@ -347,18 +359,23 @@ serve(async (req) => {
       } catch (err: any) {
         sendError = `TWILIO_ERROR: ${err.message}`;
         finalStatus = 'failed';
-        console.error('[admin-whatsapp-send] Twilio exception:', err);
+        console.error('[admin-whatsapp-send] Twilio exception:', err.message);
       }
     }
     // ============================================================
-    // NO PROVIDER CONFIGURED - STUB MODE
+    // NO PROVIDER CONFIGURED
     // ============================================================
     else {
-      provider = 'stub';
+      provider = 'none';
       stub = true;
-      sendError = 'NO_PROVIDER_CONFIGURED';
-      finalStatus = 'sent'; // Mark as sent for UI purposes
-      console.log('[admin-whatsapp-send] Stub mode - no provider configured');
+      
+      const missing = [];
+      if (!metaAccessToken) missing.push('META_WA_ACCESS_TOKEN');
+      if (!metaPhoneNumberId) missing.push('META_WA_PHONE_NUMBER_ID');
+      
+      sendError = `NO_PROVIDER_CONFIGURED: Missing ${missing.join(', ')}`;
+      finalStatus = 'failed';
+      console.error('[admin-whatsapp-send] No provider configured. Missing:', missing);
     }
 
     // Update message with final status
