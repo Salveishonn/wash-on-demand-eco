@@ -44,12 +44,22 @@ import { es } from "date-fns/locale";
 interface Subscription {
   id: string;
   plan_id: string;
+  plan_code: string | null;
   status: string;
-  washes_remaining: number | null;
-  washes_used_this_month: number | null;
-  next_wash_at: string | null;
-  payment_status: string | null;
-  start_date: string | null;
+  washes_remaining: number;
+  washes_used_in_cycle: number;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  included_service: string | null;
+  included_vehicle_size: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  subscription_plans?: {
+    name: string;
+    washes_per_month: number;
+    price_cents: number;
+  };
 }
 
 interface UserCar {
@@ -168,10 +178,17 @@ export default function Dashboard() {
         .single();
       setProfile(profileData);
 
-      // Fetch subscription
+      // Fetch subscription from canonical `subscriptions` table
       const { data: subData } = await supabase
-        .from("user_managed_subscriptions")
-        .select("*")
+        .from("subscriptions")
+        .select(`
+          *,
+          subscription_plans (
+            name,
+            washes_per_month,
+            price_cents
+          )
+        `)
         .eq("user_id", userId)
         .in("status", ["active", "paused", "pending"])
         .order("created_at", { ascending: false })
@@ -243,10 +260,14 @@ export default function Dashboard() {
     const newStatus = subscription.status === "paused" ? "active" : "paused";
 
     try {
-      const { error } = await supabase
-        .from("user_managed_subscriptions")
-        .update({ status: newStatus })
-        .eq("id", subscription.id);
+      // Use edge function to update status properly
+      const { data, error } = await supabase.functions.invoke("admin-set-subscription-status", {
+        body: {
+          subscription_id: subscription.id,
+          status: newStatus,
+        },
+      });
+      if (error || !data?.success) throw error || new Error(data?.error);
 
       if (error) throw error;
 
@@ -414,7 +435,16 @@ export default function Dashboard() {
     return "Usuario";
   };
 
-  const planInfo = subscription ? PLAN_INFO[subscription.plan_id] : null;
+  // Use plan_code for lookup, or fall back to subscription_plans data
+  const planCode = subscription?.plan_code || "";
+  const planInfo = subscription ? (PLAN_INFO[planCode] || {
+    name: subscription.subscription_plans?.name || "Plan",
+    washes: subscription.subscription_plans?.washes_per_month || 0,
+    price: subscription.subscription_plans?.price_cents 
+      ? `$${Math.round(subscription.subscription_plans.price_cents / 100).toLocaleString("es-AR")}`
+      : "N/A",
+    serviceIncluded: subscription.included_service === "complete" ? "Lavado Completo" : "Lavado Básico",
+  }) : null;
   const washesRemaining = subscription?.washes_remaining ?? planInfo?.washes ?? 0;
 
   if (isLoading) {
@@ -549,7 +579,7 @@ export default function Dashboard() {
                       </div>
                       <div className="p-4 bg-muted/50 rounded-xl text-center">
                         <p className="text-2xl font-bold text-foreground">
-                          {subscription.washes_used_this_month || 0}
+                          {subscription.washes_used_in_cycle || 0}
                         </p>
                         <p className="text-sm text-muted-foreground">Usados este mes</p>
                       </div>
@@ -1073,10 +1103,10 @@ export default function Dashboard() {
                 <SubscriptionCalendarScheduler
                   subscription={{
                     id: subscription.id,
-                    plan_id: subscription.plan_id,
+                    plan_id: subscription.plan_code || subscription.plan_id,
                     status: subscription.status,
                     washes_remaining: subscription.washes_remaining,
-                    washes_used_this_month: subscription.washes_used_this_month,
+                    washes_used_this_month: subscription.washes_used_in_cycle,
                   }}
                   cars={cars}
                   addresses={addresses}
