@@ -432,21 +432,8 @@ export function SubscriptionWashBookingModal({
         console.error("[SubscriptionWashBookingModal] Failed to update subscriptions usage:", usageError);
       }
 
-      // Update subscription usage (dashboard table)
-      const newUsed = (subscription.washes_used_this_month || 0) + 1;
-      const newRemaining = Math.max((subscription.washes_remaining ?? washesPerMonth) - 1, 0);
-
-      const { error: updateError } = await supabase
-        .from("user_managed_subscriptions")
-        .update({
-          washes_used_this_month: newUsed,
-          washes_remaining: newRemaining,
-        })
-        .eq("id", subscription.id);
-
-      if (updateError) {
-        console.error("Failed to update subscription usage:", updateError);
-      }
+      // Note: washes usage already updated on subscriptions table above
+      // No need to update user_managed_subscriptions anymore
 
       toast({
         title: "¡Lavado agendado!",

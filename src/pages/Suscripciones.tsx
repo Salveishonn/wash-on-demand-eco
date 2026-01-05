@@ -84,23 +84,8 @@ export default function Suscripciones() {
     try {
       const isPayLater = paymentMethod === "pay_later" || !PAYMENTS_ENABLED;
 
-      // Create subscription in user_managed_subscriptions
+      // Create subscription in canonical `subscriptions` table ONLY
       const { data: subscription, error } = await supabase
-        .from("user_managed_subscriptions")
-        .insert({
-          user_id: user.id,
-          plan_id: plan.item_code,
-          status: isPayLater ? "pending" : "active",
-          washes_remaining: plan.metadata.washes_per_month || 0,
-          payment_status: isPayLater ? "unpaid" : "unknown",
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Also create in subscriptions table for bookings FK
-      const { error: subError } = await supabase
         .from("subscriptions")
         .insert({
           user_id: user.id,
@@ -111,11 +96,14 @@ export default function Suscripciones() {
           washes_remaining: plan.metadata.washes_per_month || 0,
           status: isPayLater ? "pending" : "active",
           pricing_version_id: pricing.versionId,
-        });
+          customer_name: user.user_metadata?.full_name || user.email || null,
+          customer_email: user.email || null,
+          customer_phone: user.user_metadata?.phone || null,
+        })
+        .select()
+        .single();
 
-      if (subError) {
-        console.warn("[Suscripciones] Could not create subscriptions record:", subError);
-      }
+      if (error) throw error;
 
       if (isPayLater) {
         toast({
