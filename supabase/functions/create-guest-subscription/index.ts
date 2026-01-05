@@ -265,6 +265,46 @@ serve(async (req) => {
       },
     });
 
+    // Emit subscription.created webhook event
+    const notifyEventUrl = `${supabaseUrl}/functions/v1/notify-event`;
+    fetch(notifyEventUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        event: "subscription.created",
+        timestamp: new Date().toISOString(),
+        customer_email: data.customerEmail,
+        customer_phone: data.customerPhone,
+        customer_name: data.customerName,
+        subscription_id: subscription.id,
+        amount_ars: Math.round(plan.price_cents / 100),
+        status: "pending",
+        metadata: { 
+          plan_name: plan.name,
+          plan_id: data.planId,
+          payment_method: data.paymentMethod 
+        },
+      }),
+    }).catch(err => console.error("[create-guest-subscription] Notify event error:", err));
+
+    // Generate invoice for the subscription
+    const generateInvoiceUrl = `${supabaseUrl}/functions/v1/generate-invoice`;
+    fetch(generateInvoiceUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        subscription_id: subscription.id,
+        type: "subscription",
+        status: "pending_payment",
+      }),
+    }).catch(err => console.error("[create-guest-subscription] Generate invoice error:", err));
+
     return new Response(
       JSON.stringify({
         success: true,

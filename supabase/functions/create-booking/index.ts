@@ -381,6 +381,55 @@ serve(async (req) => {
       message = "¡Reserva recibida! Te contactaremos para coordinar el pago.";
     }
 
+    // Emit webhook event
+    const notifyEventUrl = `${supabaseUrl}/functions/v1/notify-event`;
+    fetch(notifyEventUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        event: "booking.created",
+        timestamp: new Date().toISOString(),
+        user_id: data.userId,
+        customer_email: data.customerEmail,
+        customer_phone: data.customerPhone,
+        customer_name: data.customerName,
+        booking_id: booking.id,
+        amount_ars: data.totalPriceArs || Math.round(totalPriceCents / 100),
+        status: bookingStatus,
+        metadata: { 
+          payment_method: paymentMethodValue,
+          is_subscription: isSubscription,
+          is_transfer: isTransfer
+        },
+      }),
+    }).catch(err => console.error("[create-booking] Notify event error:", err));
+
+    // Emit payment_required event if transfer booking
+    if (isTransfer && paymentIntent) {
+      fetch(notifyEventUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({
+          event: "booking.payment_required",
+          timestamp: new Date().toISOString(),
+          user_id: data.userId,
+          customer_email: data.customerEmail,
+          customer_phone: data.customerPhone,
+          customer_name: data.customerName,
+          booking_id: booking.id,
+          amount_ars: data.totalPriceArs || Math.round(totalPriceCents / 100),
+          status: "pending",
+          metadata: { payment_url: paymentUrl },
+        }),
+      }).catch(err => console.error("[create-booking] Payment required event error:", err));
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 

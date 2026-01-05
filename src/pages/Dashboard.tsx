@@ -82,6 +82,16 @@ interface Booking {
   is_subscription_booking: boolean | null;
 }
 
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  status: string;
+  amount_ars: number;
+  issued_at: string;
+  paid_at: string | null;
+  pdf_url: string | null;
+}
+
 interface Profile {
   full_name: string | null;
   email: string | null;
@@ -106,6 +116,7 @@ export default function Dashboard() {
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [pastBookings, setPastBookings] = useState<Booking[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
 
   // Modal states
@@ -205,6 +216,15 @@ export default function Dashboard() {
         .order("booking_date", { ascending: false })
         .limit(20);
       setPastBookings(pastData || []);
+
+      // Fetch invoices
+      const { data: invoicesData } = await supabase
+        .from("invoices")
+        .select("id, invoice_number, status, amount_ars, issued_at, paid_at, pdf_url")
+        .eq("user_id", userId)
+        .order("issued_at", { ascending: false })
+        .limit(50);
+      setInvoices((invoicesData as Invoice[]) || []);
     } catch (error) {
       console.error("Error fetching user data:", error);
     } finally {
@@ -832,36 +852,52 @@ export default function Dashboard() {
                   Facturas
                 </h2>
 
-                {pastBookings.filter(b => b.total_cents && !b.is_subscription_booking).length > 0 ? (
+                {invoices.length > 0 ? (
                   <div className="space-y-3">
-                    {pastBookings
-                      .filter(b => b.total_cents && !b.is_subscription_booking)
-                      .map((booking) => (
-                        <div
-                          key={booking.id}
-                          className="flex items-center justify-between p-4 bg-muted/30 rounded-xl"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                              <FileText className="w-5 h-5 text-muted-foreground" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-foreground">{booking.service_name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {format(new Date(`${booking.booking_date}T${booking.booking_time}`), "d MMM yyyy", { locale: es })}
-                              </p>
-                            </div>
+                    {invoices.map((invoice) => (
+                      <div
+                        key={invoice.id}
+                        className="flex items-center justify-between p-4 bg-muted/30 rounded-xl"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                            <FileText className="w-5 h-5 text-muted-foreground" />
                           </div>
-                          <div className="flex items-center gap-3">
-                            <p className="font-medium text-foreground">
-                              ${(booking.total_cents! / 100).toLocaleString("es-AR")}
+                          <div>
+                            <p className="font-medium text-foreground">{invoice.invoice_number}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {format(new Date(invoice.issued_at), "d MMM yyyy", { locale: es })}
                             </p>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" disabled>
-                              <Download className="w-4 h-4" />
-                            </Button>
                           </div>
                         </div>
-                      ))}
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="font-medium text-foreground">
+                              ${invoice.amount_ars.toLocaleString("es-AR")}
+                            </p>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                              invoice.status === "paid" 
+                                ? "bg-green-100 text-green-800" 
+                                : invoice.status === "void"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}>
+                              {invoice.status === "paid" ? "Pagado" : invoice.status === "void" ? "Anulado" : "Pendiente"}
+                            </span>
+                          </div>
+                          {invoice.pdf_url && (
+                            <a 
+                              href={invoice.pdf_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
+                            >
+                              <Download className="w-4 h-4 text-primary" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">

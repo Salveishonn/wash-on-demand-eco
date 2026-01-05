@@ -185,7 +185,32 @@ export function SubscriptionWashBookingModal({
     );
   }
 
-  if (subscription.status !== "active" && subscription.status !== "pending") {
+  if (subscription.status === "pending") {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="w-full max-w-md bg-background rounded-2xl shadow-xl border border-border p-6 text-center"
+        >
+          <Clock className="w-12 h-12 mx-auto mb-4 text-yellow-500" />
+          <h2 className="font-display text-xl font-bold mb-2">Pendiente de aprobación</h2>
+          <p className="text-muted-foreground mb-6">
+            Tu suscripción está siendo revisada por nuestro equipo. Te contactaremos pronto para coordinar el pago y activarla.
+          </p>
+          <Button onClick={onClose}>Entendido</Button>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  if (subscription.status !== "active") {
     return (
       <motion.div
         initial={{ opacity: 0 }}

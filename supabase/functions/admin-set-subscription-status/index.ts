@@ -101,6 +101,41 @@ serve(async (req) => {
       },
     });
 
+    // Emit webhook event based on status change
+    const notifyEventUrl = `${supabaseUrl}/functions/v1/notify-event`;
+    
+    // Determine event type
+    let eventType: string | null = null;
+    if (status === "active" && oldStatus === "pending") {
+      eventType = "subscription.approved";
+    } else if (status === "cancelled" && oldStatus === "pending") {
+      eventType = "subscription.declined";
+    }
+    
+    if (eventType) {
+      fetch(notifyEventUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({
+          event: eventType,
+          timestamp: new Date().toISOString(),
+          user_id: subscription.user_id,
+          customer_email: subscription.customer_email,
+          customer_phone: subscription.customer_phone,
+          customer_name: subscription.customer_name,
+          subscription_id,
+          status,
+          metadata: { 
+            plan_name: plan?.name,
+            plan_code: subscription.plan_code
+          },
+        }),
+      }).catch(err => console.error("[admin-set-subscription-status] Notify event error:", err));
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
