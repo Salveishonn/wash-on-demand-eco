@@ -24,6 +24,7 @@ import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
 import { SubscriptionsTab } from '@/components/admin/SubscriptionsTab';
 import { CalendarTab } from '@/components/admin/CalendarTab';
 import { FinanzasTab } from '@/components/admin/FinanzasTab';
+import { FacturasTab } from '@/components/admin/FacturasTab';
 import { MessagesTab } from '@/components/admin/MessagesTab';
 import { DisponibilidadTab } from '@/components/admin/DisponibilidadTab';
 import { WhatsAppSettingsTab } from '@/components/admin/WhatsAppSettingsTab';
@@ -1114,6 +1115,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             onRefresh={fetchData} 
           />
         )}
+
+        {/* Facturas Tab */}
+        {activeTab === 'facturas' && <FacturasTab />}
 
         {/* Mensajes Tab */}
         {activeTab === 'mensajes' && <MessagesTab />}

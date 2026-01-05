@@ -79,11 +79,12 @@ const SUBSCRIPTION_STATUSES = {
 } as const;
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'Pendiente',
+  pending: 'Pendiente Aprobación',
   active: 'Activa',
   paused: 'Pausada',
   cancelled: 'Cancelada',
   payment_failed: 'Pago fallido',
+  declined: 'Rechazada',
 };
 
 const EVENT_TYPE_LABELS: Record<string, string> = {

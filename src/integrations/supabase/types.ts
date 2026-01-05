@@ -379,6 +379,76 @@ export type Database = {
         }
         Relationships: []
       }
+      invoices: {
+        Row: {
+          amount_ars: number
+          booking_id: string | null
+          created_at: string
+          id: string
+          invoice_number: string
+          issued_at: string
+          metadata: Json
+          paid_at: string | null
+          pdf_url: string | null
+          status: string
+          subscription_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          amount_ars: number
+          booking_id?: string | null
+          created_at?: string
+          id?: string
+          invoice_number: string
+          issued_at?: string
+          metadata?: Json
+          paid_at?: string | null
+          pdf_url?: string | null
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          amount_ars?: number
+          booking_id?: string | null
+          created_at?: string
+          id?: string
+          invoice_number?: string
+          issued_at?: string
+          metadata?: Json
+          paid_at?: string | null
+          pdf_url?: string | null
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_bookings_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kipper_leads: {
         Row: {
           benefit_type: string | null
@@ -1008,6 +1078,9 @@ export type Database = {
       }
       subscriptions: {
         Row: {
+          admin_decision_at: string | null
+          admin_decision_by: string | null
+          admin_decision_reason: string | null
           created_at: string
           current_period_end: string | null
           current_period_start: string | null
@@ -1032,6 +1105,9 @@ export type Database = {
           whatsapp_message_status: string | null
         }
         Insert: {
+          admin_decision_at?: string | null
+          admin_decision_by?: string | null
+          admin_decision_reason?: string | null
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
@@ -1056,6 +1132,9 @@ export type Database = {
           whatsapp_message_status?: string | null
         }
         Update: {
+          admin_decision_at?: string | null
+          admin_decision_by?: string | null
+          admin_decision_reason?: string | null
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
@@ -1333,6 +1412,39 @@ export type Database = {
           name?: string | null
           phone?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      webhook_events: {
+        Row: {
+          attempts: number
+          created_at: string
+          delivered: boolean
+          delivered_at: string | null
+          error: string | null
+          event_type: string
+          id: string
+          payload: Json
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          delivered?: boolean
+          delivered_at?: string | null
+          error?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          delivered?: boolean
+          delivered_at?: string | null
+          error?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
         }
         Relationships: []
       }
@@ -1687,6 +1799,7 @@ export type Database = {
       }
     }
     Functions: {
+      generate_invoice_number: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
