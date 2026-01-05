@@ -27,6 +27,7 @@ import { FinanzasTab } from '@/components/admin/FinanzasTab';
 import { MessagesTab } from '@/components/admin/MessagesTab';
 import { DisponibilidadTab } from '@/components/admin/DisponibilidadTab';
 import { WhatsAppSettingsTab } from '@/components/admin/WhatsAppSettingsTab';
+import { PricingTab } from '@/components/admin/PricingTab';
 import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { Button } from '@/components/ui/button';
@@ -1119,6 +1120,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* Disponibilidad Tab */}
         {activeTab === 'disponibilidad' && <DisponibilidadTab />}
+
+        {/* Pricing Tab */}
+        {activeTab === 'pricing' && <PricingTab />}
 
         {/* WhatsApp Config Tab */}
         {activeTab === 'whatsapp-config' && <WhatsAppSettingsTab />}
