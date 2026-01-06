@@ -82,13 +82,21 @@ export default function Suscripciones() {
     setIsSubmitting(true);
 
     try {
-      const isPayLater = paymentMethod === "pay_later" || !PAYMENTS_ENABLED;
+      // Map pricing item_code to subscription_plans.name
+      const planNameMap: Record<string, string> = {
+        basic: "Plan Básico",
+        basico: "Plan Básico",
+        confort: "Plan Confort",
+        premium: "Plan Premium",
+      };
+      
+      const planNameToSearch = planNameMap[selectedPlan.toLowerCase()] || `Plan ${selectedPlan}`;
 
       // Get the subscription_plans row to use the proper plan_id FK
       const { data: planRow, error: planError } = await supabase
         .from("subscription_plans")
-        .select("id, washes_per_month")
-        .ilike("name", `%${selectedPlan}%`)
+        .select("id, washes_per_month, name")
+        .eq("name", planNameToSearch)
         .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -99,10 +107,12 @@ export default function Suscripciones() {
       // Use matching plan_id or fall back to first active plan
       const planIdToUse = planRow?.id;
       if (!planIdToUse) {
+        console.error("[Suscripciones] Plan not found:", { selectedPlan, planNameToSearch });
         throw new Error("No se encontró el plan seleccionado. Intenta nuevamente.");
       }
 
       // Create subscription in canonical `subscriptions` table ONLY
+      // Start with pending status and 0 credits - admin approval grants credits
       const { data: subscription, error } = await supabase
         .from("subscriptions")
         .insert({
@@ -111,8 +121,9 @@ export default function Suscripciones() {
           plan_code: plan.item_code,
           included_service: plan.metadata.included_service,
           included_vehicle_size: plan.metadata.included_vehicle_size,
-          washes_remaining: plan.metadata.washes_per_month || 0,
-          status: isPayLater ? "pending" : "active",
+          washes_remaining: 0, // Credits granted on admin approval
+          washes_used_in_cycle: 0,
+          status: "pending", // Always start as pending - admin approves
           pricing_version_id: pricing.versionId,
           customer_name: user.user_metadata?.full_name || user.email || null,
           customer_email: user.email || null,
@@ -123,21 +134,13 @@ export default function Suscripciones() {
 
       if (error) throw error;
 
-      if (isPayLater) {
-        toast({
-          title: "¡Solicitud recibida!",
-          description: "Te contactaremos para activar tu suscripción.",
-        });
-        setIsCheckoutOpen(false);
-        navigate(`/suscripcion-confirmada?status=pending&plan=${plan.display_name}`);
-      } else {
-        toast({
-          title: "¡Suscripción creada!",
-          description: "Podés ver tu plan en el dashboard.",
-        });
-        setIsCheckoutOpen(false);
-        navigate("/dashboard");
-      }
+      // All new subscriptions start as pending, awaiting admin approval
+      toast({
+        title: "¡Solicitud enviada!",
+        description: "Tu suscripción está pendiente de aprobación. Te contactaremos pronto.",
+      });
+      setIsCheckoutOpen(false);
+      navigate(`/suscripcion-confirmada?status=pending&plan=${encodeURIComponent(plan.display_name)}`);
     } catch (error: any) {
       console.error("[Suscripciones] Error:", error);
       toast({

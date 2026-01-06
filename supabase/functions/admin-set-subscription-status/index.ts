@@ -130,7 +130,8 @@ serve(async (req) => {
           status,
           metadata: { 
             plan_name: plan?.name,
-            plan_code: subscription.plan_code
+            plan_code: subscription.plan_code,
+            washes_per_month: plan?.washes_per_month || 0,
           },
         }),
       }).catch(err => console.error("[admin-set-subscription-status] Notify event error:", err));

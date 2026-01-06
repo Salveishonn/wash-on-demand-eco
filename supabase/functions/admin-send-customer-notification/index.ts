@@ -146,22 +146,30 @@ serve(async (req) => {
 
     let message = '';
     let templateName = '';
+    let templateParams: string[] = [];
     
     switch (type) {
       case 'ON_MY_WAY':
+        // Template: washero_on_the_way_u01 - 2 params: {1} = first name, {2} = address/time info
         message = `${greeting} Soy Washero 🚐. Estamos en camino hacia ${address}. Tu turno es ${dateFormatted} ${booking.booking_time}. Si necesitás reprogramar, respondé este mensaje.`;
-        templateName = 'washero_on_the_way';
+        templateName = 'washero_on_the_way_u01';
+        templateParams = [firstName || 'Cliente', `${dateFormatted} ${booking.booking_time} en ${address}`];
         break;
       case 'BOOKING_CONFIRMED':
+        // Template: washero_booking_confirmed_u01 - 3 params: {1} = name, {2} = date+time, {3} = address
         message = `${greeting} Tu reserva con Washero está confirmada para ${dateFormatted} ${booking.booking_time} en ${address}. ¡Te esperamos!`;
-        templateName = 'washero_booking_confirmed';
+        templateName = 'washero_booking_confirmed_u01';
+        templateParams = [firstName || 'Cliente', `${dateFormatted} ${booking.booking_time}`, address];
         break;
       case 'BOOKING_CANCELLED':
+        // Template: washero_reschedule_request - 1 param: {1} = name
         message = `${greeting} Tu reserva con Washero para ${dateFormatted} ha sido cancelada. Si querés reagendar, visitá washero.online`;
-        templateName = 'washero_booking_cancelled';
+        templateName = 'washero_reschedule_request';
+        templateParams = [firstName || 'Cliente'];
         break;
       default:
         message = `${greeting} Mensaje de Washero sobre tu reserva.`;
+        templateParams = [];
     }
 
     const phoneE164 = normalizePhoneE164(booking.customer_phone);
@@ -217,7 +225,15 @@ serve(async (req) => {
           
           // If outside 24h window, try template
           if (errorCode === 131026 || errorMsg.includes('24 hours')) {
-            console.log('[admin-send-customer-notification] Outside 24h window, trying template...');
+            console.log('[admin-send-customer-notification] Outside 24h window, trying template:', templateName, 'with', templateParams.length, 'params');
+            
+            // Build components only if we have parameters
+            const components = templateParams.length > 0 ? [
+              {
+                type: 'body',
+                parameters: templateParams.map(text => ({ type: 'text', text })),
+              },
+            ] : undefined;
             
             const templatePayload = {
               messaging_product: 'whatsapp',
@@ -226,17 +242,7 @@ serve(async (req) => {
               template: {
                 name: templateName,
                 language: { code: 'es_AR' },
-                components: [
-                  {
-                    type: 'body',
-                    parameters: [
-                      { type: 'text', text: firstName || 'Cliente' },
-                      { type: 'text', text: dateFormatted },
-                      { type: 'text', text: booking.booking_time },
-                      { type: 'text', text: address },
-                    ],
-                  },
-                ],
+                components,
               },
             };
 
