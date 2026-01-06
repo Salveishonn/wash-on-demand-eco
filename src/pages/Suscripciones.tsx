@@ -84,12 +84,30 @@ export default function Suscripciones() {
     try {
       const isPayLater = paymentMethod === "pay_later" || !PAYMENTS_ENABLED;
 
+      // Get the subscription_plans row to use the proper plan_id FK
+      const { data: planRow, error: planError } = await supabase
+        .from("subscription_plans")
+        .select("id, washes_per_month")
+        .ilike("name", `%${selectedPlan}%`)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (planError) throw planError;
+
+      // Use matching plan_id or fall back to first active plan
+      const planIdToUse = planRow?.id;
+      if (!planIdToUse) {
+        throw new Error("No se encontró el plan seleccionado. Intenta nuevamente.");
+      }
+
       // Create subscription in canonical `subscriptions` table ONLY
       const { data: subscription, error } = await supabase
         .from("subscriptions")
         .insert({
           user_id: user.id,
-          plan_id: "00000000-0000-0000-0000-000000000001", // Default plan ref
+          plan_id: planIdToUse,
           plan_code: plan.item_code,
           included_service: plan.metadata.included_service,
           included_vehicle_size: plan.metadata.included_vehicle_size,

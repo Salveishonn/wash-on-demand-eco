@@ -558,7 +558,11 @@ export default function Dashboard() {
                           subscription.status === "active"
                             ? "bg-washero-eco/20 text-washero-eco"
                             : subscription.status === "paused"
+                            ? "bg-orange-100 text-orange-800"
+                            : subscription.status === "pending"
                             ? "bg-yellow-100 text-yellow-800"
+                            : subscription.status === "cancelled"
+                            ? "bg-red-100 text-red-800"
                             : "bg-muted text-muted-foreground"
                         }`}
                       >
@@ -567,7 +571,9 @@ export default function Dashboard() {
                           : subscription.status === "paused"
                           ? "Pausado"
                           : subscription.status === "pending"
-                          ? "Pendiente"
+                          ? "Pendiente de aprobación"
+                          : subscription.status === "cancelled"
+                          ? "Cancelado"
                           : subscription.status}
                       </span>
                     </div>
