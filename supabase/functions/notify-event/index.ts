@@ -53,6 +53,29 @@ serve(async (req) => {
       console.error("[notify-event] Failed to log event:", insertError);
     }
 
+    // === TRIGGER WHATSAPP NOTIFICATIONS FOR KEY EVENTS ===
+    // Queue WhatsApp template messages for subscription.approved
+    if (payload.event === "subscription.approved" && payload.customer_phone) {
+      console.log("[notify-event] Queueing WhatsApp for subscription.approved");
+      
+      // Template: washero_subscription_active - 3 params: {1} = name, {2} = plan name, {3} = washes count
+      const customerName = payload.customer_name?.split(" ")[0] || "Cliente";
+      const planName = (payload.metadata?.plan_name as string) || "Tu plan";
+      const washesCount = (payload.metadata?.washes_per_month as string) || "tus lavados";
+      
+      await supabase.from("whatsapp_outbox").insert({
+        entity_type: "subscription",
+        entity_id: payload.subscription_id,
+        to_phone_e164: payload.customer_phone,
+        template_name: "washero_subscription_active",
+        language_code: "es_AR",
+        template_vars: [customerName, planName, String(washesCount)],
+        status: "queued",
+      });
+      
+      console.log("[notify-event] WhatsApp queued for subscription activation");
+    }
+
     // If N8N_WEBHOOK_URL is not configured, just return success
     if (!n8nWebhookUrl) {
       console.log("[notify-event] N8N_WEBHOOK_URL not configured, skipping external dispatch");
