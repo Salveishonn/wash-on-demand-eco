@@ -1,13 +1,10 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ============================================================
 // ADMIN SEND CUSTOMER NOTIFICATION - Meta Cloud API (Primary)
 // ============================================================
-// Sends customer notifications via Meta WhatsApp Cloud API
-// Twilio is available as fallback only if META is not configured
-// Default: Meta Cloud API
-// Production number: +54 9 11 2679 9335
+// Fixed: Phone normalization, template params, email fallback
 // ============================================================
 
 const corsHeaders = {
@@ -20,28 +17,116 @@ interface NotificationRequest {
   type: 'ON_MY_WAY' | 'BOOKING_CONFIRMED' | 'BOOKING_CANCELLED';
 }
 
-function normalizePhoneForMeta(phone: string): string {
-  // Meta expects phone without + prefix, just digits
-  return phone.replace(/[^0-9]/g, "");
+// =============================================================
+// PHONE NORMALIZATION - Inline for Edge Function compatibility
+// =============================================================
+function normalizePhoneE164(phone: string): string {
+  if (!phone) return '';
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  const hasPlus = cleaned.startsWith('+');
+  if (hasPlus) cleaned = cleaned.substring(1);
+  
+  if (cleaned.startsWith('549') && cleaned.length >= 12) return '+' + cleaned;
+  if (cleaned.startsWith('54') && !cleaned.startsWith('549')) {
+    const rest = cleaned.substring(2);
+    if (rest.startsWith('11') || rest.startsWith('15') || rest.length === 10) {
+      let mobile = rest;
+      if (mobile.startsWith('15')) mobile = mobile.substring(2);
+      return '+549' + mobile;
+    }
+    return '+54' + rest;
+  }
+  if (cleaned.startsWith('15') && cleaned.length >= 8) return '+54911' + cleaned.substring(2);
+  if (cleaned.startsWith('11') && cleaned.length >= 10) return '+549' + cleaned;
+  if (cleaned.startsWith('9') && cleaned.length >= 10) return '+54' + cleaned;
+  if (cleaned.length === 10) return '+549' + cleaned;
+  if (cleaned.length === 8) return '+54911' + cleaned;
+  if (cleaned.length >= 8 && cleaned.length <= 12 && !cleaned.startsWith('54')) return '+54' + cleaned;
+  return '+' + cleaned;
 }
 
-function normalizePhoneE164(phone: string): string {
-  let normalized = phone.replace(/[^0-9]/g, "");
-  // Handle Argentina mobile numbers
-  if (normalized.startsWith("15")) {
-    // Buenos Aires mobile without area code
-    normalized = "5411" + normalized.substring(2);
-  } else if (normalized.length === 10 && !normalized.startsWith("54")) {
-    // Assume Argentina
-    normalized = "54" + normalized;
-  } else if (!normalized.startsWith("54") && normalized.length < 13) {
-    normalized = "54" + normalized;
+function normalizePhoneForMeta(phone: string): string {
+  return normalizePhoneE164(phone).replace(/[^0-9]/g, '');
+}
+
+function validatePhone(phone: string): { valid: boolean; error?: string; forMeta: string } {
+  const forMeta = normalizePhoneForMeta(phone);
+  if (forMeta.length < 10) return { valid: false, error: `Too short: ${forMeta.length} digits`, forMeta };
+  if (forMeta.length > 15) return { valid: false, error: `Too long: ${forMeta.length} digits`, forMeta };
+  if (!forMeta.startsWith('54')) return { valid: false, error: `Invalid country code`, forMeta };
+  return { valid: true, forMeta };
+}
+
+// =============================================================
+// TEMPLATE CONFIG - Must match Meta WhatsApp Manager EXACTLY
+// =============================================================
+const TEMPLATE_CONFIG: Record<string, { paramCount: number }> = {
+  'washero_on_the_way_u01': { paramCount: 2 },
+  'washero_booking_confirmed_u01': { paramCount: 3 },
+  'washero_reschedule_request': { paramCount: 1 },
+};
+
+function sanitizeParams(params: (string | null | undefined)[], expectedCount: number): string[] {
+  const result: string[] = [];
+  for (let i = 0; i < expectedCount; i++) {
+    const value = params[i];
+    result.push(value ? String(value).trim() : 'N/D');
   }
-  return "+" + normalized;
+  return result;
+}
+
+// =============================================================
+// EMAIL FALLBACK
+// =============================================================
+async function sendEmailFallback(options: {
+  to: string;
+  customerName: string;
+  subject: string;
+  message: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const resendApiKey = Deno.env.get('RESEND_API_KEY');
+  const resendFromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'hola@washero.ar';
+  
+  if (!resendApiKey) {
+    return { success: false, error: 'RESEND_API_KEY not configured' };
+  }
+  
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `Washero <${resendFromEmail}>`,
+        to: [options.to],
+        subject: options.subject,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #1a365d;">Washero</h2>
+            <p>Hola ${options.customerName},</p>
+            <p>${options.message}</p>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+            <p style="color: #718096; font-size: 12px;">
+              Este mensaje fue enviado por Washero. Si tenés consultas, respondé a este email.
+            </p>
+          </div>
+        `,
+      }),
+    });
+    
+    if (response.ok) {
+      return { success: true };
+    }
+    const result = await response.json();
+    return { success: false, error: result.message || 'Email send failed' };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -51,27 +136,17 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Meta WhatsApp API credentials (PRIMARY)
+    // Meta WhatsApp API credentials
     const metaAccessToken = Deno.env.get('META_WA_ACCESS_TOKEN');
     const metaPhoneNumberId = Deno.env.get('META_WA_PHONE_NUMBER_ID');
     const metaConfigured = !!(metaAccessToken && metaPhoneNumberId);
 
-    // Twilio credentials (FALLBACK ONLY)
-    const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
-    const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');
-    const twilioWhatsAppNumber = Deno.env.get('TWILIO_WHATSAPP_NUMBER');
-    const twilioConfigured = !!(twilioAccountSid && twilioAuthToken && twilioWhatsAppNumber);
-
-    // Provider mode - default to meta
-    const whatsappMode = Deno.env.get('WHATSAPP_MODE') || 'meta';
-
     console.log('[admin-send-customer-notification] Config:', {
       metaConfigured,
-      twilioConfigured,
-      whatsappMode,
+      metaPhoneNumberId: metaPhoneNumberId ? `${metaPhoneNumberId.substring(0, 8)}...` : 'NOT SET',
     });
 
-    // Get user from auth header
+    // Auth check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
@@ -82,7 +157,6 @@ serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
-
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'Invalid token' }),
@@ -90,33 +164,31 @@ serve(async (req) => {
       );
     }
 
-    // Check if user is admin
-    const { data: roleData, error: roleError } = await supabaseClient
+    // Check admin role
+    const { data: roleData } = await supabaseClient
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
       .eq('role', 'admin')
       .maybeSingle();
 
-    if (roleError || !roleData) {
-      console.error('[admin-send-customer-notification] Admin check failed:', roleError);
+    if (!roleData) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized - Admin access required' }),
+        JSON.stringify({ error: 'Admin access required' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Parse request body
+    // Parse request
     const { booking_id, type } = await req.json() as NotificationRequest;
-
     if (!booking_id || !type) {
       return new Response(
-        JSON.stringify({ error: 'Invalid request: booking_id and type required' }),
+        JSON.stringify({ error: 'booking_id and type required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Fetch booking details
+    // Fetch booking
     const { data: booking, error: bookingError } = await supabaseClient
       .from('bookings')
       .select('id, customer_name, customer_phone, customer_email, address, booking_date, booking_time, service_name')
@@ -124,81 +196,103 @@ serve(async (req) => {
       .single();
 
     if (bookingError || !booking) {
-      console.error('[admin-send-customer-notification] Booking fetch error:', bookingError);
       return new Response(
         JSON.stringify({ error: 'Booking not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Build message based on type
-    const firstName = booking.customer_name?.split(' ')[0] || '';
-    const greeting = firstName ? `Hola ${firstName}!` : 'Hola!';
+    // Build message content
+    const firstName = booking.customer_name?.split(' ')[0] || 'Cliente';
     const address = booking.address || 'tu ubicación';
     
-    // Format date in Spanish
     const dateObj = new Date(booking.booking_date + 'T12:00:00');
     const dateFormatted = dateObj.toLocaleDateString('es-AR', { 
       weekday: 'long', 
       day: 'numeric', 
       month: 'long' 
     });
+    const timeFormatted = booking.booking_time || 'hora confirmada';
 
     let message = '';
     let templateName = '';
-    let templateParams: string[] = [];
+    let rawParams: (string | null)[] = [];
+    let emailSubject = '';
     
     switch (type) {
       case 'ON_MY_WAY':
-        // Template: washero_on_the_way_u01 - 2 params: {1} = first name, {2} = address/time info
-        message = `${greeting} Soy Washero 🚐. Estamos en camino hacia ${address}. Tu turno es ${dateFormatted} ${booking.booking_time}. Si necesitás reprogramar, respondé este mensaje.`;
         templateName = 'washero_on_the_way_u01';
-        templateParams = [firstName || 'Cliente', `${dateFormatted} ${booking.booking_time} en ${address}`];
+        rawParams = [firstName, `${dateFormatted} ${timeFormatted} en ${address}`];
+        message = `Hola ${firstName}! Somos Washero 🚐. Estamos en camino. Tu turno es ${dateFormatted} ${timeFormatted} en ${address}.`;
+        emailSubject = 'Washero: Estamos en camino 🚐';
         break;
       case 'BOOKING_CONFIRMED':
-        // Template: washero_booking_confirmed_u01 - 3 params: {1} = name, {2} = date+time, {3} = address
-        message = `${greeting} Tu reserva con Washero está confirmada para ${dateFormatted} ${booking.booking_time} en ${address}. ¡Te esperamos!`;
         templateName = 'washero_booking_confirmed_u01';
-        templateParams = [firstName || 'Cliente', `${dateFormatted} ${booking.booking_time}`, address];
+        rawParams = [firstName, `${dateFormatted} ${timeFormatted}`, address];
+        message = `Hola ${firstName}! Tu reserva está confirmada para ${dateFormatted} ${timeFormatted} en ${address}. ¡Te esperamos!`;
+        emailSubject = 'Washero: Tu reserva está confirmada ✅';
         break;
       case 'BOOKING_CANCELLED':
-        // Template: washero_reschedule_request - 1 param: {1} = name
-        message = `${greeting} Tu reserva con Washero para ${dateFormatted} ha sido cancelada. Si querés reagendar, visitá washero.online`;
         templateName = 'washero_reschedule_request';
-        templateParams = [firstName || 'Cliente'];
+        rawParams = [firstName];
+        message = `Hola ${firstName}! Tu reserva para ${dateFormatted} ha sido cancelada. Visitá washero.online para reagendar.`;
+        emailSubject = 'Washero: Cambio en tu reserva';
         break;
-      default:
-        message = `${greeting} Mensaje de Washero sobre tu reserva.`;
-        templateParams = [];
     }
 
+    // Validate and normalize phone
+    const phoneValidation = validatePhone(booking.customer_phone);
     const phoneE164 = normalizePhoneE164(booking.customer_phone);
-    const phoneForMeta = normalizePhoneForMeta(phoneE164);
 
-    let channel = 'pending';
-    let providerMessageId: string | null = null;
-    let sendError: string | null = null;
-    let provider = 'none';
+    // Log debug info
+    console.log('[admin-send-customer-notification] Sending:', {
+      booking_id,
+      type,
+      phone: phoneValidation.forMeta,
+      phoneValid: phoneValidation.valid,
+      template: templateName,
+      paramCount: rawParams.length,
+    });
+
+    let whatsappSent = false;
+    let whatsappMessageId: string | null = null;
+    let whatsappError: string | null = null;
+    let emailSent = false;
+    let emailError: string | null = null;
 
     // ============================================================
-    // TRY META CLOUD API FIRST (PRIMARY)
+    // TRY WHATSAPP FIRST
     // ============================================================
-    if (metaConfigured && (whatsappMode === 'meta' || whatsappMode === 'production')) {
-      provider = 'meta';
+    if (metaConfigured && phoneValidation.valid) {
+      const templateConfig = TEMPLATE_CONFIG[templateName];
+      const sanitizedParams = sanitizeParams(rawParams, templateConfig?.paramCount || rawParams.length);
+      
+      // Build components
+      const components = sanitizedParams.length > 0 ? [{
+        type: 'body',
+        parameters: sanitizedParams.map(text => ({ type: 'text', text })),
+      }] : undefined;
+      
+      const requestBody = {
+        messaging_product: 'whatsapp',
+        to: phoneValidation.forMeta,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: 'es_AR' },
+          components,
+        },
+      };
+      
+      console.log('[admin-send-customer-notification] Meta API request:', JSON.stringify({
+        to: phoneValidation.forMeta,
+        template: templateName,
+        language: 'es_AR',
+        params: sanitizedParams,
+      }));
+      
       try {
-        // Send free-form text message (within 24h window should work)
-        const metaPayload = {
-          messaging_product: 'whatsapp',
-          to: phoneForMeta,
-          type: 'text',
-          text: {
-            body: message,
-          },
-        };
-
-        console.log('[admin-send-customer-notification] Sending via Meta to:', phoneForMeta);
-
-        const metaResponse = await fetch(
+        const response = await fetch(
           `https://graph.facebook.com/v20.0/${metaPhoneNumberId}/messages`,
           {
             method: 'POST',
@@ -206,153 +300,97 @@ serve(async (req) => {
               'Authorization': `Bearer ${metaAccessToken}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(metaPayload),
+            body: JSON.stringify(requestBody),
           }
         );
-
-        const metaResult = await metaResponse.json();
-        console.log('[admin-send-customer-notification] Meta response:', metaResponse.status, JSON.stringify(metaResult));
-
-        if (metaResponse.ok && metaResult.messages?.[0]?.id) {
-          providerMessageId = metaResult.messages[0].id;
-          channel = 'whatsapp';
-          console.log('[admin-send-customer-notification] Meta success:', providerMessageId);
-        } else {
-          const errorMsg = metaResult.error?.message || 'Meta API error';
-          const errorCode = metaResult.error?.code || metaResponse.status;
-          sendError = `META_${errorCode}: ${errorMsg}`;
-          console.error('[admin-send-customer-notification] Meta error:', metaResult);
-          
-          // If outside 24h window, try template
-          if (errorCode === 131026 || errorMsg.includes('24 hours')) {
-            console.log('[admin-send-customer-notification] Outside 24h window, trying template:', templateName, 'with', templateParams.length, 'params');
-            
-            // Build components only if we have parameters
-            const components = templateParams.length > 0 ? [
-              {
-                type: 'body',
-                parameters: templateParams.map(text => ({ type: 'text', text })),
-              },
-            ] : undefined;
-            
-            const templatePayload = {
-              messaging_product: 'whatsapp',
-              to: phoneForMeta,
-              type: 'template',
-              template: {
-                name: templateName,
-                language: { code: 'es_AR' },
-                components,
-              },
-            };
-
-            const templateResponse = await fetch(
-              `https://graph.facebook.com/v20.0/${metaPhoneNumberId}/messages`,
-              {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${metaAccessToken}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(templatePayload),
-              }
-            );
-
-            const templateResult = await templateResponse.json();
-            
-            if (templateResponse.ok && templateResult.messages?.[0]?.id) {
-              providerMessageId = templateResult.messages[0].id;
-              channel = 'whatsapp';
-              sendError = null;
-              console.log('[admin-send-customer-notification] Template success:', providerMessageId);
-            } else {
-              sendError = `META_TEMPLATE: ${templateResult.error?.message || 'Template failed'}`;
-              console.error('[admin-send-customer-notification] Template error:', templateResult);
-            }
-          }
-        }
-      } catch (err: any) {
-        sendError = `META_ERROR: ${err.message}`;
-        console.error('[admin-send-customer-notification] Meta exception:', err);
-      }
-    }
-    // ============================================================
-    // FALLBACK TO TWILIO (only if Meta not configured)
-    // ============================================================
-    else if (twilioConfigured && whatsappMode === 'twilio') {
-      provider = 'twilio';
-      try {
-        const toNumber = `whatsapp:${phoneE164}`;
-        const fromNumber = twilioWhatsAppNumber!.startsWith('whatsapp:') 
-          ? twilioWhatsAppNumber 
-          : `whatsapp:${twilioWhatsAppNumber}`;
-
-        const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
-        const auth = btoa(`${twilioAccountSid}:${twilioAuthToken}`);
-
-        const twilioResponse = await fetch(twilioUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Basic ${auth}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            To: toNumber,
-            From: fromNumber!,
-            Body: message,
-          }),
-        });
-
-        const twilioResult = await twilioResponse.json();
         
-        if (twilioResponse.ok && twilioResult.sid) {
-          channel = 'whatsapp';
-          providerMessageId = twilioResult.sid;
-          console.log('[admin-send-customer-notification] Twilio success:', providerMessageId);
+        const result = await response.json();
+        
+        console.log('[admin-send-customer-notification] Meta API response:', {
+          status: response.status,
+          ok: response.ok,
+          messageId: result.messages?.[0]?.id,
+          error: result.error,
+        });
+        
+        if (response.ok && result.messages?.[0]?.id) {
+          whatsappSent = true;
+          whatsappMessageId = result.messages[0].id;
+          console.log('[admin-send-customer-notification] WhatsApp SUCCESS:', whatsappMessageId);
         } else {
-          console.error('[admin-send-customer-notification] Twilio error:', twilioResult);
-          sendError = twilioResult.message || 'Failed to send WhatsApp';
+          const errorCode = result.error?.code || response.status;
+          const errorMsg = result.error?.message || 'Meta API error';
+          const errorData = result.error?.error_data;
+          
+          whatsappError = `META ${errorCode}: ${errorMsg}`;
+          
+          console.error('[admin-send-customer-notification] WhatsApp FAILED:', {
+            code: errorCode,
+            message: errorMsg,
+            error_data: errorData,
+            template: templateName,
+            params: sanitizedParams,
+          });
         }
-      } catch (twilioError: any) {
-        console.error('[admin-send-customer-notification] Twilio exception:', twilioError);
-        sendError = String(twilioError);
+      } catch (err: unknown) {
+        whatsappError = `Network error: ${err instanceof Error ? err.message : String(err)}`;
+        console.error('[admin-send-customer-notification] WhatsApp exception:', whatsappError);
       }
+    } else if (!phoneValidation.valid) {
+      whatsappError = `Invalid phone: ${phoneValidation.error}`;
+      console.warn('[admin-send-customer-notification] Phone validation failed:', phoneValidation.error);
     } else {
-      console.log('[admin-send-customer-notification] No WhatsApp provider configured, storing message');
-      provider = 'stub';
+      whatsappError = 'Meta WhatsApp not configured';
     }
 
-    // Store in outgoing_messages table
-    const { data: insertedMessage, error: insertError } = await supabaseClient
-      .from('outgoing_messages')
-      .insert({
-        booking_id: booking.id,
-        customer_phone: booking.customer_phone,
-        type,
-        channel: channel === 'whatsapp' ? 'whatsapp' : 'pending',
-        message,
-        status: channel === 'whatsapp' ? 'sent' : 'queued',
-        provider_message_id: providerMessageId,
-        error: sendError,
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error('[admin-send-customer-notification] Failed to store message:', insertError);
+    // ============================================================
+    // EMAIL FALLBACK if WhatsApp failed
+    // ============================================================
+    if (!whatsappSent && booking.customer_email) {
+      console.log('[admin-send-customer-notification] WhatsApp failed, trying email fallback...');
+      
+      const emailResult = await sendEmailFallback({
+        to: booking.customer_email,
+        customerName: firstName,
+        subject: emailSubject,
+        message: message,
+      });
+      
+      emailSent = emailResult.success;
+      emailError = emailResult.error || null;
+      
+      console.log('[admin-send-customer-notification] Email fallback result:', {
+        sent: emailSent,
+        error: emailError,
+      });
     }
 
-    // Also store in whatsapp_messages for conversation history
-    if (channel === 'whatsapp') {
-      // Find or create conversation
-      const { data: existingConv } = await supabaseClient
+    // ============================================================
+    // STORE IN DATABASE
+    // ============================================================
+    const channel = whatsappSent ? 'whatsapp' : (emailSent ? 'email' : 'failed');
+    
+    // Store in outgoing_messages
+    await supabaseClient.from('outgoing_messages').insert({
+      booking_id: booking.id,
+      customer_phone: booking.customer_phone,
+      type,
+      channel,
+      message,
+      status: whatsappSent || emailSent ? 'sent' : 'failed',
+      provider_message_id: whatsappMessageId,
+      error: whatsappError || emailError,
+    });
+
+    // Store in whatsapp_messages if sent
+    if (whatsappSent) {
+      const { data: conv } = await supabaseClient
         .from('whatsapp_conversations')
         .select('id')
         .eq('customer_phone_e164', phoneE164)
         .maybeSingle();
 
-      let convId = existingConv?.id;
-      
+      let convId = conv?.id;
       if (!convId) {
         const { data: newConv } = await supabaseClient
           .from('whatsapp_conversations')
@@ -368,46 +406,44 @@ serve(async (req) => {
       }
 
       if (convId) {
-        await supabaseClient
-          .from('whatsapp_messages')
-          .insert({
-            conversation_id: convId,
-            direction: 'outbound',
-            body: message,
-            status: 'sent',
-            twilio_message_sid: providerMessageId,
-            created_by: user.id,
-          });
-
-        // Update conversation
-        await supabaseClient
-          .from('whatsapp_conversations')
-          .update({
-            last_message_preview: message.substring(0, 100),
-            last_message_at: new Date().toISOString(),
-          })
-          .eq('id', convId);
+        await supabaseClient.from('whatsapp_messages').insert({
+          conversation_id: convId,
+          direction: 'outbound',
+          body: message,
+          status: 'sent',
+          twilio_message_sid: whatsappMessageId,
+          created_by: user.id,
+        });
       }
     }
 
-    console.log('[admin-send-customer-notification] Processed:', {
-      booking_id,
-      type,
-      channel,
-      provider,
-      sent: channel === 'whatsapp',
+    // Log to notification_logs for Admin visibility
+    await supabaseClient.from('notification_logs').insert({
+      booking_id: booking.id,
+      notification_type: whatsappSent ? 'whatsapp' : 'email',
+      recipient: whatsappSent ? phoneE164 : booking.customer_email,
+      status: whatsappSent || emailSent ? 'sent' : 'failed',
+      message_content: message,
+      message_type: type,
+      external_id: whatsappMessageId,
+      error_message: whatsappError || emailError,
     });
 
     return new Response(
       JSON.stringify({
-        ok: channel === 'whatsapp' || provider === 'stub',
+        ok: whatsappSent || emailSent,
         channel,
-        provider,
+        whatsapp: {
+          sent: whatsappSent,
+          message_id: whatsappMessageId,
+          error: whatsappError,
+        },
+        email: {
+          sent: emailSent,
+          error: emailError,
+          fallback: !whatsappSent && emailSent,
+        },
         message,
-        stored: !!insertedMessage,
-        sent: channel === 'whatsapp',
-        wa_message_id: providerMessageId,
-        error: sendError,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
