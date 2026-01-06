@@ -29,7 +29,8 @@ interface UserAddress {
 
 interface SubscriptionInfo {
   id: string;
-  plan_id: string;
+  plan_id: string; // Can be plan_code (e.g., 'basic') or UUID
+  plan_code?: string;
   status: string;
   washes_remaining: number | null;
   washes_used_this_month: number | null;
@@ -69,8 +70,9 @@ export function SubscriptionWashBookingModal({
   // Addons
   const { addons, selectedAddons, toggleAddon, isSelected, getAddonsTotal } = useServiceAddons();
 
-  // Resolve plan from pricing
-  const plan = pricing ? getPlanByCode(pricing, subscription.plan_id) : null;
+  // Resolve plan from pricing - try plan_code first, then plan_id
+  const planCode = subscription.plan_code || subscription.plan_id;
+  const plan = pricing ? getPlanByCode(pricing, planCode) : null;
   const planName = plan?.display_name || "Plan";
   const includedService = plan?.metadata.included_service 
     ? getServiceByCode(pricing, plan.metadata.included_service) 

@@ -79,7 +79,8 @@ const SUBSCRIPTION_STATUSES = {
 } as const;
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'Pendiente Aprobación',
+  pending: 'Pendiente aprobación',
+  pending_approval: 'Pendiente aprobación',
   active: 'Activa',
   paused: 'Pausada',
   cancelled: 'Cancelada',
