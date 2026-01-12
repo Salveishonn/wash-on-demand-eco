@@ -69,23 +69,31 @@ export const EarlyAccessPopup = () => {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-md bg-background border-primary/20">
+      <DialogContent className="sm:max-w-md bg-background border-border/50 shadow-xl">
         {!isSuccess ? (
           <>
-            <DialogHeader className="text-center">
-              <DialogTitle className="text-2xl font-bold text-foreground flex items-center justify-center gap-2">
+            <DialogHeader className="space-y-3 pb-2">
+              <DialogTitle className="text-2xl font-bold text-foreground text-left">
                 Washero llega en abril 🚗✨
               </DialogTitle>
-              <DialogDescription className="text-muted-foreground mt-4 text-base leading-relaxed">
+              <DialogDescription className="text-muted-foreground text-base leading-relaxed max-w-[90%]">
                 Todavía no estamos operando, pero estamos preparando el mejor servicio de lavado premium a domicilio en Zona Norte.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 my-4">
-              <p className="text-center text-foreground font-medium flex items-center justify-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                Dejanos tus datos y accedé a un <span className="text-primary font-bold">20% de descuento exclusivo</span> para el lanzamiento.
-              </p>
+            <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-5 my-2">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-foreground leading-snug">
+                    Dejanos tus datos y accedé a un{" "}
+                    <span className="text-primary font-bold text-lg">20% de descuento</span>{" "}
+                    exclusivo para el lanzamiento.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
