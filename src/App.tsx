@@ -24,6 +24,8 @@ import Dashboard from "./pages/Dashboard";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import NotFound from "./pages/NotFound";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +52,10 @@ const App = () => (
             <Route path="/suscripcion-confirmada" element={<SuscripcionConfirmada />} />
             <Route path="/kipper-seguros" element={<KipperSeguros />} />
             <Route path="/pagar/:paymentIntentId" element={<Pagar />} />
+            
+            {/* Legal Pages for Meta Compliance */}
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
             
             {/* Auth Routes */}
             <Route path="/auth" element={<Auth />} />
