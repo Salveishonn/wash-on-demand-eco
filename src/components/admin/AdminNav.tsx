@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LucideIcon, Calendar, Bell, Shield, Users, Clock, DollarSign, MessageCircle, CalendarDays, ChevronDown, Menu, MoreHorizontal, Settings, Tag, FileText } from 'lucide-react';
+import { LucideIcon, Calendar, Bell, Shield, Users, Clock, DollarSign, MessageCircle, CalendarDays, ChevronDown, Menu, MoreHorizontal, Settings, Tag, FileText, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,7 +17,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-export type AdminTabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'facturas' | 'mensajes' | 'disponibilidad' | 'whatsapp-config' | 'pricing';
+export type AdminTabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'facturas' | 'mensajes' | 'disponibilidad' | 'whatsapp-config' | 'pricing' | 'early-access';
 
 interface AdminSection {
   key: AdminTabType;
@@ -29,6 +29,7 @@ interface AdminSection {
 export const adminSections: AdminSection[] = [
   { key: 'bookings', label: 'Reservas', icon: Calendar },
   { key: 'notifications', label: 'Notificaciones', icon: Bell },
+  { key: 'early-access', label: 'Early Access', icon: Sparkles, activeClass: 'bg-amber-600 hover:bg-amber-700 text-white' },
   { key: 'kipper', label: 'Leads Kipper', icon: Shield, activeClass: 'bg-[#8B1E2F] hover:bg-[#6B1726] text-white' },
   { key: 'subscriptions', label: 'Suscripciones', icon: Users },
   { key: 'calendario', label: 'Calendario', icon: CalendarDays },

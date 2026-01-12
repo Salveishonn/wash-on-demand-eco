@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
+import { EarlyAccessPopup } from "@/components/early-access/EarlyAccessPopup";
 import {
   Car,
   Droplets,
@@ -124,6 +125,9 @@ const staggerContainer = {
 const Index = () => {
   return (
     <Layout>
+      {/* Early Access Popup */}
+      <EarlyAccessPopup />
+
       {/* Hero Section */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
         <div
