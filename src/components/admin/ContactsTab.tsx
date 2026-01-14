@@ -15,10 +15,12 @@ interface Contact {
   name: string | null;
   phone: string | null;
   source: string;
-  tags: string[];
-  first_seen_at: string;
-  last_seen_at: string;
-  created_at: string;
+  sources: string[] | null;
+  tags: string[] | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  last_activity_at: string | null;
+  created_at: string | null;
 }
 
 export const ContactsTab = () => {
@@ -31,7 +33,7 @@ export const ContactsTab = () => {
       const { data, error } = await supabase
         .from("contacts")
         .select("*")
-        .order("last_seen_at", { ascending: false });
+        .order("last_activity_at", { ascending: false });
 
       if (error) throw error;
       setContacts(data || []);
@@ -53,15 +55,15 @@ export const ContactsTab = () => {
       return;
     }
 
-    const headers = ["Email", "Nombre", "Teléfono", "Fuente", "Tags", "Primera vez", "Última vez"];
+    const headers = ["Email", "Nombre", "Teléfono", "Fuentes", "Tags", "Primera vez", "Última actividad"];
     const rows = contacts.map(c => [
       c.email,
       c.name || "",
       c.phone || "",
-      c.source,
+      (c.sources || []).join("; "),
       (c.tags || []).join("; "),
-      format(new Date(c.first_seen_at), "dd/MM/yyyy HH:mm"),
-      format(new Date(c.last_seen_at), "dd/MM/yyyy HH:mm"),
+      c.first_seen_at ? format(new Date(c.first_seen_at), "dd/MM/yyyy HH:mm") : "",
+      c.last_activity_at ? format(new Date(c.last_activity_at), "dd/MM/yyyy HH:mm") : "",
     ]);
 
     const csvContent = [
@@ -137,7 +139,7 @@ export const ContactsTab = () => {
                     <TableHead>Email</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Teléfono</TableHead>
-                    <TableHead>Fuente</TableHead>
+                    <TableHead>Fuentes</TableHead>
                     <TableHead>Tags</TableHead>
                     <TableHead>Última actividad</TableHead>
                   </TableRow>
@@ -149,9 +151,13 @@ export const ContactsTab = () => {
                       <TableCell>{contact.name || "-"}</TableCell>
                       <TableCell>{contact.phone || "-"}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {getSourceLabel(contact.source)}
-                        </Badge>
+                        <div className="flex flex-wrap gap-1">
+                          {(contact.sources || []).map((src, idx) => (
+                            <Badge key={idx} variant="outline" className="text-xs">
+                              {getSourceLabel(src)}
+                            </Badge>
+                          ))}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -167,7 +173,9 @@ export const ContactsTab = () => {
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
-                        {format(new Date(contact.last_seen_at), "dd MMM yyyy, HH:mm", { locale: es })}
+                        {contact.last_activity_at 
+                          ? format(new Date(contact.last_activity_at), "dd MMM yyyy, HH:mm", { locale: es })
+                          : "-"}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -352,33 +352,42 @@ export type Database = {
           email: string
           first_seen_at: string | null
           id: string
+          last_activity_at: string | null
           last_seen_at: string | null
           name: string | null
           phone: string | null
           source: string
+          sources: string[] | null
           tags: string[] | null
+          updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           email: string
           first_seen_at?: string | null
           id?: string
+          last_activity_at?: string | null
           last_seen_at?: string | null
           name?: string | null
           phone?: string | null
           source: string
+          sources?: string[] | null
           tags?: string[] | null
+          updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           email?: string
           first_seen_at?: string | null
           id?: string
+          last_activity_at?: string | null
           last_seen_at?: string | null
           name?: string | null
           phone?: string | null
           source?: string
+          sources?: string[] | null
           tags?: string[] | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -1866,6 +1875,35 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      upsert_contact: {
+        Args: {
+          p_email: string
+          p_name?: string
+          p_phone?: string
+          p_source?: string
+          p_tags?: string[]
+        }
+        Returns: {
+          created_at: string | null
+          email: string
+          first_seen_at: string | null
+          id: string
+          last_activity_at: string | null
+          last_seen_at: string | null
+          name: string | null
+          phone: string | null
+          source: string
+          sources: string[] | null
+          tags: string[] | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "contacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
