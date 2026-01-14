@@ -30,6 +30,7 @@ import { DisponibilidadTab } from '@/components/admin/DisponibilidadTab';
 import { WhatsAppSettingsTab } from '@/components/admin/WhatsAppSettingsTab';
 import { PricingTab } from '@/components/admin/PricingTab';
 import { EarlyAccessTab } from '@/components/admin/EarlyAccessTab';
+import { ContactsTab } from '@/components/admin/ContactsTab';
 import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { Button } from '@/components/ui/button';
@@ -1101,6 +1102,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* Early Access Tab */}
         {activeTab === 'early-access' && <EarlyAccessTab />}
+
+        {/* Contacts Tab */}
+        {activeTab === 'contacts' && <ContactsTab />}
 
         {/* Kipper Leads Tab */}
         {activeTab === 'kipper' && <KipperLeadsTab />}
