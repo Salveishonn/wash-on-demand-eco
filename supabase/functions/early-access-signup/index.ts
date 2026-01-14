@@ -49,26 +49,21 @@ serve(async (req) => {
       // Continue even if duplicate - we still want to update contacts
     }
 
-    // 2) Upsert into contacts
-    const { error: contactError } = await supabase
-      .from("contacts")
-      .upsert(
-        {
-          email,
-          name: name || null,
-          phone: phone || null,
-          source: "early_access",
-          tags: ["early_access"],
-          last_seen_at: new Date().toISOString(),
-        },
-        { 
-          onConflict: "email",
-          ignoreDuplicates: false
-        }
-      );
+    // 2) Use RPC to upsert into contacts (handles deduplication and merging)
+    try {
+      const { error: rpcError } = await supabase.rpc("upsert_contact", {
+        p_email: email,
+        p_name: name || null,
+        p_phone: phone || null,
+        p_source: "early_access",
+        p_tags: ["early_access"],
+      });
 
-    if (contactError) {
-      console.error("[early-access-signup] Error upserting contact:", contactError);
+      if (rpcError) {
+        console.error("[early-access-signup] Error upserting contact via RPC:", rpcError);
+      }
+    } catch (contactError) {
+      console.error("[early-access-signup] Exception upserting contact:", contactError);
     }
 
     // 3) Send confirmation email via Resend API

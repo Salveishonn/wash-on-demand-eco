@@ -38,42 +38,22 @@ serve(async (req) => {
 
     console.log("[admin-notify-subscription] Processing subscription notification for:", subscription.customerEmail);
 
-    // 1) Upsert customer into contacts
+    // 1) Upsert customer into contacts using RPC
     if (subscription.customerEmail) {
-      const existingTags = ["subscription"];
-      
-      // Check if contact exists and get current tags
-      const { data: existingContact } = await supabase
-        .from("contacts")
-        .select("tags")
-        .eq("email", subscription.customerEmail)
-        .single();
+      try {
+        const { error: rpcError } = await supabase.rpc("upsert_contact", {
+          p_email: subscription.customerEmail,
+          p_name: subscription.customerName || null,
+          p_phone: subscription.customerPhone || null,
+          p_source: "subscription",
+          p_tags: ["subscription"],
+        });
 
-      let mergedTags = existingTags;
-      if (existingContact?.tags) {
-        const currentTags = existingContact.tags as string[];
-        mergedTags = [...new Set([...currentTags, ...existingTags])];
-      }
-
-      const { error: contactError } = await supabase
-        .from("contacts")
-        .upsert(
-          {
-            email: subscription.customerEmail,
-            name: subscription.customerName || null,
-            phone: subscription.customerPhone || null,
-            source: existingContact ? undefined : "subscription",
-            tags: mergedTags,
-            last_seen_at: new Date().toISOString(),
-          },
-          { 
-            onConflict: "email",
-            ignoreDuplicates: false
-          }
-        );
-
-      if (contactError) {
-        console.error("[admin-notify-subscription] Error upserting contact:", contactError);
+        if (rpcError) {
+          console.error("[admin-notify-subscription] Error upserting contact via RPC:", rpcError);
+        }
+      } catch (contactError) {
+        console.error("[admin-notify-subscription] Exception upserting contact:", contactError);
       }
     }
 

@@ -42,42 +42,22 @@ serve(async (req) => {
 
     console.log("[admin-notify-booking] Processing booking notification for:", booking.customerEmail);
 
-    // 1) Upsert customer into contacts
+    // 1) Upsert customer into contacts using RPC
     if (booking.customerEmail) {
-      const existingTags = ["booking"];
-      
-      // Check if contact exists and get current tags
-      const { data: existingContact } = await supabase
-        .from("contacts")
-        .select("tags")
-        .eq("email", booking.customerEmail)
-        .single();
+      try {
+        const { error: rpcError } = await supabase.rpc("upsert_contact", {
+          p_email: booking.customerEmail,
+          p_name: booking.customerName || null,
+          p_phone: booking.customerPhone || null,
+          p_source: "booking",
+          p_tags: ["booking"],
+        });
 
-      let mergedTags = existingTags;
-      if (existingContact?.tags) {
-        const currentTags = existingContact.tags as string[];
-        mergedTags = [...new Set([...currentTags, ...existingTags])];
-      }
-
-      const { error: contactError } = await supabase
-        .from("contacts")
-        .upsert(
-          {
-            email: booking.customerEmail,
-            name: booking.customerName || null,
-            phone: booking.customerPhone || null,
-            source: existingContact ? undefined : "booking",
-            tags: mergedTags,
-            last_seen_at: new Date().toISOString(),
-          },
-          { 
-            onConflict: "email",
-            ignoreDuplicates: false
-          }
-        );
-
-      if (contactError) {
-        console.error("[admin-notify-booking] Error upserting contact:", contactError);
+        if (rpcError) {
+          console.error("[admin-notify-booking] Error upserting contact via RPC:", rpcError);
+        }
+      } catch (contactError) {
+        console.error("[admin-notify-booking] Exception upserting contact:", contactError);
       }
     }
 
