@@ -336,6 +336,31 @@ serve(async (req) => {
       }),
     }).catch(err => console.error("[create-booking] Queue error:", err));
 
+    // Send admin email notification (fire and forget)
+    const adminNotifyUrl = `${supabaseUrl}/functions/v1/admin-notify-booking`;
+    fetch(adminNotifyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        bookingId: booking.id,
+        customerName: data.customerName.trim(),
+        customerEmail: data.customerEmail.trim().toLowerCase(),
+        customerPhone: data.customerPhone.trim(),
+        bookingDate: data.bookingDate,
+        bookingTime: data.bookingTime,
+        address: data.address.trim(),
+        serviceName: data.serviceName,
+        vehicleSize: data.vehicleSize || data.carType,
+        addons: addonsData,
+        paymentMethod: paymentMethodValue,
+        paymentStatus: paymentStatus,
+        totalArs: data.totalPriceArs || Math.round(totalPriceCents / 100),
+      }),
+    }).catch(err => console.error("[create-booking] Admin notify error:", err));
+
     // Handle Kipper opt-in
     if (data.kipperOptIn) {
       console.log("[create-booking] Creating Kipper lead");

@@ -47,18 +47,20 @@ export const EarlyAccessPopup = () => {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase
-        .from("early_access_leads")
-        .insert({
+      // Call the edge function which handles DB insert + email
+      const { data, error } = await supabase.functions.invoke("early-access-signup", {
+        body: {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
-        });
+        },
+      });
 
       if (error) throw error;
 
       setIsSuccess(true);
       localStorage.setItem(STORAGE_KEY, "true");
+      toast.success("✅ Listo. Te enviamos un email confirmando tu 20% OFF.");
     } catch (error) {
       console.error("Error submitting early access lead:", error);
       toast.error("Hubo un error. Por favor intentá de nuevo.");

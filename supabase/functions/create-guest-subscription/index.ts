@@ -254,6 +254,27 @@ serve(async (req) => {
       }),
     }).catch(err => console.error("[create-guest-subscription] Queue error:", err));
 
+    // Step 5: Send admin email notification (fire and forget)
+    const adminNotifyUrl = `${supabaseUrl}/functions/v1/admin-notify-subscription`;
+    fetch(adminNotifyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        subscriptionId: subscription.id,
+        customerName: data.customerName,
+        customerEmail: data.customerEmail.toLowerCase(),
+        customerPhone: data.customerPhone,
+        planName: plan.name,
+        planCode: plan.id,
+        priceArs: Math.round(plan.price_cents / 100),
+        status: "pending",
+        washesPerMonth: plan.washes_per_month,
+      }),
+    }).catch(err => console.error("[create-guest-subscription] Admin notify error:", err));
+
     // Log event
     await supabase.from("subscription_events").insert({
       subscription_id: subscription.id,

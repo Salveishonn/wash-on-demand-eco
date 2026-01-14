@@ -346,6 +346,42 @@ export type Database = {
         }
         Relationships: []
       }
+      contacts: {
+        Row: {
+          created_at: string | null
+          email: string
+          first_seen_at: string | null
+          id: string
+          last_seen_at: string | null
+          name: string | null
+          phone: string | null
+          source: string
+          tags: string[] | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          first_seen_at?: string | null
+          id?: string
+          last_seen_at?: string | null
+          name?: string | null
+          phone?: string | null
+          source: string
+          tags?: string[] | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          first_seen_at?: string | null
+          id?: string
+          last_seen_at?: string | null
+          name?: string | null
+          phone?: string | null
+          source?: string
+          tags?: string[] | null
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           created_at: string | null
