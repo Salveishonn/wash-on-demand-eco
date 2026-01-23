@@ -375,67 +375,64 @@ export function SubscriptionWashBookingModal({
         return;
       }
 
+      // Check remaining washes before submitting
+      if ((activeSub.washes_remaining ?? 0) <= 0) {
+        toast({
+          variant: "destructive",
+          title: "Sin lavados disponibles",
+          description: "No te quedan lavados disponibles este mes.",
+        });
+        return;
+      }
+
       // Format the date for booking
       const bookingDate = format(scheduledDate, "yyyy-MM-dd");
-
-      // Subscription bookings: base is prepaid. Extras may require payment.
-      const paymentStatus = (getAddonsTotal() > 0 ? "pending" : "approved") as "pending" | "approved";
 
       // Use data from dynamic pricing
       const baseServiceName = includedService?.display_name || "Lavado Básico";
       const vehicleSizeName = includedVehicleSize?.display_name || "Auto chico";
 
+      // Use the create-booking edge function for atomic credit decrement
       const payload = {
-        user_id: userId,
-        customer_name: profile?.full_name || "Suscriptor",
-        customer_email: profile?.email || "",
-        customer_phone: profile?.phone || "",
-        service_name: baseServiceName,
-        service_code: plan?.metadata.included_service || "basic",
-        vehicle_size: plan?.metadata.included_vehicle_size || "small",
-        pricing_version_id: pricing.versionId,
-        service_price_cents: 0, // Subscription booking - no additional cost for base
-        car_type: vehicleSizeName,
-        car_type_extra_cents: 0, // Vehicle size included in subscription
-        booking_date: bookingDate,
-        booking_time: scheduledTime,
+        customerName: profile?.full_name || "Suscriptor",
+        customerEmail: profile?.email || "",
+        customerPhone: profile?.phone || "",
+        serviceName: baseServiceName,
+        serviceCode: plan?.metadata.included_service || "basic",
+        vehicleSize: plan?.metadata.included_vehicle_size || "small",
+        pricingVersionId: pricing.versionId,
+        servicePriceCents: 0, // Subscription booking - no additional cost for base
+        carType: vehicleSizeName,
+        carTypeExtraCents: 0, // Vehicle size included in subscription
+        bookingDate: bookingDate,
+        bookingTime: scheduledTime,
         address: getAddressDisplay(selectedAddress),
         notes: `Auto: ${getCarDisplay(selectedCar)} | Plan: ${planName}`,
-        payment_method: "subscription",
-        booking_type: "subscription" as const,
-        is_subscription_booking: true,
-        subscription_id: activeSub.id,
-        addons: selectedAddons as unknown as import("@/integrations/supabase/types").Json,
-        addons_total_cents: getAddonsTotal(),
-        base_price_ars: 0,
-        vehicle_extra_ars: 0,
-        extras_total_ars: Math.round(getAddonsTotal() / 100),
-        total_price_ars: Math.round(getAddonsTotal() / 100),
-        payment_status: paymentStatus,
-        status: "pending" as const,
-        booking_source: "subscription",
+        userId: userId,
+        subscriptionId: activeSub.id,
+        isSubscriptionBooking: true,
+        bookingType: "subscription" as const,
+        paymentMethod: "subscription",
+        addons: selectedAddons,
+        addonsTotalCents: getAddonsTotal(),
+        basePriceArs: 0,
+        vehicleExtraArs: 0,
+        extrasTotalArs: Math.round(getAddonsTotal() / 100),
+        totalPriceArs: Math.round(getAddonsTotal() / 100),
+        bookingSource: "subscription",
+        whatsappOptIn: false,
       };
 
-      console.log("[SubscriptionWashBookingModal] booking payload:", payload);
+      console.log("[SubscriptionWashBookingModal] calling create-booking edge function:", payload);
 
-      const { error: bookingError } = await supabase.from("bookings").insert([payload]);
+      const { data: result, error: bookingError } = await supabase.functions.invoke('create-booking', {
+        body: payload,
+      });
+
       if (bookingError) throw bookingError;
+      if (!result?.success) throw new Error(result?.error || "Error al crear la reserva");
 
-      // Update usage on `subscriptions` (FK table)
-      const nextRemaining = Math.max((activeSub.washes_remaining ?? 0) - 1, 0);
-      const nextUsed = (activeSub.washes_used_in_cycle ?? 0) + 1;
-
-      const { error: usageError } = await supabase
-        .from("subscriptions")
-        .update({ washes_remaining: nextRemaining, washes_used_in_cycle: nextUsed })
-        .eq("id", activeSub.id);
-
-      if (usageError) {
-        console.error("[SubscriptionWashBookingModal] Failed to update subscriptions usage:", usageError);
-      }
-
-      // Note: washes usage already updated on subscriptions table above
-      // No need to update user_managed_subscriptions anymore
+      console.log("[SubscriptionWashBookingModal] Booking created:", result);
 
       toast({
         title: "¡Lavado agendado!",
