@@ -10,6 +10,8 @@ import {
   XCircle,
   CheckCircle,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,7 +38,27 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { format, startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO, isWithinInterval } from 'date-fns';
+import { 
+  format, 
+  startOfDay, 
+  endOfDay, 
+  subDays, 
+  addDays,
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek, 
+  endOfWeek, 
+  startOfYear,
+  endOfYear,
+  subMonths,
+  addMonths,
+  subWeeks,
+  addWeeks,
+  subYears,
+  addYears,
+  parseISO, 
+  isWithinInterval 
+} from 'date-fns';
 import { es } from 'date-fns/locale';
 
 interface Booking {
@@ -69,7 +91,7 @@ interface FinanzasTabProps {
   onRefresh: () => void;
 }
 
-type DateRange = 'today' | 'week' | 'month' | 'custom';
+type PeriodType = 'day' | 'week' | 'month' | 'year';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -125,7 +147,8 @@ const getBookingTotal = (booking: Booking) => {
 
 export function FinanzasTab({ bookings, isLoading, onRefresh }: FinanzasTabProps) {
   const { toast } = useToast();
-  const [dateRange, setDateRange] = useState<DateRange>('month');
+  const [periodType, setPeriodType] = useState<PeriodType>('week');
+  const [referenceDate, setReferenceDate] = useState<Date>(new Date());
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all');
@@ -138,24 +161,64 @@ export function FinanzasTab({ bookings, isLoading, onRefresh }: FinanzasTabProps
     return Array.from(serviceSet).sort();
   }, [bookings]);
 
-  // Get date range bounds
-  const getDateBounds = () => {
-    const now = new Date();
-    switch (dateRange) {
-      case 'today':
-        return { start: startOfDay(now), end: endOfDay(now) };
+  // Navigate to previous/next period
+  const navigatePeriod = (direction: 'prev' | 'next') => {
+    const offset = direction === 'prev' ? -1 : 1;
+    switch (periodType) {
+      case 'day':
+        setReferenceDate(prev => offset === -1 ? subDays(prev, 1) : addDays(prev, 1));
+        break;
       case 'week':
-        return { start: startOfWeek(now, { locale: es }), end: endOfWeek(now, { locale: es }) };
+        setReferenceDate(prev => offset === -1 ? subWeeks(prev, 1) : addWeeks(prev, 1));
+        break;
       case 'month':
-        return { start: startOfMonth(now), end: endOfMonth(now) };
-      default:
-        return { start: subDays(now, 30), end: now };
+        setReferenceDate(prev => offset === -1 ? subMonths(prev, 1) : addMonths(prev, 1));
+        break;
+      case 'year':
+        setReferenceDate(prev => offset === -1 ? subYears(prev, 1) : addYears(prev, 1));
+        break;
     }
   };
 
+  // Go to today/current period
+  const goToToday = () => setReferenceDate(new Date());
+
+  // Get period display label
+  const getPeriodLabel = useMemo(() => {
+    switch (periodType) {
+      case 'day':
+        return format(referenceDate, "EEEE d 'de' MMMM", { locale: es });
+      case 'week':
+        const weekStart = startOfWeek(referenceDate, { locale: es, weekStartsOn: 1 });
+        const weekEnd = endOfWeek(referenceDate, { locale: es, weekStartsOn: 1 });
+        return `${format(weekStart, 'd MMM', { locale: es })} - ${format(weekEnd, 'd MMM', { locale: es })}`;
+      case 'month':
+        return format(referenceDate, 'MMMM yyyy', { locale: es });
+      case 'year':
+        return format(referenceDate, 'yyyy');
+    }
+  }, [periodType, referenceDate]);
+
+  // Get date range bounds based on period type
+  const getDateBounds = useMemo(() => {
+    switch (periodType) {
+      case 'day':
+        return { start: startOfDay(referenceDate), end: endOfDay(referenceDate) };
+      case 'week':
+        return { 
+          start: startOfWeek(referenceDate, { locale: es, weekStartsOn: 1 }), 
+          end: endOfWeek(referenceDate, { locale: es, weekStartsOn: 1 }) 
+        };
+      case 'month':
+        return { start: startOfMonth(referenceDate), end: endOfMonth(referenceDate) };
+      case 'year':
+        return { start: startOfYear(referenceDate), end: endOfYear(referenceDate) };
+    }
+  }, [periodType, referenceDate]);
+
   // Filter bookings by date range and filters
   const filteredBookings = useMemo(() => {
-    const { start, end } = getDateBounds();
+    const { start, end } = getDateBounds;
     
     return bookings.filter(booking => {
       const bookingDate = parseISO(booking.booking_date);
@@ -182,7 +245,7 @@ export function FinanzasTab({ bookings, isLoading, onRefresh }: FinanzasTabProps
       
       return true;
     });
-  }, [bookings, dateRange, statusFilter, paymentStatusFilter, paymentMethodFilter, serviceFilter]);
+  }, [bookings, getDateBounds, statusFilter, paymentStatusFilter, paymentMethodFilter, serviceFilter]);
 
   // Calculate KPIs
   const kpis = useMemo(() => {
@@ -250,7 +313,7 @@ export function FinanzasTab({ bookings, isLoading, onRefresh }: FinanzasTabProps
 
   // Revenue per day chart data
   const revenueByDayData = useMemo(() => {
-    const { start, end } = getDateBounds();
+    const { start, end } = getDateBounds;
     const dailyMap = new Map<string, number>();
     
     // Initialize all days in range
@@ -276,7 +339,7 @@ export function FinanzasTab({ bookings, isLoading, onRefresh }: FinanzasTabProps
         amount: amount / 100,
       }))
       .sort((a, b) => a.fullDate.localeCompare(b.fullDate));
-  }, [filteredBookings, dateRange]);
+  }, [filteredBookings, getDateBounds]);
 
   // Revenue by service chart data
   const revenueByServiceData = useMemo(() => {
@@ -448,88 +511,129 @@ export function FinanzasTab({ bookings, isLoading, onRefresh }: FinanzasTabProps
       animate={{ opacity: 1 }}
       className="space-y-6"
     >
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      {/* Period Filter + KPI Cards */}
+      <div className="space-y-4">
+        {/* Period Selector */}
         <div className="bg-background rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-green-600" />
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Period Type Tabs */}
+            <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
+              {(['day', 'week', 'month', 'year'] as PeriodType[]).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => { setPeriodType(type); setReferenceDate(new Date()); }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    periodType === type 
+                      ? 'bg-background text-foreground shadow-sm' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {type === 'day' ? 'Día' : type === 'week' ? 'Semana' : type === 'month' ? 'Mes' : 'Año'}
+                </button>
+              ))}
             </div>
-            <div>
-              <p className="text-lg font-bold text-green-600">{formatPrice(kpis.todayPaid)}</p>
-              <p className="text-xs text-muted-foreground">Hoy (Cobrados)</p>
+
+            {/* Navigation */}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={() => navigatePeriod('prev')}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <div className="min-w-[160px] text-center">
+                <span className="font-medium capitalize">{getPeriodLabel}</span>
+              </div>
+              <Button variant="outline" size="icon" onClick={() => navigatePeriod('next')}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={goToToday}>
+                Hoy
+              </Button>
             </div>
           </div>
         </div>
 
-        <div className="bg-background rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-yellow-600" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-yellow-600">{formatPrice(kpis.todayPending)}</p>
-              <p className="text-xs text-muted-foreground">Hoy (Pendientes)</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-background rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-lg font-bold">{formatPrice(kpis.weekPaid)}</p>
-              <p className="text-xs text-muted-foreground">Semana (Cobrados)</p>
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <div className="bg-background rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-green-600">{formatPrice(kpis.todayPaid)}</p>
+                <p className="text-xs text-muted-foreground">Hoy (Cobrados)</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-background rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-lg font-bold">{formatPrice(kpis.monthPaid)}</p>
-              <p className="text-xs text-muted-foreground">Mes (Cobrados)</p>
+          <div className="bg-background rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-yellow-600">{formatPrice(kpis.todayPending)}</p>
+                <p className="text-xs text-muted-foreground">Hoy (Pendientes)</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-background rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-lg font-bold">{formatPrice(kpis.avgTicket)}</p>
-              <p className="text-xs text-muted-foreground">Ticket Promedio</p>
+          <div className="bg-background rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-lg font-bold">{formatPrice(kpis.weekPaid)}</p>
+                <p className="text-xs text-muted-foreground">Semana (Cobrados)</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-background rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
-              <Users className="w-5 h-5 text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-lg font-bold">{kpis.totalReservations}</p>
-              <p className="text-xs text-muted-foreground">Reservas</p>
+          <div className="bg-background rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-lg font-bold">{formatPrice(kpis.monthPaid)}</p>
+                <p className="text-xs text-muted-foreground">Mes (Cobrados)</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-background rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-              <XCircle className="w-5 h-5 text-red-600" />
+          <div className="bg-background rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-lg font-bold">{formatPrice(kpis.avgTicket)}</p>
+                <p className="text-xs text-muted-foreground">Ticket Promedio</p>
+              </div>
             </div>
-            <div>
-              <p className="text-lg font-bold">{kpis.cancelled} <span className="text-sm font-normal text-muted-foreground">({kpis.cancelledPct.toFixed(1)}%)</span></p>
-              <p className="text-xs text-muted-foreground">Canceladas</p>
+          </div>
+
+          <div className="bg-background rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <Users className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-lg font-bold">{kpis.totalReservations}</p>
+                <p className="text-xs text-muted-foreground">Reservas</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-background rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+                <XCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-lg font-bold">{kpis.cancelled} <span className="text-sm font-normal text-muted-foreground">({kpis.cancelledPct.toFixed(1)}%)</span></p>
+                <p className="text-xs text-muted-foreground">Canceladas</p>
+              </div>
             </div>
           </div>
         </div>
@@ -542,17 +646,6 @@ export function FinanzasTab({ bookings, isLoading, onRefresh }: FinanzasTabProps
             <Filter className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">Filtros:</span>
           </div>
-
-          <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Período" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Hoy</SelectItem>
-              <SelectItem value="week">Esta Semana</SelectItem>
-              <SelectItem value="month">Este Mes</SelectItem>
-            </SelectContent>
-          </Select>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[140px]">

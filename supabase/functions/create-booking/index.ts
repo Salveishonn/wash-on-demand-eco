@@ -113,16 +113,28 @@ serve(async (req) => {
         throw new Error("No te quedan lavados disponibles este mes");
       }
 
-      // Decrement washes remaining
-      await supabase
+      // Atomic decrement: Only update if washes_remaining > 0 to prevent race conditions
+      const { data: updated, error: updateError } = await supabase
         .from("subscriptions")
         .update({ 
           washes_remaining: subscription.washes_remaining - 1,
           washes_used_in_cycle: (subscription.washes_used_in_cycle || 0) + 1
         })
-        .eq("id", data.subscriptionId);
+        .eq("id", data.subscriptionId)
+        .gt("washes_remaining", 0)
+        .select("washes_remaining")
+        .maybeSingle();
 
-      console.log("[create-booking] Subscription booking - washes remaining updated");
+      if (updateError) {
+        console.error("[create-booking] Error updating subscription credits:", updateError);
+        throw new Error("Error al actualizar los créditos de suscripción");
+      }
+
+      if (!updated) {
+        throw new Error("No te quedan lavados disponibles este mes");
+      }
+
+      console.log("[create-booking] Subscription booking - washes remaining updated to:", updated.washes_remaining);
     }
 
     // Determine booking/payment status based on payment method
