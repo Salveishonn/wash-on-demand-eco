@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Calendar, 
@@ -48,6 +48,11 @@ import {
 } from "@/components/ui/dialog";
 import { PAYMENTS_ENABLED } from '@/config/payments';
 import { sendCustomerNotification } from '@/lib/notifications/sendCustomerNotification';
+import { AdminDateFilter, type DateRange } from '@/components/admin/AdminDateFilter';
+import { AdminTestFilter, type TestFilterMode } from '@/components/admin/AdminTestFilter';
+import { BulkDeleteDialog } from '@/components/admin/BulkDeleteDialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Trash2, FlaskConical } from 'lucide-react';
 
 interface Booking {
   id: string;
@@ -66,6 +71,7 @@ interface Booking {
   payment_status: string;
   is_subscription_booking: boolean;
   requires_payment: boolean;
+  is_test: boolean;
   created_at: string;
   confirmed_at: string | null;
 }
@@ -128,6 +134,13 @@ export default function AdminDashboard() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [sendingOnMyWayId, setSendingOnMyWayId] = useState<string | null>(null);
   const [notifiedBookings, setNotifiedBookings] = useState<Set<string>>(new Set());
+  
+  // Bookings tab filters
+  const [bookingDateRange, setBookingDateRange] = useState<DateRange | null>(null);
+  const [bookingTestFilter, setBookingTestFilter] = useState<TestFilterMode>("real");
+  const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set());
+  const [bookingBulkDeleteOpen, setBookingBulkDeleteOpen] = useState(false);
+  const [bookingBulkDeleteMode, setBookingBulkDeleteMode] = useState<"selected" | "filtered" | "test">("selected");
 
   const handleSendOnMyWay = async (booking: Booking) => {
     const confirmMsg = `¿Enviar mensaje "Estamos en camino" a ${booking.customer_phone}?`;
@@ -489,10 +502,72 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
     }
   };
 
-  const filteredBookings = bookings.filter(booking => {
-    if (statusFilter === 'all') return true;
-    return booking.status === statusFilter;
-  });
+  const filteredBookings = useMemo(() => {
+    return bookings.filter(booking => {
+      if (statusFilter !== 'all' && booking.status !== statusFilter) return false;
+      // Date filter
+      if (bookingDateRange) {
+        const created = new Date(booking.created_at);
+        if (created < bookingDateRange.from || created > bookingDateRange.to) return false;
+      }
+      // Test filter
+      if (bookingTestFilter === "real" && booking.is_test) return false;
+      if (bookingTestFilter === "test" && !booking.is_test) return false;
+      return true;
+    });
+  }, [bookings, statusFilter, bookingDateRange, bookingTestFilter]);
+
+  const toggleBookingSelect = (id: string) => {
+    setSelectedBookingIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllBookings = () => {
+    if (selectedBookingIds.size === filteredBookings.length) {
+      setSelectedBookingIds(new Set());
+    } else {
+      setSelectedBookingIds(new Set(filteredBookings.map(b => b.id)));
+    }
+  };
+
+  const getBookingDeleteIds = () => {
+    switch (bookingBulkDeleteMode) {
+      case "selected": return Array.from(selectedBookingIds);
+      case "filtered": return filteredBookings.map(b => b.id);
+      case "test": return bookings.filter(b => b.is_test).map(b => b.id);
+    }
+  };
+
+  const handleBulkDeleteBookings = async () => {
+    const ids = getBookingDeleteIds();
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('bookings').delete().in('id', ids);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron eliminar' });
+      return;
+    }
+    const { data: { user: adminUser } } = await supabase.auth.getUser();
+    if (adminUser) {
+      await supabase.from('admin_logs').insert({
+        admin_user_id: adminUser.id,
+        action: 'bulk_delete',
+        affected_table: 'bookings',
+        affected_count: ids.length,
+        details: { mode: bookingBulkDeleteMode },
+      });
+    }
+    toast({ title: `${ids.length} reserva(s) eliminada(s)` });
+    setSelectedBookingIds(new Set());
+    fetchData();
+  };
+
+  const handleToggleBookingTest = async (id: string, isTest: boolean) => {
+    await supabase.from('bookings').update({ is_test: isTest }).eq('id', id);
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, is_test: isTest } : b));
+  };
 
   const stats = {
     total: bookings.length,
@@ -749,49 +824,68 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            {/* MP Test + Filters */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Filtrar:</span>
-                {(['all', 'pending', 'confirmed', 'completed', 'cancelled'] as StatusFilter[]).map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setStatusFilter(status)}
-                    className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                      statusFilter === status
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted hover:bg-muted/80'
-                    }`}
-                  >
-                    {status === 'all' ? 'Todas' : 
-                     status === 'pending' ? 'Pendientes' :
-                     status === 'confirmed' ? 'Aceptadas' :
-                     status === 'completed' ? 'Completadas' : 'Canceladas'}
-                  </button>
-                ))}
+            {/* Filters */}
+            <div className="space-y-3 mb-4">
+              <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
+                <AdminDateFilter onDateRangeChange={setBookingDateRange} />
+                <AdminTestFilter value={bookingTestFilter} onChange={setBookingTestFilter} />
               </div>
-              {PAYMENTS_ENABLED && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleTestMercadoPago}
-                  disabled={isTestingMP}
-                  className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                >
-                  {isTestingMP ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Creando...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      Test MP Payment
-                    </>
-                  )}
-                </Button>
-              )}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Estado:</span>
+                  {(['all', 'pending', 'confirmed', 'completed', 'cancelled'] as StatusFilter[]).map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setStatusFilter(status)}
+                      className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                        statusFilter === status
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted hover:bg-muted/80'
+                      }`}
+                    >
+                      {status === 'all' ? 'Todas' : 
+                       status === 'pending' ? 'Pendientes' :
+                       status === 'confirmed' ? 'Aceptadas' :
+                       status === 'completed' ? 'Completadas' : 'Canceladas'}
+                    </button>
+                  ))}
+                </div>
+                {PAYMENTS_ENABLED && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleTestMercadoPago}
+                    disabled={isTestingMP}
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                  >
+                    {isTestingMP ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Creando...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-4 h-4 mr-2" />
+                        Test MP Payment
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+              {/* Bulk actions */}
+              <div className="flex items-center gap-2">
+                {selectedBookingIds.size > 0 && (
+                  <Button variant="destructive" size="sm" onClick={() => { setBookingBulkDeleteMode("selected"); setBookingBulkDeleteOpen(true); }}>
+                    <Trash2 className="w-4 h-4 mr-1" /> Eliminar ({selectedBookingIds.size})
+                  </Button>
+                )}
+                {bookings.some(b => b.is_test) && (
+                  <Button variant="outline" size="sm" onClick={() => { setBookingBulkDeleteMode("test"); setBookingBulkDeleteOpen(true); }}>
+                    <FlaskConical className="w-4 h-4 mr-1" /> Limpiar test ({bookings.filter(b => b.is_test).length})
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Bookings Table */}
@@ -800,6 +894,12 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                 <table className="w-full">
                   <thead className="bg-muted/50">
                     <tr>
+                      <th className="px-2 py-3 text-left">
+                        <Checkbox
+                          checked={selectedBookingIds.size === filteredBookings.length && filteredBookings.length > 0}
+                          onCheckedChange={toggleAllBookings}
+                        />
+                      </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">ID</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Cliente</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Servicio</th>
@@ -807,25 +907,32 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Total</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Estado</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Pago</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Test</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {isLoading ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                         <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
                           Cargando...
                         </td>
                       </tr>
                     ) : filteredBookings.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                         <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
                           No hay reservas
                         </td>
                       </tr>
                     ) : (
                       filteredBookings.map((booking) => (
-                        <tr key={booking.id} className="hover:bg-muted/30">
+                        <tr key={booking.id} className={`hover:bg-muted/30 ${booking.is_test ? 'opacity-60' : ''}`}>
+                          <td className="px-2 py-4">
+                            <Checkbox
+                              checked={selectedBookingIds.has(booking.id)}
+                              onCheckedChange={() => toggleBookingSelect(booking.id)}
+                            />
+                          </td>
                           <td className="px-4 py-4">
                             <span className="font-mono text-xs">{booking.id.substring(0, 8).toUpperCase()}</span>
                           </td>
@@ -855,6 +962,12 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                           </td>
                           <td className="px-4 py-4">
                             {getPaymentBadge(booking.payment_status, booking.is_subscription_booking, booking.requires_payment)}
+                          </td>
+                          <td className="px-4 py-4">
+                            <Checkbox
+                              checked={booking.is_test}
+                              onCheckedChange={(checked) => handleToggleBookingTest(booking.id, !!checked)}
+                            />
                           </td>
                           <td className="px-4 py-4">
                             <div className="flex gap-1">
@@ -1270,6 +1383,21 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Delete Dialog for Bookings */}
+      <BulkDeleteDialog
+        open={bookingBulkDeleteOpen}
+        onOpenChange={setBookingBulkDeleteOpen}
+        count={getBookingDeleteIds().length}
+        description={
+          bookingBulkDeleteMode === "test"
+            ? "Se eliminarán todas las reservas marcadas como TEST."
+            : bookingBulkDeleteMode === "filtered"
+            ? "Se eliminarán todas las reservas filtradas."
+            : "Se eliminarán las reservas seleccionadas."
+        }
+        onConfirm={handleBulkDeleteBookings}
+      />
     </div>
   );
 }
