@@ -56,6 +56,36 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_logs: {
+        Row: {
+          action: string
+          admin_user_id: string
+          affected_count: number | null
+          affected_table: string | null
+          created_at: string
+          details: Json | null
+          id: string
+        }
+        Insert: {
+          action: string
+          admin_user_id: string
+          affected_count?: number | null
+          affected_table?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string
+          affected_count?: number | null
+          affected_table?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+        }
+        Relationships: []
+      }
       availability_override_slots: {
         Row: {
           date: string
@@ -158,6 +188,7 @@ export type Database = {
           extras_total_ars: number | null
           id: string
           is_subscription_booking: boolean | null
+          is_test: boolean
           mercadopago_payment_id: string | null
           mercadopago_preference_id: string | null
           notes: string | null
@@ -204,6 +235,7 @@ export type Database = {
           extras_total_ars?: number | null
           id?: string
           is_subscription_booking?: boolean | null
+          is_test?: boolean
           mercadopago_payment_id?: string | null
           mercadopago_preference_id?: string | null
           notes?: string | null
@@ -250,6 +282,7 @@ export type Database = {
           extras_total_ars?: number | null
           id?: string
           is_subscription_booking?: boolean | null
+          is_test?: boolean
           mercadopago_payment_id?: string | null
           mercadopago_preference_id?: string | null
           notes?: string | null
@@ -352,6 +385,7 @@ export type Database = {
           email: string
           first_seen_at: string | null
           id: string
+          is_test: boolean
           last_activity_at: string | null
           last_seen_at: string | null
           name: string | null
@@ -366,6 +400,7 @@ export type Database = {
           email: string
           first_seen_at?: string | null
           id?: string
+          is_test?: boolean
           last_activity_at?: string | null
           last_seen_at?: string | null
           name?: string | null
@@ -380,6 +415,7 @@ export type Database = {
           email?: string
           first_seen_at?: string | null
           id?: string
+          is_test?: boolean
           last_activity_at?: string | null
           last_seen_at?: string | null
           name?: string | null
@@ -429,6 +465,7 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          is_test: boolean
           name: string
           phone: string
         }
@@ -436,6 +473,7 @@ export type Database = {
           created_at?: string
           email: string
           id?: string
+          is_test?: boolean
           name: string
           phone: string
         }
@@ -443,6 +481,7 @@ export type Database = {
           created_at?: string
           email?: string
           id?: string
+          is_test?: boolean
           name?: string
           phone?: string
         }
@@ -1889,6 +1928,7 @@ export type Database = {
           email: string
           first_seen_at: string | null
           id: string
+          is_test: boolean
           last_activity_at: string | null
           last_seen_at: string | null
           name: string | null
