@@ -263,6 +263,87 @@ serve(async (req) => {
       }
     }
 
+    // Send invoice email via Resend
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    const resendFromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "Washero <reservas@washero.online>";
+    
+    if (resendApiKey && customerEmail) {
+      try {
+        const statusLabel = invoiceStatus === "paid" ? "Pagada" : "Pendiente de pago";
+        const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f5f5f5; color: #333; }
+  .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+  .header { background: linear-gradient(135deg, #1a1a1a, #333); color: #FFD700; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+  .header h1 { margin: 0; font-size: 22px; }
+  .content { background: white; padding: 30px; }
+  .invoice-box { background: #FFF8E1; border: 2px solid #FFD700; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0; }
+  .invoice-number { font-size: 20px; font-weight: bold; color: #1a1a1a; }
+  .amount { font-size: 32px; font-weight: bold; margin: 10px 0; }
+  .status { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+  .status-paid { background: #dcfce7; color: #166534; }
+  .status-pending { background: #fef3c7; color: #92400e; }
+  .items { width: 100%; border-collapse: collapse; margin: 20px 0; }
+  .items td { padding: 10px 0; border-bottom: 1px solid #eee; }
+  .items td:last-child { text-align: right; font-weight: 600; }
+  .total td { border-top: 2px solid #333; font-size: 18px; font-weight: bold; padding-top: 15px; }
+  .cta { text-align: center; margin: 25px 0; }
+  .cta a { display: inline-block; background: #FFD700; color: #1a1a1a; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 700; }
+  .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🧼 Tu Factura Washero</h1>
+  </div>
+  <div class="content">
+    <p>Hola <strong>${customerName || "Cliente"}</strong>,</p>
+    <p>Adjuntamos tu factura por el servicio contratado.</p>
+    <div class="invoice-box">
+      <div class="invoice-number">${invoiceNumber}</div>
+      <div class="amount">${formatPrice(amountArs)}</div>
+      <span class="status ${invoiceStatus === "paid" ? "status-paid" : "status-pending"}">${statusLabel}</span>
+    </div>
+    <table class="items">
+      ${lineItems.map((item: { description: string; amount: number }) => `<tr><td>${item.description}</td><td>${formatPrice(item.amount)}</td></tr>`).join("")}
+      <tr class="total"><td>TOTAL</td><td>${formatPrice(amountArs)}</td></tr>
+    </table>
+    ${invoice.pdf_url ? `<div class="cta"><a href="${invoice.pdf_url}" target="_blank">📄 Ver Factura Completa</a></div>` : ""}
+  </div>
+  <div class="footer">
+    <p>WASHERO - Lavado de autos a domicilio</p>
+    <p>www.washero.online | contacto@washero.online</p>
+  </div>
+</div>
+</body>
+</html>`;
+
+        const emailResponse = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${resendApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: resendFromEmail,
+            to: [customerEmail],
+            cc: ["washerocarwash@gmail.com"],
+            subject: `Tu factura Washero 🧼✨ - ${invoiceNumber}`,
+            html: emailHtml,
+          }),
+        });
+
+        const emailResult = await emailResponse.json();
+        console.log("[generate-invoice] Email result:", emailResponse.ok ? "sent" : emailResult);
+      } catch (emailErr) {
+        console.error("[generate-invoice] Email error:", emailErr);
+      }
+    }
+
     // Emit invoice.created event
     const notifyUrl = `${supabaseUrl}/functions/v1/notify-event`;
     fetch(notifyUrl, {

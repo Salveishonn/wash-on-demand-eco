@@ -8,7 +8,8 @@ import {
   CheckCircle,
   Clock,
   XCircle,
-  ExternalLink
+  ExternalLink,
+  Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,7 @@ export function FacturasTab() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState<string | null>(null);
 
   const fetchInvoices = useCallback(async () => {
     try {
@@ -131,6 +133,41 @@ export function FacturasTab() {
     }
     return true;
   });
+
+  const handleResendInvoice = async (invoiceId: string) => {
+    setIsResending(invoiceId);
+    try {
+      const invoice = invoices.find(i => i.id === invoiceId);
+      if (!invoice) throw new Error("Factura no encontrada");
+
+      // Re-trigger generate-invoice which sends the email
+      const { data, error } = await supabase.functions.invoke("generate-invoice", {
+        body: {
+          booking_id: invoice.booking_id,
+          subscription_id: invoice.subscription_id,
+          type: invoice.booking_id ? "single" : "subscription",
+          status: invoice.status === "paid" ? "paid" : "pending_payment",
+          resend: true,
+          existing_invoice_id: invoiceId,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Email reenviado",
+        description: `Factura ${invoice.invoice_number} reenviada al cliente`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "No se pudo reenviar la factura",
+      });
+    } finally {
+      setIsResending(null);
+    }
+  };
 
   const stats = {
     total: invoices.length,
@@ -283,6 +320,19 @@ export function FacturasTab() {
                             </a>
                           </Button>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleResendInvoice(invoice.id)}
+                          disabled={isResending === invoice.id}
+                          title="Reenviar factura por email"
+                        >
+                          {isResending === invoice.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Send className="w-4 h-4" />
+                          )}
+                        </Button>
                         {invoice.status === "pending_payment" && (
                           <>
                             <Button

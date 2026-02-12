@@ -418,6 +418,23 @@ serve(async (req) => {
       message = "¡Reserva recibida! Te contactaremos para coordinar el pago.";
     }
 
+    // Generate invoice for subscription bookings (already paid) or pay_later (pending_payment)
+    if (isSubscription) {
+      const generateInvoiceUrl = `${supabaseUrl}/functions/v1/generate-invoice`;
+      fetch(generateInvoiceUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({
+          booking_id: booking.id,
+          type: "single",
+          status: "paid",
+        }),
+      }).catch(err => console.error("[create-booking] Generate invoice error:", err));
+    }
+
     // Emit webhook event
     const notifyEventUrl = `${supabaseUrl}/functions/v1/notify-event`;
     fetch(notifyEventUrl, {
