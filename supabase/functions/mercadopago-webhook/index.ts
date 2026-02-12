@@ -232,7 +232,7 @@ serve(async (req) => {
         .eq("source", "mercadopago")
         .eq("event_type", topic);
 
-      // If payment approved, queue notifications
+      // If payment approved, queue notifications and generate invoice
       if (paymentStatus === "approved") {
         console.log("[mercadopago-webhook] Payment approved, queueing notifications");
         
@@ -252,6 +252,21 @@ serve(async (req) => {
         } catch (queueErr) {
           console.error("[mercadopago-webhook] Queue error:", queueErr);
         }
+
+        // Generate invoice for paid booking
+        const generateInvoiceUrl = `${supabaseUrl}/functions/v1/generate-invoice`;
+        fetch(generateInvoiceUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            booking_id: bookingId,
+            type: "single",
+            status: "paid",
+          }),
+        }).catch(err => console.error("[mercadopago-webhook] Generate invoice error:", err));
       }
     }
 
