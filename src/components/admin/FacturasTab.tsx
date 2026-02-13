@@ -9,7 +9,8 @@ import {
   Clock,
   XCircle,
   ExternalLink,
-  Send
+  Send,
+  Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +68,7 @@ export function FacturasTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [isResending, setIsResending] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
   const fetchInvoices = useCallback(async () => {
     try {
@@ -314,11 +316,39 @@ export function FacturasTab() {
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         {invoice.pdf_url && (
-                          <Button variant="ghost" size="sm" asChild>
-                            <a href={invoice.pdf_url} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                          </Button>
+                          <>
+                            <Button variant="ghost" size="sm" asChild title="Ver PDF">
+                              <a href={invoice.pdf_url} target="_blank" rel="noopener noreferrer">
+                                <Eye className="w-4 h-4" />
+                              </a>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Descargar PDF"
+                              disabled={isDownloading === invoice.id}
+                              onClick={async () => {
+                                setIsDownloading(invoice.id);
+                                try {
+                                  const res = await fetch(invoice.pdf_url!);
+                                  const blob = await res.blob();
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement("a");
+                                  a.href = url;
+                                  a.download = `${invoice.invoice_number}.pdf`;
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                } catch { /* ignore */ }
+                                setIsDownloading(null);
+                              }}
+                            >
+                              {isDownloading === invoice.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Download className="w-4 h-4" />
+                              )}
+                            </Button>
+                          </>
                         )}
                         <Button
                           variant="ghost"
