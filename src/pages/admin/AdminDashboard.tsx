@@ -275,20 +275,16 @@ export default function AdminDashboard() {
 
   const handleMarkAsPaid = async (bookingId: string) => {
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ 
-          payment_status: 'approved',
-          status: 'confirmed',
-          confirmed_at: new Date().toISOString()
-        })
-        .eq('id', bookingId);
+      const { data, error } = await supabase.functions.invoke('mark-booking-paid', {
+        body: { bookingId },
+      });
 
       if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Error desconocido');
 
       toast({
-        title: 'Pago registrado',
-        description: 'Reserva marcada como pagada y confirmada',
+        title: data.duplicate ? 'Factura ya existente' : 'Pago registrado ✅',
+        description: data.message || 'Reserva marcada como pagada y factura generada',
       });
 
       fetchData();
@@ -296,8 +292,8 @@ export default function AdminDashboard() {
     } catch (error: any) {
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'No se pudo registrar el pago',
+        title: 'Error generando factura',
+        description: error.message || 'No se pudo registrar el pago',
       });
     }
   };
