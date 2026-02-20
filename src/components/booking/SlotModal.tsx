@@ -35,7 +35,7 @@ interface SubscriptionInfo {
   periodEnd: string;
 }
 
-type PaymentMethod = "transfer" | "pay_later" | "subscription";
+type PaymentMethod = "online" | "transfer" | "pay_later" | "subscription";
 
 const DAYS_FULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const MONTHS_FULL = [
@@ -82,7 +82,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
   const [hasCheckedSubscription, setHasCheckedSubscription] = useState(false);
   const [isCheckingSubscription, setIsCheckingSubscription] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pay_later");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("online");
 
   // Opt-ins
   const [kipperOptIn, setKipperOptIn] = useState(false);
@@ -313,7 +313,45 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
         description: bookingResponse.message,
       });
 
-      onBookingSuccess(bookingResponse.bookingId || bookingResponse.booking?.id, bookingPaymentMethod);
+      const createdBookingId = bookingResponse.bookingId || bookingResponse.booking?.id;
+
+      // If online payment, create MercadoPago preference and redirect
+      if (paymentMethod === "online" && createdBookingId) {
+        toast({
+          title: "Redirigiendo a MercadoPago...",
+          description: "Te llevamos a la página de pago seguro",
+        });
+
+        try {
+          const { data: mpData, error: mpError } = await supabase.functions.invoke(
+            "create-mercadopago-preference",
+            {
+              body: {
+                type: "booking",
+                bookingId: createdBookingId,
+              },
+            }
+          );
+
+          if (mpError) throw mpError;
+
+          if (mpData?.initPoint) {
+            window.location.href = mpData.initPoint;
+            return;
+          } else {
+            throw new Error("No se recibió el link de pago");
+          }
+        } catch (mpErr: any) {
+          console.error("[SlotModal] MercadoPago preference error:", mpErr);
+          toast({
+            variant: "destructive",
+            title: "Error al crear link de pago",
+            description: "La reserva fue creada. Podés pagar después.",
+          });
+        }
+      }
+
+      onBookingSuccess(createdBookingId, bookingPaymentMethod);
     } catch (error: any) {
       console.error("[SlotModal] Submit error:", error);
       toast({
@@ -605,7 +643,20 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
               {!subscriptionInfo && (
                 <div className="space-y-3">
                   <Label className="text-base font-semibold">Método de pago</Label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("online")}
+                      className={`p-3 rounded-xl border-2 text-left transition-all ${
+                        paymentMethod === "online"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      <CreditCard className={`w-5 h-5 mb-1 ${paymentMethod === "online" ? "text-primary" : "text-muted-foreground"}`} />
+                      <div className="font-medium text-sm">MercadoPago</div>
+                      <div className="text-xs text-muted-foreground">Online seguro</div>
+                    </button>
                     <button
                       type="button"
                       onClick={() => setPaymentMethod("transfer")}
@@ -615,9 +666,9 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                           : "border-border hover:border-primary/50"
                       }`}
                     >
-                      <CreditCard className={`w-5 h-5 mb-1 ${paymentMethod === "transfer" ? "text-primary" : "text-muted-foreground"}`} />
+                      <Wallet className={`w-5 h-5 mb-1 ${paymentMethod === "transfer" ? "text-primary" : "text-muted-foreground"}`} />
                       <div className="font-medium text-sm">Transferencia</div>
-                      <div className="text-xs text-muted-foreground">Te enviamos los datos</div>
+                      <div className="text-xs text-muted-foreground">Te enviamos datos</div>
                     </button>
                     <button
                       type="button"
@@ -674,6 +725,8 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Procesando...
                   </>
+                ) : paymentMethod === "online" ? (
+                  "Pagar con MercadoPago →"
                 ) : (
                   "Confirmar reserva"
                 )}

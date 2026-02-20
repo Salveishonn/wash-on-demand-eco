@@ -19,6 +19,9 @@ import Suscripciones from "./pages/Suscripciones";
 import SuscripcionConfirmada from "./pages/SuscripcionConfirmada";
 import KipperSeguros from "./pages/KipperSeguros";
 import Pagar from "./pages/Pagar";
+import PagoExito from "./pages/PagoExito";
+import PagoFallo from "./pages/PagoFallo";
+import PagoPendiente from "./pages/PagoPendiente";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import AdminLogin from "./pages/admin/AdminLogin";
@@ -52,6 +55,9 @@ const App = () => (
             <Route path="/suscripcion-confirmada" element={<SuscripcionConfirmada />} />
             <Route path="/kipper-seguros" element={<KipperSeguros />} />
             <Route path="/pagar/:paymentIntentId" element={<Pagar />} />
+            <Route path="/pago/exito" element={<PagoExito />} />
+            <Route path="/pago/fallo" element={<PagoFallo />} />
+            <Route path="/pago/pendiente" element={<PagoPendiente />} />
             
             {/* Legal Pages for Meta Compliance */}
             <Route path="/privacy" element={<Privacy />} />
