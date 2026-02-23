@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { MetaPixelPageView } from "@/components/MetaPixelPageView";
 import Index from "./pages/Index";
 import Servicios from "./pages/Servicios";
 import ComoFunciona from "./pages/ComoFunciona";
@@ -40,6 +41,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <ScrollToTop />
+          <MetaPixelPageView />
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Index />} />
