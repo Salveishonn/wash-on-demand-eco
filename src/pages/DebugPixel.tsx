@@ -52,6 +52,16 @@ const DebugPixel = () => {
         </tbody>
       </table>
       <h2 className="text-lg font-bold mt-6 mb-2">Fired Events ({events.length})</h2>
+      <button
+        className="mb-4 px-4 py-2 bg-primary text-primary-foreground rounded font-bold"
+        onClick={() => {
+          window.fbq?.("trackCustom", "TestEvent", { test: true });
+          window._fbq_debug_events?.push({ event: "TestEvent (custom)", ts: Date.now() });
+          setEvents([...(window._fbq_debug_events ?? [])]);
+        }}
+      >
+        🧪 Fire TestEvent
+      </button>
       {events.length === 0 ? (
         <p className="text-muted-foreground">No events captured yet (navigate to another page and come back).</p>
       ) : (
