@@ -130,6 +130,24 @@ export const Footer = () => {
               🌱 Comprometidos con el cuidado del medio ambiente
             </p>
           </div>
+          {typeof window !== 'undefined' && window.location.search.includes('debug=1') && (
+            <div className="mt-4 text-center">
+              <button
+                className="px-4 py-2 bg-red-600 text-white rounded text-xs font-mono"
+                onClick={() => {
+                  (window as any).__washeroLeadTracked = false;
+                  if (typeof (window as any).fbq === 'function') {
+                    (window as any).fbq('track', 'Lead');
+                    console.log('[META] DEBUG Lead fired manually');
+                  } else {
+                    console.warn('[META] fbq not available');
+                  }
+                }}
+              >
+                DEBUG: Fire Lead
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </footer>

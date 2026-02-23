@@ -7,9 +7,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CheckCircle2, Sparkles } from "lucide-react";
 import { trackEvent } from "@/lib/gtag";
-import { trackPixelEvent } from "@/lib/metaPixel";
 
 const STORAGE_KEY = "washero_early_access_shown";
+
+function trackLeadOnce() {
+  try {
+    if (typeof window === 'undefined') return;
+    if ((window as any).__washeroLeadTracked) return;
+    if (typeof (window as any).fbq !== 'function') {
+      console.warn('[META] fbq not ready');
+      return;
+    }
+    (window as any).fbq('track', 'Lead');
+    (window as any).__washeroLeadTracked = true;
+    console.log('[META] Lead tracked');
+  } catch (e) {
+    console.warn('[META] Lead track failed', e);
+  }
+}
 
 export const EarlyAccessPopup = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -22,10 +37,8 @@ export const EarlyAccessPopup = () => {
   });
 
   useEffect(() => {
-    // Check if popup was already shown
     const wasShown = localStorage.getItem(STORAGE_KEY);
     if (!wasShown) {
-      // Small delay for better UX
       const timer = setTimeout(() => {
         setIsOpen(true);
       }, 1500);
@@ -46,29 +59,33 @@ export const EarlyAccessPopup = () => {
       return;
     }
 
+    const payload = { name: formData.name, email: formData.email, phone: formData.phone };
+    console.log('[EARLY_ACCESS] submit start', payload);
     setIsSubmitting(true);
 
     try {
-      // Call the edge function which handles DB insert + email
       const { data, error } = await supabase.functions.invoke("early-access-signup", {
-        body: {
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-        },
+        body: payload,
       });
 
-      if (error) throw error;
+      const ok = !error;
+      console.log('[EARLY_ACCESS] submit success', { ok, data, error });
+
+      if (!ok) throw error;
 
       setIsSuccess(true);
       localStorage.setItem(STORAGE_KEY, "true");
       trackEvent("early_access_signup");
-      if (window.fbq) {
-        window.fbq("track", "Lead");
-      }
+
+      // Reset guard so each new submission can track
+      (window as any).__washeroLeadTracked = false;
+      trackLeadOnce();
+      setTimeout(trackLeadOnce, 800);
+      setTimeout(trackLeadOnce, 2000);
+
       toast.success("✅ Listo. Te enviamos un email confirmando tu 20% OFF.");
     } catch (error) {
-      console.error("Error submitting early access lead:", error);
+      console.error("[EARLY_ACCESS] submit error", error);
       toast.error("Hubo un error. Por favor intentá de nuevo.");
     } finally {
       setIsSubmitting(false);
