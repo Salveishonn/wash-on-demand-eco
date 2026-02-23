@@ -2,11 +2,21 @@ import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { CalendarScheduler } from "@/components/booking/CalendarScheduler";
+import { useEffect, useRef } from "react";
+import { trackEvent } from "@/lib/gtag";
 
 const Reservar = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const bookingSource = searchParams.get("source") || "direct";
+  const trackedRef = useRef(false);
+
+  useEffect(() => {
+    if (!trackedRef.current) {
+      trackEvent("booking_started");
+      trackedRef.current = true;
+    }
+  }, []);
 
   const handleBookingComplete = (bookingId: string, paymentMethod: string) => {
     navigate(`/reserva-confirmada?booking_id=${bookingId}&payment_method=${paymentMethod}`);

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CheckCircle2, Sparkles } from "lucide-react";
+import { trackEvent } from "@/lib/gtag";
 
 const STORAGE_KEY = "washero_early_access_shown";
 
@@ -60,6 +61,7 @@ export const EarlyAccessPopup = () => {
 
       setIsSuccess(true);
       localStorage.setItem(STORAGE_KEY, "true");
+      trackEvent("early_access_signup");
       toast.success("✅ Listo. Te enviamos un email confirmando tu 20% OFF.");
     } catch (error) {
       console.error("Error submitting early access lead:", error);

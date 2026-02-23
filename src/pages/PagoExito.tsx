@@ -1,13 +1,27 @@
 import { useSearchParams, Link } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Layout } from '@/components/layout/Layout';
+import { trackEvent } from '@/lib/gtag';
 
 export default function PagoExito() {
   const [searchParams] = useSearchParams();
   const ref = searchParams.get('ref');
   const type = searchParams.get('type') || 'booking';
+  const trackedRef = useRef(false);
+
+  useEffect(() => {
+    if (!trackedRef.current && ref) {
+      trackEvent('purchase', {
+        transaction_id: ref,
+        value: 0, // actual amount not available client-side after redirect
+        currency: 'ARS',
+      });
+      trackedRef.current = true;
+    }
+  }, [ref]);
 
   return (
     <Layout>

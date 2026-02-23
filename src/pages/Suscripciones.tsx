@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PAYMENTS_ENABLED } from "@/config/payments";
 import { KipperSubscriptionBanner } from "@/components/kipper/KipperSubscriptionBanner";
 import { usePricing, formatPrice, getPlanByCode } from "@/hooks/usePricing";
+import { trackEvent } from "@/lib/gtag";
 import {
   Dialog,
   DialogContent,
@@ -135,6 +136,11 @@ export default function Suscripciones() {
       if (error) throw error;
 
       // All new subscriptions start as pending, awaiting admin approval
+      trackEvent("subscription_created", {
+        value: plan.price_ars,
+        currency: "ARS",
+      });
+
       toast({
         title: "¡Solicitud enviada!",
         description: "Tu suscripción está pendiente de aprobación. Te contactaremos pronto.",
