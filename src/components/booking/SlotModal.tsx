@@ -12,6 +12,7 @@ import { KipperOptIn } from "@/components/kipper/KipperOptIn";
 import { AddressAutocomplete, PlaceSelection } from "./AddressAutocomplete";
 import { formatDateKey } from "@/lib/dateUtils";
 import { usePricing, formatPrice, type PricingItem } from "@/hooks/usePricing";
+import { trackEvent } from "@/lib/gtag";
 
 interface SlotInfo {
   time: string;
@@ -314,6 +315,11 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
       });
 
       const createdBookingId = bookingResponse.bookingId || bookingResponse.booking?.id;
+
+      trackEvent("booking_created", {
+        value: getTotalPrice(),
+        currency: "ARS",
+      });
 
       // If online payment, create MercadoPago preference and redirect
       if (paymentMethod === "online" && createdBookingId) {
