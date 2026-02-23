@@ -4,6 +4,7 @@ import { Layout } from "@/components/layout/Layout";
 import { CalendarScheduler } from "@/components/booking/CalendarScheduler";
 import { useEffect, useRef } from "react";
 import { trackEvent } from "@/lib/gtag";
+import { trackPixelEvent } from "@/lib/metaPixel";
 
 const Reservar = () => {
   const navigate = useNavigate();
@@ -14,6 +15,9 @@ const Reservar = () => {
   useEffect(() => {
     if (!trackedRef.current) {
       trackEvent("booking_started");
+      trackPixelEvent("InitiateCheckout", {
+        content_category: "Car Wash Booking",
+      });
       trackedRef.current = true;
     }
   }, []);

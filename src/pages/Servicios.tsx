@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,8 @@ import {
 } from "lucide-react";
 import { getWhatsAppUrl } from "@/config/whatsapp";
 import { usePricing, formatPrice } from "@/hooks/usePricing";
+
+import { trackPixelEvent } from "@/lib/metaPixel";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -56,7 +59,18 @@ const iconMap: Record<string, React.ReactNode> = {
 
 const Servicios = () => {
   const { data: pricing, isLoading } = usePricing();
+  const trackedRef = useRef(false);
   const whatsappUrl = getWhatsAppUrl("Hola! Quiero reservar un lavado con Washero 🚗");
+
+  useEffect(() => {
+    if (!trackedRef.current) {
+      trackPixelEvent("ViewContent", {
+        content_name: "Servicios",
+        content_category: "Car Wash",
+      });
+      trackedRef.current = true;
+    }
+  }, []);
 
   const scrollToPlanes = () => {
     document.getElementById('planes')?.scrollIntoView({ behavior: 'smooth' });
