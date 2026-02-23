@@ -63,7 +63,9 @@ export const EarlyAccessPopup = () => {
       setIsSuccess(true);
       localStorage.setItem(STORAGE_KEY, "true");
       trackEvent("early_access_signup");
-      trackPixelEvent("Lead", { lead_type: "early_access" });
+      if (window.fbq) {
+        window.fbq("track", "Lead");
+      }
       toast.success("✅ Listo. Te enviamos un email confirmando tu 20% OFF.");
     } catch (error) {
       console.error("Error submitting early access lead:", error);
