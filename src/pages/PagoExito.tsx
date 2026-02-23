@@ -5,6 +5,7 @@ import { CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Layout } from '@/components/layout/Layout';
 import { trackEvent } from '@/lib/gtag';
+import { trackPixelEvent } from '@/lib/metaPixel';
 
 export default function PagoExito() {
   const [searchParams] = useSearchParams();
@@ -16,6 +17,10 @@ export default function PagoExito() {
     if (!trackedRef.current && ref) {
       trackEvent('purchase', {
         transaction_id: ref,
+        value: 0,
+        currency: 'ARS',
+      });
+      trackPixelEvent('Purchase', {
         value: 0, // actual amount not available client-side after redirect
         currency: 'ARS',
       });

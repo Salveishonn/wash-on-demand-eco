@@ -51,6 +51,10 @@ const Contacto = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Fire Meta Pixel Lead event
+    import("@/lib/metaPixel").then(({ trackPixelEvent }) => {
+      trackPixelEvent("Lead");
+    });
     toast({
       title: "¡Mensaje Enviado!",
       description: "Te responderemos lo antes posible.",
