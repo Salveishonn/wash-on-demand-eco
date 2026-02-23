@@ -53,7 +53,7 @@ const Contacto = () => {
     e.preventDefault();
     // Fire Meta Pixel Lead event
     import("@/lib/metaPixel").then(({ trackPixelEvent }) => {
-      trackPixelEvent("Lead");
+      trackPixelEvent("Lead", { lead_type: "contact" });
     });
     toast({
       title: "¡Mensaje Enviado!",
