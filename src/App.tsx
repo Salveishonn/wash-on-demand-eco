@@ -30,6 +30,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import DebugPixel from "./pages/DebugPixel";
 
 const queryClient = new QueryClient();
 
@@ -79,6 +80,8 @@ const App = () => (
                 </AdminRoute>
               }
             />
+            {/* Debug */}
+            <Route path="/debug/pixel" element={<DebugPixel />} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>
