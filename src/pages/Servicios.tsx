@@ -62,6 +62,7 @@ const iconMap: Record<string, React.ReactNode> = {
 const Servicios = () => {
   const { data: pricing, isLoading } = usePricing();
   const trackedRef = useRef(false);
+  const [showEarlyAccess, setShowEarlyAccess] = useState(false);
   const whatsappUrl = getWhatsAppUrl("Hola! Quiero reservar un lavado con Washero 🚗");
 
   useEffect(() => {
