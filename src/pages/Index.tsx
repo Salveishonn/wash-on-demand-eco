@@ -176,6 +176,72 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Barrio Section */}
+      <section className="py-16 bg-washero-charcoal">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="font-display text-4xl md:text-5xl font-black text-background mb-4">
+              Si se suman <span className="text-primary">vecinos</span> de tu barrio, 
+              <br />
+              <span className="text-primary">ganan más</span>
+            </h2>
+            <p className="text-lg text-background/70 max-w-3xl mx-auto mb-8">
+              Si en tu barrio se anotan varios autos, podemos abrir cupos especiales de lanzamiento y beneficios exclusivos para esa zona.
+            </p>
+
+            <motion.div
+              initial="initial"
+              whileInView="animate"
+              viewport={{ once: true }}
+              variants={staggerContainer}
+              className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10"
+            >
+              <motion.div
+                variants={fadeInUp}
+                className="p-6 rounded-xl bg-background/10 border border-primary/20"
+              >
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-4 mx-auto">
+                  <Gift className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-bold text-background mb-2">20% OFF para los primeros clientes</h3>
+                <p className="text-background/70 text-sm">Descuento exclusivo para early adopters del barrio</p>
+              </motion.div>
+              
+              <motion.div
+                variants={fadeInUp}
+                className="p-6 rounded-xl bg-background/10 border border-primary/20"
+              >
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-4 mx-auto">
+                  <MapPin className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-bold text-background mb-2">Prioridad de agenda por barrio</h3>
+                <p className="text-background/70 text-sm">Horarios preferenciales para zonas con alta demanda</p>
+              </motion.div>
+              
+              <motion.div
+                variants={fadeInUp}
+                className="p-6 rounded-xl bg-background/10 border border-primary/20"
+              >
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-4 mx-auto">
+                  <Users className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-bold text-background mb-2">Beneficios especiales para grupos</h3>
+                <p className="text-background/70 text-sm">Descuentos adicionales cuando se suma el barrio</p>
+              </motion.div>
+            </motion.div>
+
+            <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
+              Quiero traer Washero a mi barrio <ChevronRight className="w-5 h-5" />
+            </Button>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Benefits Section */}
       <section className="py-24 bg-background">
         <div className="container mx-auto px-4">
