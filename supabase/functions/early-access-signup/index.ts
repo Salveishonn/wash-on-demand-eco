@@ -42,7 +42,13 @@ serve(async (req) => {
     const { error: leadError } = await supabase
       .from("early_access_leads")
       .upsert(
-        { name, email, phone },
+        { 
+          name, 
+          email, 
+          phone,
+          barrio,
+          wants_barrio_coordination: wantsBarrioCoordination || false
+        },
         { onConflict: "email", ignoreDuplicates: true }
       );
 
