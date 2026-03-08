@@ -131,10 +131,15 @@ export const Navbar = () => {
                 )}
               </>
             )}
-            <Button variant="hero" size="lg" asChild>
-              <Link to="/reservar">Reservar</Link>
-            </Button>
-          </div>
+            {PRELAUNCH_MODE ? (
+              <Button variant="hero" size="lg" onClick={() => setShowEarlyAccess(true)}>
+                <Sparkles className="w-4 h-4 mr-1" /> 20% OFF
+              </Button>
+            ) : (
+              <Button variant="hero" size="lg" asChild>
+                <Link to="/reservar">Reservar</Link>
+              </Button>
+            )}
 
           {/* Mobile Menu Button */}
           <button
