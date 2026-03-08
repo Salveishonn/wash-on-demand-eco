@@ -422,14 +422,20 @@ const Servicios = () => {
       {/* Sticky CTA for Mobile */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border md:hidden z-50">
         <div className="flex gap-3">
-          <Button 
-            variant="hero" 
-            size="lg" 
-            className="flex-1"
-            asChild
-          >
-            <Link to="/reservar">
-              Reservar ahora
+          {PRELAUNCH_MODE ? (
+            <Button variant="hero" size="lg" className="flex-1" onClick={() => setShowEarlyAccess(true)}>
+              Acceder al 20% OFF
+            </Button>
+          ) : (
+            <Button variant="hero" size="lg" className="flex-1" asChild>
+              <Link to="/reservar">Reservar ahora</Link>
+            </Button>
+          )}
+          <Button variant="outline" size="lg" onClick={scrollToPlanes}>
+            Planes
+          </Button>
+        </div>
+      </div>
             </Link>
           </Button>
           <Button 
