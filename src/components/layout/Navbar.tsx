@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, User, LogOut, ChevronDown } from "lucide-react";
+import { Menu, X, User, LogOut, ChevronDown, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
+import { PRELAUNCH_MODE } from "@/config/prelaunch";
+import { EarlyAccessPopup } from "@/components/early-access/EarlyAccessPopup";
 import {
   DropdownMenu,
   DropdownMenuContent,
