@@ -91,6 +91,7 @@ const Servicios = () => {
   
   return (
     <Layout>
+      <EarlyAccessPopup forceOpen={showEarlyAccess} onForceClose={() => setShowEarlyAccess(false)} />
       {/* Hero Section */}
       <section className="py-12 md:py-20 bg-gradient-to-b from-washero-charcoal to-washero-charcoal/95">
         <div className="container mx-auto px-4">
