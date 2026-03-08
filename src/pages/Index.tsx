@@ -332,13 +332,23 @@ const Index = () => {
                     </li>
                   ))}
                 </ul>
-                <Button
-                  variant={service.popular ? "hero" : "outline"}
-                  className="w-full"
-                  asChild
-                >
-                  <Link to="/reservar">Reservar</Link>
-                </Button>
+                {PRELAUNCH_MODE ? (
+                  <Button
+                    variant={service.popular ? "hero" : "outline"}
+                    className="w-full"
+                    onClick={() => setShowEarlyAccess(true)}
+                  >
+                    Sumate a la Lista
+                  </Button>
+                ) : (
+                  <Button
+                    variant={service.popular ? "hero" : "outline"}
+                    className="w-full"
+                    asChild
+                  >
+                    <Link to="/reservar">Reservar</Link>
+                  </Button>
+                )}
               </motion.div>
             ))}
           </motion.div>
