@@ -29,9 +29,9 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { name, email, phone }: EarlyAccessRequest = await req.json();
+    const { name, email, phone, barrio, wantsBarrioCoordination }: EarlyAccessRequest = await req.json();
 
-    console.log("[early-access-signup] Processing signup for:", email);
+    console.log("[early-access-signup] Processing signup for:", email, { barrio, wantsBarrioCoordination });
 
     // Validate email
     if (!email || !email.includes("@")) {
