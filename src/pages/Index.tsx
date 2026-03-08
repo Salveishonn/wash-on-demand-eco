@@ -152,29 +152,24 @@ const Index = () => {
               Lavado Premium a Domicilio en Buenos Aires
             </span>
             <h1 className="font-display text-5xl md:text-7xl font-black text-background leading-tight mb-6">
-              Vamos
+              Lavado Premium
               <br />
-              <span className="text-primary">a Vos.</span>
+              <span className="text-primary">a Domicilio en</span>
+              <br />
+              <span className="text-primary">Zona Norte</span>
             </h1>
-            <p className="text-xl text-background/80 mb-8 leading-relaxed">
-              Eco-friendly • Ahorrá tiempo • Resultados profesionales
-              <br />
-              Cuidado premium de tu auto en tu puerta.
+            <p className="text-xl text-background/80 mb-2 leading-relaxed">
+              Lanzamos en abril. Sumate ahora y obtené 20% OFF en tu primer lavado.
+            </p>
+            <p className="text-lg text-background/70 mb-8">
+              Eco-friendly • Resultados profesionales • Sin salir de casa
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              {PRELAUNCH_MODE ? (
-                <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
-                  Acceder al 20% OFF <ChevronRight className="w-5 h-5" />
-                </Button>
-              ) : (
-                <Button variant="hero" size="xl" asChild>
-                  <Link to="/reservar">
-                    Reservar Ahora <ChevronRight className="w-5 h-5" />
-                  </Link>
-                </Button>
-              )}
-              <Button variant="heroDark" size="xl" asChild>
-                <Link to="/servicios">Ver Servicios</Link>
+              <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
+                Acceder al 20% OFF <ChevronRight className="w-5 h-5" />
+              </Button>
+              <Button variant="heroDark" size="xl" onClick={() => setShowEarlyAccess(true)}>
+                Quiero sumarme con mi barrio
               </Button>
             </div>
           </motion.div>
