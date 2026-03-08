@@ -27,6 +27,8 @@ import { getWhatsAppUrl } from "@/config/whatsapp";
 import { usePricing, formatPrice } from "@/hooks/usePricing";
 
 import { trackPixelEvent } from "@/lib/metaPixel";
+import { PRELAUNCH_MODE } from "@/config/prelaunch";
+import { EarlyAccessPopup } from "@/components/early-access/EarlyAccessPopup";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
