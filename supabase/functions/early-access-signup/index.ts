@@ -10,6 +10,8 @@ interface EarlyAccessRequest {
   name: string;
   email: string;
   phone: string;
+  barrio?: string;
+  wantsBarrioCoordination?: boolean;
 }
 
 serve(async (req) => {
