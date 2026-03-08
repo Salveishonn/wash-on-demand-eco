@@ -62,6 +62,7 @@ export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupPr
   const handleClose = () => {
     setIsOpen(false);
     localStorage.setItem(STORAGE_KEY, "true");
+    onForceClose?.();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

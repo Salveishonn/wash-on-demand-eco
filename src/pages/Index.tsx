@@ -162,11 +162,17 @@ const Index = () => {
               Cuidado premium de tu auto en tu puerta.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="hero" size="xl" asChild>
-                <Link to="/reservar">
-                  Reservar Ahora <ChevronRight className="w-5 h-5" />
-                </Link>
-              </Button>
+              {PRELAUNCH_MODE ? (
+                <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
+                  Acceder al 20% OFF <ChevronRight className="w-5 h-5" />
+                </Button>
+              ) : (
+                <Button variant="hero" size="xl" asChild>
+                  <Link to="/reservar">
+                    Reservar Ahora <ChevronRight className="w-5 h-5" />
+                  </Link>
+                </Button>
+              )}
               <Button variant="heroDark" size="xl" asChild>
                 <Link to="/servicios">Ver Servicios</Link>
               </Button>
