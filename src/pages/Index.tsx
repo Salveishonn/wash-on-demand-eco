@@ -612,16 +612,28 @@ const Index = () => {
             className="text-center max-w-3xl mx-auto"
           >
             <h2 className="font-display text-4xl md:text-5xl font-black text-background mb-6">
-              ¿Listo para un Auto <span className="text-primary">Impecable</span>?
+              {PRELAUNCH_MODE
+                ? <>¿Querés un Auto <span className="text-primary">Impecable</span>?</>
+                : <>¿Listo para un Auto <span className="text-primary">Impecable</span>?</>
+              }
             </h2>
             <p className="text-xl text-background/70 mb-10">
-              Reservá tu primer lavado hoy y descubrí la diferencia Washero.
+              {PRELAUNCH_MODE
+                ? "Sumate a la lista de espera y obtené 20% OFF en tu primer lavado."
+                : "Reservá tu primer lavado hoy y descubrí la diferencia Washero."
+              }
             </p>
-            <Button variant="hero" size="xl" asChild>
-              <Link to="/reservar">
-                Reservar Ahora <ChevronRight className="w-5 h-5" />
-              </Link>
-            </Button>
+            {PRELAUNCH_MODE ? (
+              <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
+                Acceder al 20% OFF <ChevronRight className="w-5 h-5" />
+              </Button>
+            ) : (
+              <Button variant="hero" size="xl" asChild>
+                <Link to="/reservar">
+                  Reservar Ahora <ChevronRight className="w-5 h-5" />
+                </Link>
+              </Button>
+            )}
           </motion.div>
         </div>
       </section>
