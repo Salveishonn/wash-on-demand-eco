@@ -435,22 +435,8 @@ const Servicios = () => {
             Planes
           </Button>
         </div>
-      </div>
-            </Link>
-          </Button>
-          <Button 
-            variant="outline" 
-            size="lg"
-            onClick={scrollToPlanes}
-          >
-            Planes
-          </Button>
-        </div>
-      </div>
 
-      {/* Desktop CTA Section */}
-      <section className="py-16 bg-washero-charcoal hidden md:block">
-        <div className="container mx-auto px-4">
+
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
