@@ -125,10 +125,12 @@ const staggerContainer = {
 };
 
 const Index = () => {
+  const [showEarlyAccess, setShowEarlyAccess] = useState(false);
+
   return (
     <Layout>
       {/* Early Access Popup */}
-      <EarlyAccessPopup />
+      <EarlyAccessPopup forceOpen={showEarlyAccess} onForceClose={() => setShowEarlyAccess(false)} />
 
       {/* Hero Section */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
