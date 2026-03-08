@@ -71,11 +71,17 @@ export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupPr
     e.preventDefault();
     
     if (!formData.name || !formData.email || !formData.phone) {
-      toast.error("Por favor completá todos los campos");
+      toast.error("Por favor completá todos los campos obligatorios");
       return;
     }
 
-    const payload = { name: formData.name, email: formData.email, phone: formData.phone };
+    const payload = { 
+      name: formData.name, 
+      email: formData.email, 
+      phone: formData.phone,
+      barrio: formData.barrio || null,
+      wantsBarrioCoordination: formData.wantsBarrioCoordination,
+    };
     console.log('[EARLY_ACCESS] submit start', payload);
     setIsSubmitting(true);
 
