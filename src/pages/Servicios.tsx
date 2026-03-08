@@ -434,6 +434,7 @@ const Servicios = () => {
           <Button variant="outline" size="lg" onClick={scrollToPlanes}>
             Planes
           </Button>
+        </div>
       </div>
 
       {/* Desktop CTA Section */}
