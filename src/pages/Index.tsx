@@ -17,6 +17,7 @@ import {
   ChevronRight,
   CheckCircle,
   Gift,
+  Users,
 } from "lucide-react";
 import kipperLogo from "@/assets/kipper-logo.png";
 import heroImage from "@/assets/hero-washero-branded.jpg";
