@@ -39,6 +39,8 @@ export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupPr
     name: "",
     email: "",
     phone: "",
+    barrio: "",
+    wantsBarrioCoordination: false,
   });
 
   // Auto-open on first visit
