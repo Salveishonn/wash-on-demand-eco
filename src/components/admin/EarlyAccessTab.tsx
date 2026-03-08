@@ -18,6 +18,8 @@ interface EarlyAccessLead {
   name: string;
   email: string;
   phone: string;
+  barrio: string | null;
+  wants_barrio_coordination: boolean | null;
   is_test: boolean;
   created_at: string;
 }
