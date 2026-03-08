@@ -26,7 +26,12 @@ function trackLeadOnce() {
   }
 }
 
-export const EarlyAccessPopup = () => {
+interface EarlyAccessPopupProps {
+  forceOpen?: boolean;
+  onForceClose?: () => void;
+}
+
+export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupProps = {}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -36,6 +41,7 @@ export const EarlyAccessPopup = () => {
     phone: "",
   });
 
+  // Auto-open on first visit
   useEffect(() => {
     const wasShown = localStorage.getItem(STORAGE_KEY);
     if (!wasShown) {
@@ -46,9 +52,17 @@ export const EarlyAccessPopup = () => {
     }
   }, []);
 
+  // Handle forceOpen from parent
+  useEffect(() => {
+    if (forceOpen) {
+      setIsOpen(true);
+    }
+  }, [forceOpen]);
+
   const handleClose = () => {
     setIsOpen(false);
     localStorage.setItem(STORAGE_KEY, "true");
+    onForceClose?.();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

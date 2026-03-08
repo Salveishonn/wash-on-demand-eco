@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,8 @@ import { getWhatsAppUrl } from "@/config/whatsapp";
 import { usePricing, formatPrice } from "@/hooks/usePricing";
 
 import { trackPixelEvent } from "@/lib/metaPixel";
+import { PRELAUNCH_MODE } from "@/config/prelaunch";
+import { EarlyAccessPopup } from "@/components/early-access/EarlyAccessPopup";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -60,6 +62,7 @@ const iconMap: Record<string, React.ReactNode> = {
 const Servicios = () => {
   const { data: pricing, isLoading } = usePricing();
   const trackedRef = useRef(false);
+  const [showEarlyAccess, setShowEarlyAccess] = useState(false);
   const whatsappUrl = getWhatsAppUrl("Hola! Quiero reservar un lavado con Washero 🚗");
 
   useEffect(() => {
@@ -88,6 +91,7 @@ const Servicios = () => {
   
   return (
     <Layout>
+      <EarlyAccessPopup forceOpen={showEarlyAccess} onForceClose={() => setShowEarlyAccess(false)} />
       {/* Hero Section */}
       <section className="py-12 md:py-20 bg-gradient-to-b from-washero-charcoal to-washero-charcoal/95">
         <div className="container mx-auto px-4">
@@ -153,9 +157,15 @@ const Servicios = () => {
                     </p>
                   </div>
                 </div>
-                <Button variant="hero" className="w-full mt-4" asChild>
-                  <Link to="/reservar">Reservar</Link>
-                </Button>
+                {PRELAUNCH_MODE ? (
+                  <Button variant="hero" className="w-full mt-4" onClick={() => setShowEarlyAccess(true)}>
+                    Sumate a la Lista
+                  </Button>
+                ) : (
+                  <Button variant="hero" className="w-full mt-4" asChild>
+                    <Link to="/reservar">Reservar</Link>
+                  </Button>
+                )}
               </motion.div>
             ))}
           </motion.div>
@@ -412,21 +422,16 @@ const Servicios = () => {
       {/* Sticky CTA for Mobile */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border md:hidden z-50">
         <div className="flex gap-3">
-          <Button 
-            variant="hero" 
-            size="lg" 
-            className="flex-1"
-            asChild
-          >
-            <Link to="/reservar">
-              Reservar ahora
-            </Link>
-          </Button>
-          <Button 
-            variant="outline" 
-            size="lg"
-            onClick={scrollToPlanes}
-          >
+          {PRELAUNCH_MODE ? (
+            <Button variant="hero" size="lg" className="flex-1" onClick={() => setShowEarlyAccess(true)}>
+              Acceder al 20% OFF
+            </Button>
+          ) : (
+            <Button variant="hero" size="lg" className="flex-1" asChild>
+              <Link to="/reservar">Reservar ahora</Link>
+            </Button>
+          )}
+          <Button variant="outline" size="lg" onClick={scrollToPlanes}>
             Planes
           </Button>
         </div>
@@ -442,17 +447,27 @@ const Servicios = () => {
             className="text-center max-w-2xl mx-auto"
           >
             <h2 className="font-display text-3xl md:text-4xl font-black text-background mb-4">
-              ¿Listo para <span className="text-primary">empezar?</span>
+              {PRELAUNCH_MODE
+                ? <>Washero llega <span className="text-primary">pronto</span></>
+                : <>¿Listo para <span className="text-primary">empezar?</span></>
+              }
             </h2>
             <p className="text-lg text-background/70 mb-8">
-              Reservá tu lavado ahora o consultanos sobre los planes mensuales.
+              {PRELAUNCH_MODE
+                ? "Sumate a la lista de espera y obtené 20% OFF en tu primer lavado."
+                : "Reservá tu lavado ahora o consultanos sobre los planes mensuales."
+              }
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button variant="hero" size="lg" asChild>
-                <Link to="/reservar">
-                  Reservar ahora
-                </Link>
-              </Button>
+              {PRELAUNCH_MODE ? (
+                <Button variant="hero" size="lg" onClick={() => setShowEarlyAccess(true)}>
+                  Acceder al 20% OFF
+                </Button>
+              ) : (
+                <Button variant="hero" size="lg" asChild>
+                  <Link to="/reservar">Reservar ahora</Link>
+                </Button>
+              )}
               <Button variant="heroDark" size="lg" onClick={scrollToPlanes}>
                 Consultar planes mensuales
               </Button>

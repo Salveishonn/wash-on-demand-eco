@@ -44,9 +44,24 @@ interface CreateBookingRequest {
   bookingSource?: string;
 }
 
+// ============================================
+// PRE-LAUNCH MODE SAFETY CHECK
+// Set to false when ready to go live
+// ============================================
+const PRELAUNCH_MODE = true;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Block all public bookings in pre-launch mode
+  if (PRELAUNCH_MODE) {
+    console.log("[create-booking] BLOCKED: Pre-launch mode is active");
+    return new Response(
+      JSON.stringify({ error: "Washero todavía no está operando. Próximamente." }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

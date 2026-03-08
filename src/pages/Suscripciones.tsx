@@ -16,6 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PAYMENTS_ENABLED } from "@/config/payments";
+import { PRELAUNCH_MODE } from "@/config/prelaunch";
 import { KipperSubscriptionBanner } from "@/components/kipper/KipperSubscriptionBanner";
 import { usePricing, formatPrice, getPlanByCode } from "@/hooks/usePricing";
 import { trackEvent } from "@/lib/gtag";
@@ -66,6 +67,13 @@ export default function Suscripciones() {
   }, [searchParams]);
 
   const handleSelectPlan = (planCode: string) => {
+    if (PRELAUNCH_MODE) {
+      toast({
+        title: "Próximamente",
+        description: "Las suscripciones se activan pronto. Sumate a la lista de espera para obtener 20% OFF.",
+      });
+      return;
+    }
     if (!user) {
       navigate(`/auth?redirect=/suscripciones&plan=${planCode}`);
       return;

@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, User, LogOut, ChevronDown } from "lucide-react";
+import { Menu, X, User, LogOut, ChevronDown, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
+import { PRELAUNCH_MODE } from "@/config/prelaunch";
+import { EarlyAccessPopup } from "@/components/early-access/EarlyAccessPopup";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +28,7 @@ export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showEarlyAccess, setShowEarlyAccess] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -128,11 +131,16 @@ export const Navbar = () => {
                 )}
               </>
             )}
-            <Button variant="hero" size="lg" asChild>
-              <Link to="/reservar">Reservar</Link>
-            </Button>
+            {PRELAUNCH_MODE ? (
+              <Button variant="hero" size="lg" onClick={() => setShowEarlyAccess(true)}>
+                <Sparkles className="w-4 h-4 mr-1" /> 20% OFF
+              </Button>
+            ) : (
+              <Button variant="hero" size="lg" asChild>
+                <Link to="/reservar">Reservar</Link>
+              </Button>
+            )}
           </div>
-
           {/* Mobile Menu Button */}
           <button
             className="lg:hidden p-2"
@@ -205,16 +213,23 @@ export const Navbar = () => {
                     )}
                   </>
                 )}
-                <Button variant="hero" size="lg" className="w-full" asChild>
-                  <Link to="/reservar" onClick={() => setIsOpen(false)}>
-                    Reservar
-                  </Link>
-                </Button>
+                {PRELAUNCH_MODE ? (
+                  <Button variant="hero" size="lg" className="w-full" onClick={() => { setShowEarlyAccess(true); setIsOpen(false); }}>
+                    <Sparkles className="w-4 h-4 mr-1" /> Acceder al 20% OFF
+                  </Button>
+                ) : (
+                  <Button variant="hero" size="lg" className="w-full" asChild>
+                    <Link to="/reservar" onClick={() => setIsOpen(false)}>
+                      Reservar
+                    </Link>
+                  </Button>
+                )}
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+      <EarlyAccessPopup forceOpen={showEarlyAccess} onForceClose={() => setShowEarlyAccess(false)} />
     </nav>
   );
 };

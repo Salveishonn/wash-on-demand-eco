@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout/Layout";
 import { EarlyAccessPopup } from "@/components/early-access/EarlyAccessPopup";
+import { PRELAUNCH_MODE } from "@/config/prelaunch";
 import {
   Car,
   Droplets,
@@ -123,10 +125,12 @@ const staggerContainer = {
 };
 
 const Index = () => {
+  const [showEarlyAccess, setShowEarlyAccess] = useState(false);
+
   return (
     <Layout>
       {/* Early Access Popup */}
-      <EarlyAccessPopup />
+      <EarlyAccessPopup forceOpen={showEarlyAccess} onForceClose={() => setShowEarlyAccess(false)} />
 
       {/* Hero Section */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
@@ -158,11 +162,17 @@ const Index = () => {
               Cuidado premium de tu auto en tu puerta.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="hero" size="xl" asChild>
-                <Link to="/reservar">
-                  Reservar Ahora <ChevronRight className="w-5 h-5" />
-                </Link>
-              </Button>
+              {PRELAUNCH_MODE ? (
+                <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
+                  Acceder al 20% OFF <ChevronRight className="w-5 h-5" />
+                </Button>
+              ) : (
+                <Button variant="hero" size="xl" asChild>
+                  <Link to="/reservar">
+                    Reservar Ahora <ChevronRight className="w-5 h-5" />
+                  </Link>
+                </Button>
+              )}
               <Button variant="heroDark" size="xl" asChild>
                 <Link to="/servicios">Ver Servicios</Link>
               </Button>
@@ -322,13 +332,23 @@ const Index = () => {
                     </li>
                   ))}
                 </ul>
-                <Button
-                  variant={service.popular ? "hero" : "outline"}
-                  className="w-full"
-                  asChild
-                >
-                  <Link to="/reservar">Reservar</Link>
-                </Button>
+                {PRELAUNCH_MODE ? (
+                  <Button
+                    variant={service.popular ? "hero" : "outline"}
+                    className="w-full"
+                    onClick={() => setShowEarlyAccess(true)}
+                  >
+                    Sumate a la Lista
+                  </Button>
+                ) : (
+                  <Button
+                    variant={service.popular ? "hero" : "outline"}
+                    className="w-full"
+                    asChild
+                  >
+                    <Link to="/reservar">Reservar</Link>
+                  </Button>
+                )}
               </motion.div>
             ))}
           </motion.div>
@@ -592,16 +612,28 @@ const Index = () => {
             className="text-center max-w-3xl mx-auto"
           >
             <h2 className="font-display text-4xl md:text-5xl font-black text-background mb-6">
-              ¿Listo para un Auto <span className="text-primary">Impecable</span>?
+              {PRELAUNCH_MODE
+                ? <>¿Querés un Auto <span className="text-primary">Impecable</span>?</>
+                : <>¿Listo para un Auto <span className="text-primary">Impecable</span>?</>
+              }
             </h2>
             <p className="text-xl text-background/70 mb-10">
-              Reservá tu primer lavado hoy y descubrí la diferencia Washero.
+              {PRELAUNCH_MODE
+                ? "Sumate a la lista de espera y obtené 20% OFF en tu primer lavado."
+                : "Reservá tu primer lavado hoy y descubrí la diferencia Washero."
+              }
             </p>
-            <Button variant="hero" size="xl" asChild>
-              <Link to="/reservar">
-                Reservar Ahora <ChevronRight className="w-5 h-5" />
-              </Link>
-            </Button>
+            {PRELAUNCH_MODE ? (
+              <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
+                Acceder al 20% OFF <ChevronRight className="w-5 h-5" />
+              </Button>
+            ) : (
+              <Button variant="hero" size="xl" asChild>
+                <Link to="/reservar">
+                  Reservar Ahora <ChevronRight className="w-5 h-5" />
+                </Link>
+              </Button>
+            )}
           </motion.div>
         </div>
       </section>
