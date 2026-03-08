@@ -241,6 +241,7 @@ export const EarlyAccessTab = () => {
                     <TableHead>Nombre</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>WhatsApp</TableHead>
+                    <TableHead>Barrio / Zona</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead className="w-16">Test</TableHead>
                   </TableRow>
