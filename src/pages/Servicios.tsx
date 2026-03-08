@@ -157,9 +157,15 @@ const Servicios = () => {
                     </p>
                   </div>
                 </div>
-                <Button variant="hero" className="w-full mt-4" asChild>
-                  <Link to="/reservar">Reservar</Link>
-                </Button>
+                {PRELAUNCH_MODE ? (
+                  <Button variant="hero" className="w-full mt-4" onClick={() => setShowEarlyAccess(true)}>
+                    Sumate a la Lista
+                  </Button>
+                ) : (
+                  <Button variant="hero" className="w-full mt-4" asChild>
+                    <Link to="/reservar">Reservar</Link>
+                  </Button>
+                )}
               </motion.div>
             ))}
           </motion.div>
