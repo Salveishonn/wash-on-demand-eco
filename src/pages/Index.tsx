@@ -428,6 +428,31 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Social Proof / Momentum Section */}
+      <section className="py-20 bg-secondary/50">
+        <div className="container mx-auto px-4 text-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            className="max-w-2xl mx-auto"
+          >
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-semibold mb-6">
+              <Sparkles className="w-4 h-4" /> Lanzamiento Abril
+            </div>
+            <h2 className="font-display text-3xl md:text-4xl font-black text-foreground mb-4">
+              Estamos armando el lanzamiento en Zona Norte
+            </h2>
+            <p className="text-xl text-muted-foreground mb-8">
+              Cada semana se suman nuevos interesados al lanzamiento. Anotate para asegurar tu descuento y prioridad.
+            </p>
+            <Button variant="hero" size="lg" onClick={() => setShowEarlyAccess(true)}>
+              Sumate a la lista <ChevronRight className="w-5 h-5 ml-2" />
+            </Button>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Service Images Section */}
       <section className="py-24 bg-secondary">
         <div className="container mx-auto px-4">
