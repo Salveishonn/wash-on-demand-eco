@@ -59,12 +59,16 @@ serve(async (req) => {
 
     // 2) Use RPC to upsert into contacts (handles deduplication and merging)
     try {
+      const tags = ["early_access"];
+      if (barrio) tags.push("barrio");
+      if (wantsBarrioCoordination) tags.push("barrio_coordination");
+
       const { error: rpcError } = await supabase.rpc("upsert_contact", {
         p_email: email,
         p_name: name || null,
         p_phone: phone || null,
-        p_source: "early_access",
-        p_tags: ["early_access"],
+        p_source: barrio ? "barrio_interest" : "early_access",
+        p_tags: tags,
       });
 
       if (rpcError) {
