@@ -17,6 +17,7 @@ import {
   ChevronRight,
   CheckCircle,
   Gift,
+  Users,
 } from "lucide-react";
 import kipperLogo from "@/assets/kipper-logo.png";
 import heroImage from "@/assets/hero-washero-branded.jpg";
@@ -152,31 +153,92 @@ const Index = () => {
               Lavado Premium a Domicilio en Buenos Aires
             </span>
             <h1 className="font-display text-5xl md:text-7xl font-black text-background leading-tight mb-6">
-              Vamos
+              Lavado Premium
               <br />
-              <span className="text-primary">a Vos.</span>
+              <span className="text-primary">a Domicilio en</span>
+              <br />
+              <span className="text-primary">Zona Norte</span>
             </h1>
-            <p className="text-xl text-background/80 mb-8 leading-relaxed">
-              Eco-friendly • Ahorrá tiempo • Resultados profesionales
-              <br />
-              Cuidado premium de tu auto en tu puerta.
+            <p className="text-xl text-background/80 mb-2 leading-relaxed">
+              Lanzamos en abril. Sumate ahora y obtené 20% OFF en tu primer lavado.
+            </p>
+            <p className="text-lg text-background/70 mb-8">
+              Eco-friendly • Resultados profesionales • Sin salir de casa
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              {PRELAUNCH_MODE ? (
-                <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
-                  Acceder al 20% OFF <ChevronRight className="w-5 h-5" />
-                </Button>
-              ) : (
-                <Button variant="hero" size="xl" asChild>
-                  <Link to="/reservar">
-                    Reservar Ahora <ChevronRight className="w-5 h-5" />
-                  </Link>
-                </Button>
-              )}
-              <Button variant="heroDark" size="xl" asChild>
-                <Link to="/servicios">Ver Servicios</Link>
+              <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
+                Acceder al 20% OFF <ChevronRight className="w-5 h-5" />
+              </Button>
+              <Button variant="heroDark" size="xl" onClick={() => setShowEarlyAccess(true)}>
+                Quiero sumarme con mi barrio
               </Button>
             </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Barrio Section */}
+      <section className="py-16 bg-washero-charcoal">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="font-display text-4xl md:text-5xl font-black text-background mb-4">
+              Si se suman <span className="text-primary">vecinos</span> de tu barrio, 
+              <br />
+              <span className="text-primary">ganan más</span>
+            </h2>
+            <p className="text-lg text-background/70 max-w-3xl mx-auto mb-8">
+              Si en tu barrio se anotan varios autos, podemos abrir cupos especiales de lanzamiento y beneficios exclusivos para esa zona.
+            </p>
+
+            <motion.div
+              initial="initial"
+              whileInView="animate"
+              viewport={{ once: true }}
+              variants={staggerContainer}
+              className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10"
+            >
+              <motion.div
+                variants={fadeInUp}
+                className="p-6 rounded-xl bg-background/10 border border-primary/20"
+              >
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-4 mx-auto">
+                  <Gift className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-bold text-background mb-2">20% OFF para los primeros clientes</h3>
+                <p className="text-background/70 text-sm">Descuento exclusivo para early adopters del barrio</p>
+              </motion.div>
+              
+              <motion.div
+                variants={fadeInUp}
+                className="p-6 rounded-xl bg-background/10 border border-primary/20"
+              >
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-4 mx-auto">
+                  <MapPin className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-bold text-background mb-2">Prioridad de agenda por barrio</h3>
+                <p className="text-background/70 text-sm">Horarios preferenciales para zonas con alta demanda</p>
+              </motion.div>
+              
+              <motion.div
+                variants={fadeInUp}
+                className="p-6 rounded-xl bg-background/10 border border-primary/20"
+              >
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-4 mx-auto">
+                  <Users className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-bold text-background mb-2">Beneficios especiales para grupos</h3>
+                <p className="text-background/70 text-sm">Descuentos adicionales cuando se suma el barrio</p>
+              </motion.div>
+            </motion.div>
+
+            <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
+              Quiero traer Washero a mi barrio <ChevronRight className="w-5 h-5" />
+            </Button>
           </motion.div>
         </div>
       </section>
@@ -361,6 +423,31 @@ const Index = () => {
           >
             <Button variant="outline" size="lg" asChild>
               <Link to="/servicios">Ver Todos los Servicios</Link>
+            </Button>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Social Proof / Momentum Section */}
+      <section className="py-20 bg-secondary/50">
+        <div className="container mx-auto px-4 text-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            className="max-w-2xl mx-auto"
+          >
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-semibold mb-6">
+              <Sparkles className="w-4 h-4" /> Lanzamiento Abril
+            </div>
+            <h2 className="font-display text-3xl md:text-4xl font-black text-foreground mb-4">
+              Estamos armando el lanzamiento en Zona Norte
+            </h2>
+            <p className="text-xl text-muted-foreground mb-8">
+              Cada semana se suman nuevos interesados al lanzamiento. Anotate para asegurar tu descuento y prioridad.
+            </p>
+            <Button variant="hero" size="lg" onClick={() => setShowEarlyAccess(true)}>
+              Sumate a la lista <ChevronRight className="w-5 h-5 ml-2" />
             </Button>
           </motion.div>
         </div>

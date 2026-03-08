@@ -462,28 +462,34 @@ export type Database = {
       }
       early_access_leads: {
         Row: {
+          barrio: string | null
           created_at: string
           email: string
           id: string
           is_test: boolean
           name: string
           phone: string
+          wants_barrio_coordination: boolean | null
         }
         Insert: {
+          barrio?: string | null
           created_at?: string
           email: string
           id?: string
           is_test?: boolean
           name: string
           phone: string
+          wants_barrio_coordination?: boolean | null
         }
         Update: {
+          barrio?: string | null
           created_at?: string
           email?: string
           id?: string
           is_test?: boolean
           name?: string
           phone?: string
+          wants_barrio_coordination?: boolean | null
         }
         Relationships: []
       }

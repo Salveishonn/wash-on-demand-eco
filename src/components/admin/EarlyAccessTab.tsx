@@ -18,6 +18,8 @@ interface EarlyAccessLead {
   name: string;
   email: string;
   phone: string;
+  barrio: string | null;
+  wants_barrio_coordination: boolean | null;
   is_test: boolean;
   created_at: string;
 }
@@ -239,6 +241,7 @@ export const EarlyAccessTab = () => {
                     <TableHead>Nombre</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>WhatsApp</TableHead>
+                    <TableHead>Barrio / Zona</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead className="w-16">Test</TableHead>
                   </TableRow>
@@ -267,6 +270,14 @@ export const EarlyAccessTab = () => {
                         >
                           {lead.phone}
                         </a>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span>{lead.barrio || "-"}</span>
+                          {lead.wants_barrio_coordination && (
+                            <Badge variant="outline" className="w-fit text-[10px] mt-1">Coordina Vecinos</Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {formatDate(lead.created_at)}

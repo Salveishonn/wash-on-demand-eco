@@ -10,6 +10,8 @@ interface EarlyAccessRequest {
   name: string;
   email: string;
   phone: string;
+  barrio?: string;
+  wantsBarrioCoordination?: boolean;
 }
 
 serve(async (req) => {
@@ -27,9 +29,9 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { name, email, phone }: EarlyAccessRequest = await req.json();
+    const { name, email, phone, barrio, wantsBarrioCoordination }: EarlyAccessRequest = await req.json();
 
-    console.log("[early-access-signup] Processing signup for:", email);
+    console.log("[early-access-signup] Processing signup for:", email, { barrio, wantsBarrioCoordination });
 
     // Validate email
     if (!email || !email.includes("@")) {
@@ -40,7 +42,13 @@ serve(async (req) => {
     const { error: leadError } = await supabase
       .from("early_access_leads")
       .upsert(
-        { name, email, phone },
+        { 
+          name, 
+          email, 
+          phone,
+          barrio,
+          wants_barrio_coordination: wantsBarrioCoordination || false
+        },
         { onConflict: "email", ignoreDuplicates: true }
       );
 
@@ -51,12 +59,16 @@ serve(async (req) => {
 
     // 2) Use RPC to upsert into contacts (handles deduplication and merging)
     try {
+      const tags = ["early_access"];
+      if (barrio) tags.push("barrio");
+      if (wantsBarrioCoordination) tags.push("barrio_coordination");
+
       const { error: rpcError } = await supabase.rpc("upsert_contact", {
         p_email: email,
         p_name: name || null,
         p_phone: phone || null,
-        p_source: "early_access",
-        p_tags: ["early_access"],
+        p_source: barrio ? "barrio_interest" : "early_access",
+        p_tags: tags,
       });
 
       if (rpcError) {

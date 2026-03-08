@@ -39,6 +39,8 @@ export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupPr
     name: "",
     email: "",
     phone: "",
+    barrio: "",
+    wantsBarrioCoordination: false,
   });
 
   // Auto-open on first visit
@@ -69,11 +71,17 @@ export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupPr
     e.preventDefault();
     
     if (!formData.name || !formData.email || !formData.phone) {
-      toast.error("Por favor completá todos los campos");
+      toast.error("Por favor completá todos los campos obligatorios");
       return;
     }
 
-    const payload = { name: formData.name, email: formData.email, phone: formData.phone };
+    const payload = { 
+      name: formData.name, 
+      email: formData.email, 
+      phone: formData.phone,
+      barrio: formData.barrio || null,
+      wantsBarrioCoordination: formData.wantsBarrioCoordination,
+    };
     console.log('[EARLY_ACCESS] submit start', payload);
     setIsSubmitting(true);
 
@@ -171,12 +179,35 @@ export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupPr
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="barrio">Barrio / Zona (opcional)</Label>
+                <Input
+                  id="barrio"
+                  placeholder="Ej: Palermo, Belgrano, San Isidro"
+                  value={formData.barrio}
+                  onChange={(e) => setFormData({ ...formData, barrio: e.target.value })}
+                />
+              </div>
+
+              <div className="flex items-start space-x-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="wants-barrio-coordination"
+                  checked={formData.wantsBarrioCoordination}
+                  onChange={(e) => setFormData({ ...formData, wantsBarrioCoordination: e.target.checked })}
+                  className="mt-1 h-4 w-4 rounded border-gray-300"
+                />
+                <Label htmlFor="wants-barrio-coordination" className="text-sm font-normal cursor-pointer">
+                  Me interesa coordinar con vecinos para traer Washero a mi barrio
+                </Label>
+              </div>
+
               <Button 
                 type="submit" 
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? "Enviando..." : "Acceder al 20% OFF"}
+                {isSubmitting ? "Enviando..." : "Quiero mi 20% OFF"}
               </Button>
             </form>
           </>
