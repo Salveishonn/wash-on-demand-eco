@@ -140,7 +140,7 @@ export const Navbar = () => {
                 <Link to="/reservar">Reservar</Link>
               </Button>
             )}
-
+          </div>
           {/* Mobile Menu Button */}
           <button
             className="lg:hidden p-2"
