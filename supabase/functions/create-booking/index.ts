@@ -88,6 +88,15 @@ serve(async (req) => {
       );
     }
 
+    // Block bookings before launch date
+    if (data.bookingDate < LAUNCH_DATE) {
+      console.log("[create-booking] BLOCKED: booking_date", data.bookingDate, "is before LAUNCH_DATE", LAUNCH_DATE);
+      return new Response(
+        JSON.stringify({ error: "Las reservas están disponibles a partir del 15 de Abril." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Determine booking type
     const isSubscription: boolean = Boolean(
       data.bookingType === "subscription" || 
