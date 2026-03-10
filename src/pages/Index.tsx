@@ -166,11 +166,11 @@ const Index = () => {
               Eco-friendly • Resultados profesionales • Sin salir de casa
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="hero" size="xl" onClick={() => setShowEarlyAccess(true)}>
-                Acceder al 20% OFF <ChevronRight className="w-5 h-5" />
+              <Button variant="hero" size="xl" asChild>
+                <Link to="/reservar">Reservar Lavado <ChevronRight className="w-5 h-5" /></Link>
               </Button>
               <Button variant="heroDark" size="xl" onClick={() => setShowEarlyAccess(true)}>
-                Quiero sumarme con mi barrio
+                Acceder al 20% OFF
               </Button>
             </div>
           </motion.div>
@@ -394,23 +394,13 @@ const Index = () => {
                     </li>
                   ))}
                 </ul>
-                {PRELAUNCH_MODE ? (
-                  <Button
-                    variant={service.popular ? "hero" : "outline"}
-                    className="w-full"
-                    onClick={() => setShowEarlyAccess(true)}
-                  >
-                    Sumate a la Lista
-                  </Button>
-                ) : (
-                  <Button
-                    variant={service.popular ? "hero" : "outline"}
-                    className="w-full"
-                    asChild
-                  >
-                    <Link to="/reservar">Reservar</Link>
-                  </Button>
-                )}
+                <Button
+                  variant={service.popular ? "hero" : "outline"}
+                  className="w-full"
+                  asChild
+                >
+                  <Link to="/reservar">Reservar</Link>
+                </Button>
               </motion.div>
             ))}
           </motion.div>

@@ -45,23 +45,14 @@ interface CreateBookingRequest {
 }
 
 // ============================================
-// PRE-LAUNCH MODE SAFETY CHECK
-// Set to false when ready to go live
+// LAUNCH DATE GUARD
+// Bookings before this date are blocked
 // ============================================
-const PRELAUNCH_MODE = true;
+const LAUNCH_DATE = "2025-04-15";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
-  }
-
-  // Block all public bookings in pre-launch mode
-  if (PRELAUNCH_MODE) {
-    console.log("[create-booking] BLOCKED: Pre-launch mode is active");
-    return new Response(
-      JSON.stringify({ error: "Washero todavía no está operando. Próximamente." }),
-      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -94,6 +85,15 @@ serve(async (req) => {
           message: validationErrors.join(", ")
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Block bookings before launch date
+    if (data.bookingDate < LAUNCH_DATE) {
+      console.log("[create-booking] BLOCKED: booking_date", data.bookingDate, "is before LAUNCH_DATE", LAUNCH_DATE);
+      return new Response(
+        JSON.stringify({ error: "Las reservas están disponibles a partir del 15 de Abril." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

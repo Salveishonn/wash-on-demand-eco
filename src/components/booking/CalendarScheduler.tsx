@@ -10,10 +10,13 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
-  DrawerClose,
 } from "@/components/ui/drawer";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateKey } from "@/lib/dateUtils";
+import { LAUNCH_DATE, LAUNCH_HIGHLIGHT_DATES, FOUNDING_SLOTS_TOTAL } from "@/config/prelaunch";
+import { LaunchBanner } from "./LaunchBanner";
+import { BarrioCard } from "./BarrioCard";
+import { PreLaunchModal } from "./PreLaunchModal";
 
 interface DayAvailability {
   date: string;
@@ -37,7 +40,6 @@ interface CalendarSchedulerProps {
   bookingSource?: string;
 }
 
-// Single letter for mobile, full for desktop
 const DAYS_SHORT = ["D", "L", "M", "X", "J", "V", "S"];
 const DAYS_MEDIUM = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const DAYS_FULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -55,23 +57,18 @@ function getMonthDays(year: number, month: number) {
   const lastDay = new Date(year, month + 1, 0);
   const daysInMonth = lastDay.getDate();
   const startDayOfWeek = firstDay.getDay();
-  
   const days: (Date | null)[] = [];
-  
-  for (let i = 0; i < startDayOfWeek; i++) {
-    days.push(null);
-  }
-  
-  for (let i = 1; i <= daysInMonth; i++) {
-    days.push(new Date(year, month, i));
-  }
-  
+  for (let i = 0; i < startDayOfWeek; i++) days.push(null);
+  for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
   return days;
 }
 
 function formatDateLong(date: Date): string {
   return `${DAYS_FULL[date.getDay()]} ${date.getDate()} de ${MONTHS[date.getMonth()].toLowerCase()}`;
 }
+
+const isBeforeLaunch = (dateKey: string) => dateKey < LAUNCH_DATE;
+const isLaunchHighlight = (dateKey: string) => LAUNCH_HIGHLIGHT_DATES.includes(dateKey);
 
 export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" }: CalendarSchedulerProps) {
   const { toast } = useToast();
@@ -81,26 +78,40 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  
-  // Bottom sheet states for mobile slot picker
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [slots, setSlots] = useState<SlotInfo[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [currentSurcharge, setCurrentSurcharge] = useState<{ amount: number | null; percent: number | null } | null>(null);
-  
-  // Full modal for booking form
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showPreLaunchModal, setShowPreLaunchModal] = useState(false);
+  const [foundingSlotsRemaining, setFoundingSlotsRemaining] = useState<number | null>(null);
+
+  // Fetch founding slots count
+  useEffect(() => {
+    const fetchFoundingSlots = async () => {
+      try {
+        const { count } = await supabase
+          .from("bookings")
+          .select("*", { count: "exact", head: true })
+          .gte("booking_date", LAUNCH_DATE)
+          .neq("status", "cancelled");
+        const used = count ?? 0;
+        setFoundingSlotsRemaining(Math.max(0, FOUNDING_SLOTS_TOTAL - used));
+      } catch {
+        setFoundingSlotsRemaining(FOUNDING_SLOTS_TOTAL);
+      }
+    };
+    fetchFoundingSlots();
+  }, []);
 
   const fetchMonthAvailability = useCallback(async (year: number, month: number) => {
     setIsLoading(true);
     try {
       const firstDay = new Date(year, month, 1);
       const lastDay = new Date(year, month + 1, 0);
-      
       const from = formatDateKey(firstDay);
       const to = formatDateKey(lastDay);
-
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-availability-month?from=${from}&to=${to}`,
         {
@@ -110,18 +121,12 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
           },
         }
       );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch availability");
-      }
-
+      if (!response.ok) throw new Error("Failed to fetch availability");
       const result = await response.json();
-      
       const availabilityMap: Record<string, DayAvailability> = {};
       for (const day of result.availability || []) {
         availabilityMap[day.date] = day;
       }
-      
       setAvailability(availabilityMap);
     } catch (error) {
       console.error("[CalendarScheduler] Error fetching availability:", error);
@@ -147,11 +152,7 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
           },
         }
       );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch slots");
-      }
-
+      if (!response.ok) throw new Error("Failed to fetch slots");
       const result = await response.json();
       setSlots(result.slots || []);
       setCurrentSurcharge({
@@ -160,32 +161,20 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
       });
     } catch (error) {
       console.error("[CalendarScheduler] Error fetching slots:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudieron cargar los horarios",
-      });
+      toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los horarios" });
     } finally {
       setIsLoadingSlots(false);
     }
   }, [toast]);
 
   const handlePrevMonth = () => {
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear(currentYear - 1);
-    } else {
-      setCurrentMonth(currentMonth - 1);
-    }
+    if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); }
+    else setCurrentMonth(currentMonth - 1);
   };
 
   const handleNextMonth = () => {
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear(currentYear + 1);
-    } else {
-      setCurrentMonth(currentMonth + 1);
-    }
+    if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); }
+    else setCurrentMonth(currentMonth + 1);
   };
 
   const goToToday = () => {
@@ -193,15 +182,27 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
     setCurrentYear(today.getFullYear());
   };
 
+  const goToLaunchMonth = () => {
+    const [y, m] = LAUNCH_DATE.split("-").map(Number);
+    setCurrentYear(y);
+    setCurrentMonth(m - 1);
+    setShowPreLaunchModal(false);
+  };
+
   const handleDayClick = (date: Date) => {
     const dateKey = formatDateKey(date);
     const dayInfo = availability[dateKey];
-    
     if (dayInfo?.closed) return;
-    
+
     const todayStr = formatDateKey(today);
     if (dateKey < todayStr) return;
-    
+
+    // Block dates before launch
+    if (isBeforeLaunch(dateKey)) {
+      setShowPreLaunchModal(true);
+      return;
+    }
+
     setSelectedDate(date);
     setSelectedTime(null);
     setSlots([]);
@@ -221,104 +222,82 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
     setSelectedTime(null);
   };
 
-  const handleDrawerClose = () => {
-    setIsDrawerOpen(false);
-  };
-
   const handleBookingSuccess = (bookingId: string, paymentMethod: string) => {
     setIsModalOpen(false);
     setIsDrawerOpen(false);
     setSelectedDate(null);
     setSelectedTime(null);
     fetchMonthAvailability(currentYear, currentMonth);
+    // Refresh founding slots
+    supabase
+      .from("bookings")
+      .select("*", { count: "exact", head: true })
+      .gte("booking_date", LAUNCH_DATE)
+      .neq("status", "cancelled")
+      .then(({ count }) => {
+        setFoundingSlotsRemaining(Math.max(0, FOUNDING_SLOTS_TOTAL - (count ?? 0)));
+      });
     onBookingComplete?.(bookingId, paymentMethod);
   };
 
   const days = getMonthDays(currentYear, currentMonth);
   const todayStr = formatDateKey(today);
-
   const canGoPrev = currentYear > today.getFullYear() || 
     (currentYear === today.getFullYear() && currentMonth > today.getMonth());
-
   const isCurrentMonth = currentMonth === today.getMonth() && currentYear === today.getFullYear();
-
-  const availableSlots = useMemo(() => 
-    slots.filter(s => s.status === "available"), 
-    [slots]
-  );
+  const availableSlots = useMemo(() => slots.filter(s => s.status === "available"), [slots]);
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      {/* Compact Card Container */}
+      {/* Launch Banner */}
+      <LaunchBanner foundingSlotsRemaining={foundingSlotsRemaining} />
+
+      {/* Calendar Card */}
       <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
-        {/* Month Navigation - Sticky compact header */}
+        {/* Month Navigation */}
         <div className="sticky top-0 z-10 bg-card border-b border-border px-3 py-2 sm:px-4 sm:py-3">
           <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handlePrevMonth}
-              disabled={!canGoPrev}
-              className="h-10 w-10 sm:h-11 sm:w-11 text-foreground shrink-0"
-            >
+            <Button variant="ghost" size="icon" onClick={handlePrevMonth} disabled={!canGoPrev}
+              className="h-10 w-10 sm:h-11 sm:w-11 text-foreground shrink-0">
               <ChevronLeft className="w-5 h-5" />
             </Button>
-            
             <div className="flex items-center gap-2 min-w-0">
               <h2 className="font-display text-base sm:text-lg font-bold text-foreground truncate">
                 <span className="sm:hidden">{MONTHS_SHORT[currentMonth]} {currentYear}</span>
                 <span className="hidden sm:inline">{MONTHS[currentMonth]} {currentYear}</span>
               </h2>
               {!isCurrentMonth && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={goToToday}
-                  className="h-7 px-2 text-xs shrink-0"
-                >
+                <Button variant="outline" size="sm" onClick={goToToday} className="h-7 px-2 text-xs shrink-0">
                   <CalendarIcon className="w-3 h-3 mr-1" />
                   <span className="hidden sm:inline">Hoy</span>
                 </Button>
               )}
             </div>
-            
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleNextMonth}
-              className="h-10 w-10 sm:h-11 sm:w-11 text-foreground shrink-0"
-            >
+            <Button variant="ghost" size="icon" onClick={handleNextMonth}
+              className="h-10 w-10 sm:h-11 sm:w-11 text-foreground shrink-0">
               <ChevronRight className="w-5 h-5" />
             </Button>
           </div>
         </div>
 
-        {/* Loading indicator - inline */}
         {isLoading && (
           <div className="flex justify-center py-3">
             <Loader2 className="w-5 h-5 animate-spin text-primary" />
           </div>
         )}
 
-        {/* Calendar Grid - Compact */}
+        {/* Calendar Grid */}
         <div className="p-2 sm:p-4">
           <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
-            {/* Day headers - Single letter on mobile */}
             {DAYS_SHORT.map((day, i) => (
-              <div
-                key={day}
-                className="text-center py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-muted-foreground"
-              >
+              <div key={day} className="text-center py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-muted-foreground">
                 <span className="sm:hidden">{day}</span>
                 <span className="hidden sm:inline">{DAYS_MEDIUM[i]}</span>
               </div>
             ))}
 
-            {/* Calendar days - Compact cells */}
             {days.map((date, index) => {
-              if (!date) {
-                return <div key={`empty-${index}`} className="aspect-square" />;
-              }
+              if (!date) return <div key={`empty-${index}`} className="aspect-square" />;
 
               const dateKey = formatDateKey(date);
               const dayInfo = availability[dateKey];
@@ -327,39 +306,58 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
               const isClosed = dayInfo?.closed;
               const hasAvailability = dayInfo?.availableSlots && dayInfo.availableSlots > 0;
               const isFullyBooked = dayInfo && !dayInfo.closed && dayInfo.availableSlots === 0;
-              const isClickable = !isPast && !isClosed;
               const hasSurcharge = dayInfo?.surchargeAmount || dayInfo?.surchargePercent;
+              const preLaunch = isBeforeLaunch(dateKey) && !isPast;
+              const isHighlight = isLaunchHighlight(dateKey);
+              const isClickable = !isPast && !isClosed && !preLaunch;
 
               return (
                 <motion.button
                   key={dateKey}
                   type="button"
-                  onClick={() => isClickable && handleDayClick(date)}
-                  disabled={!isClickable}
+                  onClick={() => {
+                    if (preLaunch && !isPast) {
+                      setShowPreLaunchModal(true);
+                      return;
+                    }
+                    if (isClickable) handleDayClick(date);
+                  }}
+                  disabled={isPast}
                   whileTap={isClickable ? { scale: 0.92 } : undefined}
+                  title={preLaunch ? "Disponible a partir del 15 de Abril" : undefined}
                   className={`
                     aspect-square min-h-[44px] min-w-[44px] p-0.5 sm:p-1 rounded-lg sm:rounded-xl 
                     flex flex-col items-center justify-center
                     transition-all relative touch-manipulation
-                    ${isPast ? "opacity-30" : ""}
-                    ${isClosed && !isPast ? "bg-muted/30" : ""}
+                    ${isPast ? "opacity-30 cursor-not-allowed" : ""}
+                    ${preLaunch && !isPast ? "opacity-40 cursor-not-allowed" : ""}
+                    ${isClosed && !isPast && !preLaunch ? "bg-muted/30" : ""}
                     ${isClickable && hasAvailability ? "hover:bg-primary/10 active:bg-primary/20 cursor-pointer" : ""}
                     ${isClickable && isFullyBooked ? "bg-destructive/5" : ""}
                     ${isClickable && hasSurcharge ? "bg-yellow-50" : ""}
+                    ${isHighlight && !isPast ? "ring-2 ring-primary/50 bg-primary/5" : ""}
                     ${isToday ? "ring-2 ring-primary ring-inset" : ""}
-                    ${!isClickable ? "cursor-not-allowed" : ""}
+                    ${!isClickable && !isPast && !preLaunch ? "cursor-not-allowed" : ""}
                   `}
                 >
                   <span className={`
                     text-sm sm:text-base font-semibold leading-none
                     ${isToday ? "text-primary" : "text-foreground"}
-                    ${isPast || isClosed ? "text-muted-foreground" : ""}
+                    ${isPast || isClosed || preLaunch ? "text-muted-foreground" : ""}
+                    ${isHighlight && !isPast ? "text-primary font-bold" : ""}
                   `}>
                     {date.getDate()}
                   </span>
 
-                  {/* Availability indicator dot */}
-                  {!isPast && !isClosed && dayInfo && (
+                  {/* Launch highlight label */}
+                  {isHighlight && !isPast && (
+                    <span className="text-[8px] sm:text-[9px] text-primary font-bold leading-none mt-0.5">
+                      🚀
+                    </span>
+                  )}
+
+                  {/* Availability indicator */}
+                  {!isPast && !isClosed && !preLaunch && dayInfo && (
                     <div className="mt-0.5 sm:mt-1 flex gap-0.5">
                       {hasAvailability ? (
                         <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-accent" />
@@ -377,7 +375,7 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
           </div>
         </div>
 
-        {/* Compact Legend */}
+        {/* Legend */}
         <div className="flex items-center justify-center gap-4 px-3 py-2 sm:py-3 border-t border-border text-xs sm:text-sm text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-accent" />
@@ -388,19 +386,30 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
             <span>Lleno</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-yellow-500" />
-            <span>Recargo</span>
+            <span>🚀</span>
+            <span>Lanzamiento</span>
           </div>
         </div>
       </div>
 
-      {/* Bottom Sheet Drawer for Slot Selection (Mobile-first) */}
+      {/* Barrio Card */}
+      <BarrioCard />
+
+      {/* Pre-Launch Modal */}
+      <AnimatePresence>
+        {showPreLaunchModal && (
+          <PreLaunchModal
+            onClose={() => setShowPreLaunchModal(false)}
+            onPickLaunchDate={goToLaunchMonth}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Slot Drawer */}
       <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
         <DrawerContent className="max-h-[85vh]">
           <DrawerHeader className="text-left pb-2">
-            <DrawerTitle className="text-lg font-display">
-              Horarios disponibles
-            </DrawerTitle>
+            <DrawerTitle className="text-lg font-display">Horarios disponibles</DrawerTitle>
             <DrawerDescription>
               {selectedDate && formatDateLong(selectedDate)}
               {currentSurcharge && (currentSurcharge.amount || currentSurcharge.percent) && (
@@ -412,7 +421,6 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
               )}
             </DrawerDescription>
           </DrawerHeader>
-          
           <div className="px-4 pb-6 overflow-y-auto">
             {isLoadingSlots ? (
               <div className="flex justify-center py-8">
@@ -449,7 +457,7 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
         </DrawerContent>
       </Drawer>
 
-      {/* Full Booking Modal (opens after slot selection) */}
+      {/* Booking Modal */}
       <AnimatePresence>
         {isModalOpen && selectedDate && selectedTime && (
           <SlotModal
