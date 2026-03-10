@@ -435,27 +435,15 @@ const Servicios = () => {
             className="text-center max-w-2xl mx-auto"
           >
             <h2 className="font-display text-3xl md:text-4xl font-black text-background mb-4">
-              {PRELAUNCH_MODE
-                ? <>Washero llega <span className="text-primary">pronto</span></>
-                : <>¿Listo para <span className="text-primary">empezar?</span></>
-              }
+              ¿Listo para <span className="text-primary">empezar?</span>
             </h2>
             <p className="text-lg text-background/70 mb-8">
-              {PRELAUNCH_MODE
-                ? "Sumate a la lista de espera y obtené 20% OFF en tu primer lavado."
-                : "Reservá tu lavado ahora o consultanos sobre los planes mensuales."
-              }
+              Reservá tu lavado ahora o consultanos sobre los planes mensuales.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              {PRELAUNCH_MODE ? (
-                <Button variant="hero" size="lg" onClick={() => setShowEarlyAccess(true)}>
-                  Acceder al 20% OFF
-                </Button>
-              ) : (
-                <Button variant="hero" size="lg" asChild>
-                  <Link to="/reservar">Reservar ahora</Link>
-                </Button>
-              )}
+              <Button variant="hero" size="lg" asChild>
+                <Link to="/reservar">Reservar ahora</Link>
+              </Button>
               <Button variant="heroDark" size="lg" onClick={scrollToPlanes}>
                 Consultar planes mensuales
               </Button>

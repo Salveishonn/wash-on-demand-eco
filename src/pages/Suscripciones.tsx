@@ -67,13 +67,7 @@ export default function Suscripciones() {
   }, [searchParams]);
 
   const handleSelectPlan = (planCode: string) => {
-    if (PRELAUNCH_MODE) {
-      toast({
-        title: "Próximamente",
-        description: "Las suscripciones se activan pronto. Sumate a la lista de espera para obtener 20% OFF.",
-      });
-      return;
-    }
+    // Subscriptions available regardless of launch date
     if (!user) {
       navigate(`/auth?redirect=/suscripciones&plan=${planCode}`);
       return;
