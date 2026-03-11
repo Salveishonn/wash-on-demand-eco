@@ -262,6 +262,9 @@ export function MessagesTab() {
 
     const textToSend = messageText.trim();
     setMessageText('');
+    if (composerRef.current) {
+      composerRef.current.style.height = 'auto';
+    }
     setIsSending(true);
 
     // Optimistic update
