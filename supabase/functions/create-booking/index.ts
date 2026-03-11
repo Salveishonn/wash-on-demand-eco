@@ -346,6 +346,33 @@ serve(async (req) => {
 
     console.log("[create-booking] Booking created:", booking.id);
 
+    // Apply discount engine (fire and forget for speed, but await for payment intent accuracy)
+    let discountResult = null;
+    try {
+      const discountUrl = `${supabaseUrl}/functions/v1/apply-booking-discount`;
+      const discountResp = await fetch(discountUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({ bookingId: booking.id }),
+      });
+      discountResult = await discountResp.json();
+      console.log("[create-booking] Discount result:", discountResult);
+    } catch (discountErr) {
+      console.error("[create-booking] Discount engine error:", discountErr);
+    }
+
+    // Get updated booking with discount applied
+    const { data: updatedBooking } = await supabase
+      .from("bookings")
+      .select("final_price_ars, discount_type, discount_percent, discount_amount_ars, is_launch_founder_slot")
+      .eq("id", booking.id)
+      .single();
+
+    const finalPriceArs = updatedBooking?.final_price_ars || data.totalPriceArs || Math.round(totalPriceCents / 100);
+
     // Create payment intent for non-subscription bookings
     let paymentIntent = null;
     let paymentUrl = null;
