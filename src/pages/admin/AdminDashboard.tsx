@@ -130,6 +130,9 @@ export default function AdminDashboard() {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
   
+  // Auto-logout after 30 minutes of inactivity
+  useSessionTimeout(true);
+  
   const [activeTab, setActiveTab] = useState<AdminTabType>('bookings');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [bookings, setBookings] = useState<Booking[]>([]);
