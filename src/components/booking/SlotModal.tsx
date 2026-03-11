@@ -70,6 +70,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     service: "",
     vehicleSize: "small",
     address: "",
+    barrio: "",
     name: "",
     email: "",
     phone: "",
