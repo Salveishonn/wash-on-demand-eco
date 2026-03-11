@@ -40,7 +40,7 @@ export function AddressAutocomplete({
   const [errorMsg, setErrorMsg] = useState<string>("");
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const initAttemptedRef = useRef(false);
   const didInitValueRef = useRef(false);
 

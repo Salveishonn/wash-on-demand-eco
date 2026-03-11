@@ -8,6 +8,7 @@ declare global {
     __gmapsPromise?: Promise<void>;
     __gmapsError?: string;
     __gmapsLoaded?: boolean;
+    google?: typeof google;
   }
 }
 
