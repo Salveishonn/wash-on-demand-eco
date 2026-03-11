@@ -154,6 +154,15 @@ serve(async (req) => {
       );
     }
 
+    // Block bookings before launch date
+    if (data.bookingDate < LAUNCH_DATE) {
+      console.log("[create-booking] BLOCKED: booking_date", data.bookingDate, "is before LAUNCH_DATE", LAUNCH_DATE);
+      return new Response(
+        JSON.stringify({ error: "Las reservas están disponibles a partir del 15 de Abril." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Check if the date is blocked via availability_overrides
     const { data: overrideData } = await supabase
       .from("availability_overrides")
