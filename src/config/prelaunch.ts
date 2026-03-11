@@ -10,10 +10,15 @@
 
 export const PRELAUNCH_MODE = false;
 
-export const LAUNCH_DATE = "2025-04-15";
+export const LAUNCH_DATE = "2026-04-15";
 
 /** Number of founding launch slots available */
 export const FOUNDING_SLOTS_TOTAL = 30;
 
+/** Discount percentages */
+export const FOUNDER_DISCOUNT_PERCENT = 20;
+export const BARRIO_DISCOUNT_PERCENT = 30;
+export const BARRIO_THRESHOLD = 3;
+
 /** Launch highlight days (shown specially in calendar) */
-export const LAUNCH_HIGHLIGHT_DATES = ["2025-04-15", "2025-04-16", "2025-04-17"];
+export const LAUNCH_HIGHLIGHT_DATES = ["2026-04-15", "2026-04-16", "2026-04-17"];
