@@ -285,8 +285,14 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
       formData.name.trim() &&
       formData.email.trim() &&
       formData.phone.trim() &&
-      selectedTime
+      selectedTime &&
+      (!zoneResult || zoneResult.isInOperativeArea)
     );
+  };
+
+  const handleSubmitWithValidation = async () => {
+    if (!validateForm()) return;
+    handleSubmit();
   };
 
   const handleSubmit = async () => {
