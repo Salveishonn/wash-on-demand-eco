@@ -577,6 +577,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                 <p className="text-xs text-muted-foreground">
                   Si 3+ autos de tu barrio reservan el mismo día, todos reciben 30% OFF
                 </p>
+              </div>
 
               {/* Contact Information */}
               <div className="space-y-4">
