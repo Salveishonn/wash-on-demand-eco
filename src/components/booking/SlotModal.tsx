@@ -91,6 +91,13 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
   const [kipperOptIn, setKipperOptIn] = useState(false);
   const [whatsappOptIn, setWhatsappOptIn] = useState(true);
 
+  // Zone detection
+  const [zoneResult, setZoneResult] = useState<ZoneDetectionResult | null>(null);
+  const [showOutOfAreaModal, setShowOutOfAreaModal] = useState(false);
+
+  // Validation errors
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   // Set default service when pricing loads
   useEffect(() => {
     if (pricing?.services.length && !formData.service) {
