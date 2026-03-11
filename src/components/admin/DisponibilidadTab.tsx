@@ -171,11 +171,11 @@ export function DisponibilidadTab() {
       }
       setWeeklyRules(allRules);
 
-      // Fetch date overrides (next 60 days)
+      // Fetch date overrides (next 120 days)
       const fromDate = new Date();
       fromDate.setDate(fromDate.getDate() - 7);
       const toDate = new Date();
-      toDate.setDate(toDate.getDate() + 60);
+      toDate.setDate(toDate.getDate() + 120);
 
       const { data: overridesData, error: overridesError } = await supabase
         .from("availability_overrides")
