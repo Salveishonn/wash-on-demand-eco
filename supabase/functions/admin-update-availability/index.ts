@@ -42,12 +42,27 @@ interface DeleteSlotOverridePayload {
   time: string;
 }
 
+interface BlockDateRangePayload {
+  type: "block_date_range";
+  from_date: string;
+  to_date: string;
+  note?: string;
+}
+
+interface UnblockDateRangePayload {
+  type: "unblock_date_range";
+  from_date: string;
+  to_date: string;
+}
+
 type Payload = 
   | UpdateWeeklyRulePayload 
   | UpdateDateOverridePayload 
   | UpdateSlotOverridePayload
   | DeleteDateOverridePayload
-  | DeleteSlotOverridePayload;
+  | DeleteSlotOverridePayload
+  | BlockDateRangePayload
+  | UnblockDateRangePayload;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
