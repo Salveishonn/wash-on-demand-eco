@@ -871,7 +871,14 @@ export function DisponibilidadTab() {
               return (
                 <button
                   key={dateKey}
-                  onClick={() => !isPast && openDateDialog(dateKey)}
+                  onClick={() => {
+                    if (isPast) return;
+                    if (quickBlockMode) {
+                      handleQuickToggleBlock(dateKey);
+                    } else {
+                      openDateDialog(dateKey);
+                    }
+                  }}
                   disabled={isPast}
                   className={`
                     aspect-square p-1 rounded-lg text-sm flex flex-col items-center justify-center gap-0.5
