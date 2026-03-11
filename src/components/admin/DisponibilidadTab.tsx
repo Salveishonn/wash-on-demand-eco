@@ -120,6 +120,19 @@ export function DisponibilidadTab() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isDateDialogOpen, setIsDateDialogOpen] = useState(false);
   
+  // Range blocking
+  const [rangeFromDate, setRangeFromDate] = useState("");
+  const [rangeToDate, setRangeToDate] = useState("");
+  const [rangeNote, setRangeNote] = useState("");
+  const [isBlockingRange, setIsBlockingRange] = useState(false);
+  
+  // Block until date
+  const [blockUntilDate, setBlockUntilDate] = useState("");
+  const [isBlockingUntil, setIsBlockingUntil] = useState(false);
+  
+  // Quick block mode
+  const [quickBlockMode, setQuickBlockMode] = useState(false);
+  
   // Date dialog form state
   const [dateFormClosed, setDateFormClosed] = useState(false);
   const [dateFormNote, setDateFormNote] = useState("");
