@@ -581,6 +581,7 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
     completed: bookings.filter(b => b.status === 'completed').length,
     cancelled: bookings.filter(b => b.status === 'cancelled').length,
     pendingPayment: bookings.filter(b => b.payment_status === 'pending' && b.status !== 'cancelled').length,
+    founderSlots: bookings.filter(b => b.is_launch_founder_slot && !b.is_test).length,
   };
 
   const getStatusBadge = (status: string) => {
