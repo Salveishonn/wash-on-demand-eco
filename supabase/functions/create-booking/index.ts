@@ -97,6 +97,39 @@ serve(async (req) => {
       );
     }
 
+    // Check if the date is blocked via availability_overrides
+    const { data: overrideData } = await supabase
+      .from("availability_overrides")
+      .select("is_closed")
+      .eq("date", data.bookingDate)
+      .eq("is_closed", true)
+      .maybeSingle();
+
+    if (overrideData) {
+      console.log("[create-booking] BLOCKED: date", data.bookingDate, "is closed via override");
+      return new Response(
+        JSON.stringify({ error: "Esta fecha no está disponible para reservas." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check if the time slot is blocked via availability_override_slots
+    const { data: slotOverrideData } = await supabase
+      .from("availability_override_slots")
+      .select("is_open")
+      .eq("date", data.bookingDate)
+      .eq("time", data.bookingTime)
+      .eq("is_open", false)
+      .maybeSingle();
+
+    if (slotOverrideData) {
+      console.log("[create-booking] BLOCKED: slot", data.bookingDate, data.bookingTime, "is closed via slot override");
+      return new Response(
+        JSON.stringify({ error: "Este horario no está disponible." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Determine booking type
     const isSubscription: boolean = Boolean(
       data.bookingType === "subscription" || 

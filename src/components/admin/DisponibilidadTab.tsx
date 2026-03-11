@@ -12,6 +12,9 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Ban,
+  CalendarRange,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -117,6 +120,19 @@ export function DisponibilidadTab() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isDateDialogOpen, setIsDateDialogOpen] = useState(false);
   
+  // Range blocking
+  const [rangeFromDate, setRangeFromDate] = useState("");
+  const [rangeToDate, setRangeToDate] = useState("");
+  const [rangeNote, setRangeNote] = useState("");
+  const [isBlockingRange, setIsBlockingRange] = useState(false);
+  
+  // Block until date
+  const [blockUntilDate, setBlockUntilDate] = useState("");
+  const [isBlockingUntil, setIsBlockingUntil] = useState(false);
+  
+  // Quick block mode
+  const [quickBlockMode, setQuickBlockMode] = useState(false);
+  
   // Date dialog form state
   const [dateFormClosed, setDateFormClosed] = useState(false);
   const [dateFormNote, setDateFormNote] = useState("");
@@ -155,11 +171,11 @@ export function DisponibilidadTab() {
       }
       setWeeklyRules(allRules);
 
-      // Fetch date overrides (next 60 days)
+      // Fetch date overrides (next 120 days)
       const fromDate = new Date();
       fromDate.setDate(fromDate.getDate() - 7);
       const toDate = new Date();
-      toDate.setDate(toDate.getDate() + 60);
+      toDate.setDate(toDate.getDate() + 120);
 
       const { data: overridesData, error: overridesError } = await supabase
         .from("availability_overrides")
@@ -450,7 +466,120 @@ export function DisponibilidadTab() {
     }
   };
 
-  // Calendar helpers
+  // Quick toggle block/unblock a single date
+  const handleQuickToggleBlock = async (dateStr: string) => {
+    const existingOverride = overrides.find((o) => o.date === dateStr);
+    const isClosed = existingOverride?.is_closed;
+    
+    try {
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error("No authenticated");
+
+      const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (isClosed) {
+        // Unblock: delete override
+        await fetch(`${baseUrl}/functions/v1/admin-update-availability`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ type: "delete_date_override", date: dateStr }),
+        });
+        toast({ title: "Desbloqueado", description: `${dateStr} ahora está abierto` });
+      } else {
+        // Block: create closed override
+        await fetch(`${baseUrl}/functions/v1/admin-update-availability`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ type: "date_override", date: dateStr, is_closed: true, note: "Bloqueado manualmente" }),
+        });
+        toast({ title: "Bloqueado", description: `${dateStr} ahora está cerrado` });
+      }
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    }
+  };
+
+  // Block a date range
+  const handleBlockRange = async () => {
+    if (!rangeFromDate || !rangeToDate) return;
+    if (rangeFromDate > rangeToDate) {
+      toast({ variant: "destructive", title: "Error", description: "La fecha de inicio debe ser anterior a la fecha de fin" });
+      return;
+    }
+    
+    setIsBlockingRange(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error("No authenticated");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-availability`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({
+            type: "block_date_range",
+            from_date: rangeFromDate,
+            to_date: rangeToDate,
+            note: rangeNote || "Bloqueado por rango",
+          }),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      
+      toast({ title: "Rango bloqueado", description: `${result.count || "Varias"} fechas bloqueadas` });
+      setRangeFromDate("");
+      setRangeToDate("");
+      setRangeNote("");
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsBlockingRange(false);
+    }
+  };
+
+  // Block all dates until a specific date
+  const handleBlockUntilDate = async () => {
+    if (!blockUntilDate) return;
+    
+    setIsBlockingUntil(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error("No authenticated");
+
+      const todayStr = formatDateKey(new Date());
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-availability`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({
+            type: "block_date_range",
+            from_date: todayStr,
+            to_date: blockUntilDate,
+            note: "Bloqueado hasta lanzamiento",
+          }),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      
+      toast({ title: "Fechas bloqueadas", description: `Todas las fechas bloqueadas hasta ${blockUntilDate}` });
+      setBlockUntilDate("");
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsBlockingUntil(false);
+    }
+  };
+
   const getMonthDays = (year: number, month: number) => {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
@@ -564,7 +693,95 @@ export function DisponibilidadTab() {
         </CardContent>
       </Card>
 
-      {/* Section 2: Date Overrides Calendar */}
+      {/* Section 2: Quick Blocking Tools */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="w-5 h-5" />
+            Bloqueo Rápido de Fechas
+          </CardTitle>
+          <CardDescription>
+            Bloqueá fechas en bloque para feriados, vacaciones o antes del lanzamiento
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Block until date */}
+          <div className="p-4 rounded-lg border border-border bg-muted/30 space-y-3">
+            <div className="flex items-center gap-2">
+              <Ban className="w-4 h-4 text-destructive" />
+              <Label className="font-semibold">Bloquear todas las fechas hasta…</Label>
+            </div>
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Fecha límite</Label>
+                <Input
+                  type="date"
+                  value={blockUntilDate}
+                  onChange={(e) => setBlockUntilDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <Button
+                onClick={handleBlockUntilDate}
+                disabled={!blockUntilDate || isBlockingUntil}
+                variant="destructive"
+                size="sm"
+              >
+                {isBlockingUntil ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Ban className="w-4 h-4 mr-1" />}
+                Bloquear
+              </Button>
+            </div>
+          </div>
+
+          {/* Range blocking */}
+          <div className="p-4 rounded-lg border border-border bg-muted/30 space-y-3">
+            <div className="flex items-center gap-2">
+              <CalendarRange className="w-4 h-4" />
+              <Label className="font-semibold">Bloquear rango de fechas</Label>
+            </div>
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Desde</Label>
+                <Input
+                  type="date"
+                  value={rangeFromDate}
+                  onChange={(e) => setRangeFromDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Hasta</Label>
+                <Input
+                  type="date"
+                  value={rangeToDate}
+                  onChange={(e) => setRangeToDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Nota (opcional)</Label>
+                <Input
+                  value={rangeNote}
+                  onChange={(e) => setRangeNote(e.target.value)}
+                  placeholder="Ej: Vacaciones"
+                  className="w-44"
+                />
+              </div>
+              <Button
+                onClick={handleBlockRange}
+                disabled={!rangeFromDate || !rangeToDate || isBlockingRange}
+                variant="destructive"
+                size="sm"
+              >
+                {isBlockingRange ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Ban className="w-4 h-4 mr-1" />}
+                Bloquear rango
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section 3: Date Overrides Calendar */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -611,6 +828,22 @@ export function DisponibilidadTab() {
             </Button>
           </div>
 
+          {/* Quick block mode toggle */}
+          <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-muted/30 border border-border">
+            <Switch checked={quickBlockMode} onCheckedChange={setQuickBlockMode} />
+            <div className="flex-1">
+              <Label className="font-medium">Modo bloqueo rápido</Label>
+              <p className="text-xs text-muted-foreground">
+                {quickBlockMode
+                  ? "Hacé clic en cualquier fecha para bloquear/desbloquear al instante"
+                  : "Hacé clic en una fecha para editar detalles (recargo, horarios, nota)"}
+              </p>
+            </div>
+            {quickBlockMode && (
+              <Badge variant="destructive" className="shrink-0">Activo</Badge>
+            )}
+          </div>
+
           {/* Calendar grid */}
           <div className="grid grid-cols-7 gap-1">
             {WEEKDAYS_SHORT.map((day) => (
@@ -638,7 +871,14 @@ export function DisponibilidadTab() {
               return (
                 <button
                   key={dateKey}
-                  onClick={() => !isPast && openDateDialog(dateKey)}
+                  onClick={() => {
+                    if (isPast) return;
+                    if (quickBlockMode) {
+                      handleQuickToggleBlock(dateKey);
+                    } else {
+                      openDateDialog(dateKey);
+                    }
+                  }}
                   disabled={isPast}
                   className={`
                     aspect-square p-1 rounded-lg text-sm flex flex-col items-center justify-center gap-0.5

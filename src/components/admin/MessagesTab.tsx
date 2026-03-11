@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -99,6 +99,13 @@ const getStatusIcon = (status: string) => {
 export function MessagesTab() {
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea helper
+  const autoResizeTextarea = useCallback((el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, []);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
@@ -255,6 +262,9 @@ export function MessagesTab() {
 
     const textToSend = messageText.trim();
     setMessageText('');
+    if (composerRef.current) {
+      composerRef.current.style.height = 'auto';
+    }
     setIsSending(true);
 
     // Optimistic update
@@ -628,24 +638,28 @@ export function MessagesTab() {
 
             {/* Composer */}
             <div className="p-4 border-t border-border">
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-end">
                 <Textarea
+                  ref={composerRef}
                   placeholder="Escribe un mensaje..."
                   value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
+                  onChange={(e) => {
+                    setMessageText(e.target.value);
+                    autoResizeTextarea(e.target);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       handleSend();
                     }
                   }}
-                  className="min-h-[44px] max-h-32 resize-none"
+                  className="min-h-[44px] max-h-[200px] resize-none overflow-y-auto"
                   rows={1}
                 />
                 <Button
                   onClick={handleSend}
                   disabled={!messageText.trim() || isSending}
-                  className="px-4"
+                  className="px-4 shrink-0"
                 >
                   {isSending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
