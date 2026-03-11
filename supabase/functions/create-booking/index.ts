@@ -126,11 +126,30 @@ serve(async (req) => {
       );
     }
 
-    // Block bookings before launch date
-    if (data.bookingDate < LAUNCH_DATE) {
-      console.log("[create-booking] BLOCKED: booking_date", data.bookingDate, "is before LAUNCH_DATE", LAUNCH_DATE);
+    // Validate email format
+    if (!isValidEmailServer(data.customerEmail)) {
       return new Response(
-        JSON.stringify({ error: "Las reservas están disponibles a partir del 15 de Abril." }),
+        JSON.stringify({ error: "Email inválido", message: "Ingresá un email válido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate phone format
+    if (!isValidPhoneServer(data.customerPhone)) {
+      return new Response(
+        JSON.stringify({ error: "Teléfono inválido", message: "Ingresá un teléfono válido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate operative zone
+    if (!isInOperativeArea(data.address)) {
+      console.log("[create-booking] BLOCKED: address outside operative area:", data.address);
+      return new Response(
+        JSON.stringify({ 
+          error: "Dirección fuera de zona operativa",
+          message: "Por ahora Washero está disponible en C.A.B.A. y Zona Norte (Vicente López a Escobar)."
+        }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
