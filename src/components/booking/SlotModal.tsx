@@ -566,6 +566,18 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                 />
               </div>
 
+              {/* Barrio / Zona */}
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">Barrio / Zona</Label>
+                <Input
+                  placeholder="Ej: Olivos, Martínez, San Isidro"
+                  value={formData.barrio}
+                  onChange={(e) => handleInputChange("barrio", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Si 3+ autos de tu barrio reservan el mismo día, todos reciben 30% OFF
+                </p>
+
               {/* Contact Information */}
               <div className="space-y-4">
                 <Label className="text-base font-semibold">Datos de contacto</Label>
