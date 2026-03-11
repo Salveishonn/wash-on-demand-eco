@@ -42,6 +42,8 @@ export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupPr
     barrio: "",
     wantsBarrioCoordination: false,
   });
+  const [honeypot, setHoneypot] = useState("");
+  const formTimestamp = useRef(Date.now());
 
   // Auto-open on first visit
   useEffect(() => {
