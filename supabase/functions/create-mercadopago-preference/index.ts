@@ -1,10 +1,36 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logError, isRateLimited } from "../_shared/securityUtils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Operative zones for server-side validation
+const OPERATIVE_ZONES_LOWER = [
+  "caba", "capital federal", "ciudad autónoma de buenos aires", "ciudad de buenos aires",
+  "palermo", "belgrano", "nuñez", "colegiales", "recoleta", "retiro",
+  "san telmo", "la boca", "barracas", "caballito", "flores",
+  "villa crespo", "villa urquiza", "villa devoto", "chacarita", "saavedra",
+  "vicente lópez", "vicente lopez", "olivos", "la lucila", "florida", "munro",
+  "san isidro", "acassuso", "martínez", "martinez", "beccar", "boulogne",
+  "tigre", "nordelta", "don torcuato", "general pacheco",
+  "benavídez", "benavidez", "ingeniero maschwitz", "ing. maschwitz",
+  "garín", "garin", "escobar", "san fernando",
+];
+
+const LAUNCH_DATE = "2026-04-15";
+
+function isInOperativeArea(address: string): boolean {
+  if (!address) return false;
+  const lower = address.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/\bc\d{4}\b/.test(lower)) return true;
+  return OPERATIVE_ZONES_LOWER.some(zone => {
+    const normalized = zone.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return lower.includes(normalized);
+  });
+}
 
 function getMercadoPagoToken(): string {
   const mode = (Deno.env.get("MERCADOPAGO_MODE") || "test").toLowerCase();
@@ -37,6 +63,16 @@ serve(async (req) => {
     );
   }
 
+  // Rate limiting: max 10 payment preference requests per IP per 10 min
+  const rateLimited = await isRateLimited("mp-preference", 10, 10, req);
+  if (rateLimited) {
+    await logError("create-mercadopago-preference", "rate_limit", "Rate limit exceeded", {}, req);
+    return new Response(
+      JSON.stringify({ error: "Demasiados intentos. Esperá un momento." }),
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
@@ -60,15 +96,60 @@ serve(async (req) => {
         .single();
 
       if (error || !booking) {
+        await logError("create-mercadopago-preference", "booking_not_found", `Booking ${bookingId} not found`, { bookingId }, req);
         return new Response(
           JSON.stringify({ error: "Reserva no encontrada" }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
+      // SECURITY: Validate booking date is not before launch
+      if (booking.booking_date < LAUNCH_DATE) {
+        await logError("create-mercadopago-preference", "blocked_date", `Payment attempt for pre-launch date ${booking.booking_date}`, { bookingId }, req);
+        return new Response(
+          JSON.stringify({ error: "Fecha no válida para pago" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // SECURITY: Validate booking date is not blocked
+      const { data: override } = await supabase
+        .from("availability_overrides")
+        .select("is_closed")
+        .eq("date", booking.booking_date)
+        .eq("is_closed", true)
+        .maybeSingle();
+
+      if (override) {
+        await logError("create-mercadopago-preference", "blocked_date", `Payment attempt for blocked date ${booking.booking_date}`, { bookingId }, req);
+        return new Response(
+          JSON.stringify({ error: "Fecha bloqueada, no se puede crear el pago" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // SECURITY: Validate address is in operative zone
+      if (booking.address && !isInOperativeArea(booking.address)) {
+        await logError("create-mercadopago-preference", "out_of_area", `Payment attempt for out-of-area address`, { bookingId, address: booking.address }, req);
+        return new Response(
+          JSON.stringify({ error: "Dirección fuera de zona operativa" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // SECURITY: Validate booking status allows payment
+      if (booking.status === "cancelled") {
+        return new Response(
+          JSON.stringify({ error: "Esta reserva fue cancelada" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       title = `Washero - ${booking.service_name}`;
       description = `Lavado ${booking.service_name} - ${booking.booking_date} ${booking.booking_time}`;
-      amountARS = booking.total_price_ars || Math.round(
+      
+      // SECURITY: Use server-calculated price, not client-provided
+      amountARS = booking.final_price_ars || booking.total_price_ars || Math.round(
         (booking.service_price_cents + (booking.car_type_extra_cents || 0) + (booking.addons_total_cents || 0)) / 100
       );
       customerEmail = booking.customer_email;
@@ -174,6 +255,7 @@ serve(async (req) => {
 
     if (!mpResponse.ok) {
       console.error("[create-mercadopago-preference] MP error:", mpData);
+      await logError("create-mercadopago-preference", "mp_api_error", mpData.message || "MP API error", { status: mpResponse.status, mpData }, req);
       throw new Error(mpData.message || "Error al crear preferencia de pago");
     }
 
@@ -203,6 +285,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("[create-mercadopago-preference] Error:", error);
+    await logError("create-mercadopago-preference", "unhandled", error.message, { stack: error.stack }, req);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

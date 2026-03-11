@@ -688,6 +688,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("[create-booking] Error:", error);
+    await logError("create-booking", "unhandled", error.message, { stack: error.stack }, req);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
