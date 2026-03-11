@@ -378,7 +378,7 @@ serve(async (req) => {
     let paymentUrl = null;
     
     if (!isSubscription) {
-      const totalAmountArs = data.totalPriceArs || Math.round(totalPriceCents / 100);
+      const totalAmountArs = finalPriceArs;
       
       const { data: intentData, error: intentError } = await supabase
         .from("payment_intents")
