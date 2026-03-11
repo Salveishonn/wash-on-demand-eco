@@ -74,6 +74,14 @@ interface Booking {
   is_test: boolean;
   created_at: string;
   confirmed_at: string | null;
+  // Discount fields
+  total_price_ars: number | null;
+  final_price_ars: number | null;
+  discount_type: string | null;
+  discount_percent: number | null;
+  discount_amount_ars: number | null;
+  is_launch_founder_slot: boolean | null;
+  barrio: string | null;
 }
 
 interface NotificationLog {
