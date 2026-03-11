@@ -343,6 +343,8 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
             address: formData.address.trim(),
             barrio: formData.barrio.trim() || undefined,
             notes: formData.notes.trim(),
+            _hp: honeypot,
+            _ts: formTimestamp.current,
             paymentMethod: bookingPaymentMethod,
             bookingType: isSubscriptionBooking ? "subscription" : "single",
             isSubscriptionBooking: !!isSubscriptionBooking,

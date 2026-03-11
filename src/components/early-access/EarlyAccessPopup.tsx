@@ -83,6 +83,8 @@ export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupPr
       phone: formData.phone,
       barrio: formData.barrio || null,
       wantsBarrioCoordination: formData.wantsBarrioCoordination,
+      _hp: honeypot,
+      _ts: formTimestamp.current,
     };
     console.log('[EARLY_ACCESS] submit start', payload);
     setIsSubmitting(true);
