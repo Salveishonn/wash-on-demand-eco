@@ -909,6 +909,7 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Servicio</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Fecha/Hora</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Total</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Descuento</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Estado</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Pago</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Test</th>
