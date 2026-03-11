@@ -147,7 +147,7 @@ export function AddressAutocomplete({
 
         console.log("[Autocomplete] Attaching Autocomplete to input...");
 
-        autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
+        autocompleteRef.current = new (window as any).google.maps.places.Autocomplete(inputRef.current, {
           componentRestrictions: { country: "ar" },
           types: ["address"],
           fields: ["formatted_address", "geometry", "place_id"],

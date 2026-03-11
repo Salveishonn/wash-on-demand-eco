@@ -4,11 +4,12 @@
  */
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-empty-interface
   interface Window {
     __gmapsPromise?: Promise<void>;
     __gmapsError?: string;
     __gmapsLoaded?: boolean;
-    google?: typeof google;
+    google?: any; // google.maps types from @types/google.maps
   }
 }
 
