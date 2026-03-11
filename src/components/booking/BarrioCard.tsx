@@ -15,11 +15,14 @@ export function BarrioCard() {
         </div>
         <div>
           <h4 className="font-display text-base font-bold text-foreground mb-1">
-            Beneficio por barrio
+            Beneficio por zona
           </h4>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Si en tu barrio reservan <span className="font-semibold text-foreground">3 o más autos el mismo día</span>,
-            todos reciben <span className="font-bold text-primary">30% OFF</span>.
+            Si <span className="font-semibold text-foreground">3 o más autos reservan el mismo día en tu zona</span>,
+            todos reciben <span className="font-bold text-primary">30% OFF automáticamente</span>.
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            La zona se detecta automáticamente desde tu dirección. No necesitás hacer nada extra.
           </p>
         </div>
       </div>

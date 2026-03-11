@@ -51,6 +51,43 @@ interface CreateBookingRequest {
 // ============================================
 const LAUNCH_DATE = "2026-04-15";
 
+// ============================================
+// OPERATIVE ZONES (server-side enforcement)
+// ============================================
+const OPERATIVE_ZONES_LOWER = [
+  "caba", "capital federal", "ciudad autónoma de buenos aires", "ciudad de buenos aires",
+  "palermo", "belgrano", "nuñez", "colegiales", "recoleta", "retiro",
+  "san telmo", "la boca", "barracas", "caballito", "flores",
+  "villa crespo", "villa urquiza", "villa devoto", "chacarita", "saavedra",
+  "vicente lópez", "vicente lopez", "olivos", "la lucila", "florida", "munro",
+  "san isidro", "acassuso", "martínez", "martinez", "beccar", "boulogne",
+  "tigre", "nordelta", "don torcuato", "general pacheco",
+  "benavídez", "benavidez", "ingeniero maschwitz", "ing. maschwitz",
+  "garín", "garin", "escobar", "san fernando",
+];
+
+function isInOperativeArea(address: string): boolean {
+  if (!address) return false;
+  const lower = address.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // Check for CABA postal codes (C1xxx)
+  if (/\bc\d{4}\b/.test(lower)) return true;
+  return OPERATIVE_ZONES_LOWER.some(zone => {
+    const normalized = zone.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return lower.includes(normalized);
+  });
+}
+
+function isValidEmailServer(email: string): boolean {
+  if (!email) return false;
+  return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email.trim());
+}
+
+function isValidPhoneServer(phone: string): boolean {
+  if (!phone) return false;
+  const digits = phone.replace(/[^\d]/g, "");
+  return digits.length >= 8 && digits.length <= 13;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -86,6 +123,34 @@ serve(async (req) => {
           message: validationErrors.join(", ")
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate email format
+    if (!isValidEmailServer(data.customerEmail)) {
+      return new Response(
+        JSON.stringify({ error: "Email inválido", message: "Ingresá un email válido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate phone format
+    if (!isValidPhoneServer(data.customerPhone)) {
+      return new Response(
+        JSON.stringify({ error: "Teléfono inválido", message: "Ingresá un teléfono válido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate operative zone
+    if (!isInOperativeArea(data.address)) {
+      console.log("[create-booking] BLOCKED: address outside operative area:", data.address);
+      return new Response(
+        JSON.stringify({ 
+          error: "Dirección fuera de zona operativa",
+          message: "Por ahora Washero está disponible en C.A.B.A. y Zona Norte (Vicente López a Escobar)."
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

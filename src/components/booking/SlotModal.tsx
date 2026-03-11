@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
-import { X, Clock, Loader2, User, Phone, Mail, CreditCard, Wallet, RefreshCw, Check, AlertCircle, MessageCircle, Sparkles, Armchair, Wind, Waves, Car } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, Clock, Loader2, User, Phone, Mail, CreditCard, Wallet, RefreshCw, Check, AlertCircle, MessageCircle, Sparkles, Armchair, Wind, Waves, Car, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { AddressAutocomplete, PlaceSelection } from "./AddressAutocomplete";
 import { formatDateKey } from "@/lib/dateUtils";
 import { usePricing, formatPrice, type PricingItem } from "@/hooks/usePricing";
 import { trackEvent } from "@/lib/gtag";
+import { detectZoneFromAddress, isValidEmail, isValidArgentinaPhone, type ZoneDetectionResult } from "@/config/operativeZones";
 
 interface SlotInfo {
   time: string;
@@ -90,6 +91,13 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
   const [kipperOptIn, setKipperOptIn] = useState(false);
   const [whatsappOptIn, setWhatsappOptIn] = useState(true);
 
+  // Zone detection
+  const [zoneResult, setZoneResult] = useState<ZoneDetectionResult | null>(null);
+  const [showOutOfAreaModal, setShowOutOfAreaModal] = useState(false);
+
+  // Validation errors
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   // Set default service when pricing loads
   useEffect(() => {
     if (pricing?.services.length && !formData.service) {
@@ -142,6 +150,8 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear field error on change
+    setFieldErrors((prev) => ({ ...prev, [field]: "" }));
     if (field === "email" || field === "phone") {
       setHasCheckedSubscription(false);
       setSubscriptionInfo(null);
@@ -149,6 +159,51 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
         setPaymentMethod("pay_later");
       }
     }
+  };
+
+  const handleAddressSelect = (selection: PlaceSelection) => {
+    handleInputChange("address", selection.address);
+    // Auto-detect zone from address
+    const result = detectZoneFromAddress(selection.address);
+    setZoneResult(result);
+    if (result.zone) {
+      setFormData((prev) => ({ ...prev, barrio: result.zone! }));
+    }
+    if (!result.isInOperativeArea) {
+      setShowOutOfAreaModal(true);
+    }
+  };
+
+  const handleAddressTextChange = (text: string) => {
+    handleInputChange("address", text);
+    // Re-detect zone on text change (debounced by typing)
+    const result = detectZoneFromAddress(text);
+    setZoneResult(result);
+    if (result.zone) {
+      setFormData((prev) => ({ ...prev, barrio: result.zone! }));
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!formData.email.trim() || !isValidEmail(formData.email)) {
+      errors.email = "Ingresá un email válido";
+    }
+    if (!formData.phone.trim() || !isValidArgentinaPhone(formData.phone)) {
+      errors.phone = "Ingresá un teléfono válido";
+    }
+    if (!formData.name.trim()) {
+      errors.name = "Ingresá tu nombre";
+    }
+    if (!formData.address.trim()) {
+      errors.address = "Ingresá una dirección";
+    }
+    // Check operative area
+    if (formData.address.trim() && zoneResult && !zoneResult.isInOperativeArea) {
+      errors.address = "Dirección fuera de nuestra zona operativa";
+    }
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const toggleExtra = (code: string) => {
@@ -230,8 +285,14 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
       formData.name.trim() &&
       formData.email.trim() &&
       formData.phone.trim() &&
-      selectedTime
+      selectedTime &&
+      (!zoneResult || zoneResult.isInOperativeArea)
     );
+  };
+
+  const handleSubmitWithValidation = async () => {
+    if (!validateForm()) return;
+    handleSubmit();
   };
 
   const handleSubmit = async () => {
@@ -559,23 +620,33 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                   key={step === "form" ? "form-open" : "form-closed"}
                   initialValue={formData.address}
                   placeholder="Ej: Av. Corrientes 1234, CABA"
-                  onTextChange={(text) => handleInputChange("address", text)}
-                  onSelect={(selection: PlaceSelection) => {
-                    handleInputChange("address", selection.address);
-                  }}
+                  onTextChange={handleAddressTextChange}
+                  onSelect={handleAddressSelect}
                 />
+                {fieldErrors.address && (
+                  <p className="text-xs text-destructive flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {fieldErrors.address}
+                  </p>
+                )}
+                {zoneResult?.isInOperativeArea && zoneResult.zone && (
+                  <p className="text-xs text-primary flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    Zona detectada: {zoneResult.zone}
+                  </p>
+                )}
               </div>
 
-              {/* Barrio / Zona */}
+              {/* Barrio / Zona (auto-filled, editable as fallback) */}
               <div className="space-y-2">
                 <Label className="text-base font-semibold">Barrio / Zona</Label>
                 <Input
-                  placeholder="Ej: Olivos, Martínez, San Isidro"
+                  placeholder="Se detecta automáticamente de la dirección"
                   value={formData.barrio}
                   onChange={(e) => handleInputChange("barrio", e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Si 3+ autos de tu barrio reservan el mismo día, todos reciben 30% OFF
+                  Beneficio por zona: si 3+ autos de tu zona reservan el mismo día, todos reciben 30% OFF automáticamente
                 </p>
               </div>
 
@@ -583,31 +654,33 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
               <div className="space-y-4">
                 <Label className="text-base font-semibold">Datos de contacto</Label>
                 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       placeholder="Nombre completo"
                       value={formData.name}
                       onChange={(e) => handleInputChange("name", e.target.value)}
-                      className="pl-10"
+                      className={`pl-10 ${fieldErrors.name ? "border-destructive" : ""}`}
                     />
                   </div>
+                  {fieldErrors.name && <p className="text-xs text-destructive">{fieldErrors.name}</p>}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       placeholder="Teléfono (ej: 11 2345-6789)"
                       value={formData.phone}
                       onChange={(e) => handleInputChange("phone", e.target.value)}
-                      className="pl-10"
+                      className={`pl-10 ${fieldErrors.phone ? "border-destructive" : ""}`}
                     />
                   </div>
+                  {fieldErrors.phone && <p className="text-xs text-destructive">{fieldErrors.phone}</p>}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -615,9 +688,10 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                       placeholder="Email"
                       value={formData.email}
                       onChange={(e) => handleInputChange("email", e.target.value)}
-                      className="pl-10"
+                      className={`pl-10 ${fieldErrors.email ? "border-destructive" : ""}`}
                     />
                   </div>
+                  {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
                 </div>
 
                 <Textarea
@@ -735,7 +809,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                   <div className="mt-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
                     <p className="text-xs text-primary font-medium text-center">
                       🎉 Los primeros 30 lavados tienen 20% OFF automático.
-                      {formData.barrio.trim() && " Si tu barrio suma 3+ reservas el mismo día: 30% OFF."}
+                      {formData.barrio.trim() && " Si tu zona suma 3+ reservas el mismo día: 30% OFF."}
                       {" "}El descuento se aplica automáticamente al confirmar.
                     </p>
                   </div>
@@ -746,7 +820,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
               <Button
                 className="w-full"
                 size="lg"
-                onClick={handleSubmit}
+                onClick={handleSubmitWithValidation}
                 disabled={!canSubmit() || isSubmitting}
               >
                 {isSubmitting ? (
@@ -764,6 +838,56 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
           )}
         </div>
       </motion.div>
+
+      {/* Out of Area Modal */}
+      <AnimatePresence>
+        {showOutOfAreaModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+            onClick={() => setShowOutOfAreaModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md bg-background rounded-2xl shadow-xl border border-border p-6 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-12 h-12 rounded-xl bg-yellow-100 flex items-center justify-center mx-auto">
+                <MapPin className="w-6 h-6 text-yellow-600" />
+              </div>
+              <h3 className="text-lg font-display font-bold text-foreground text-center">
+                Todavía no operamos en esa zona
+              </h3>
+              <p className="text-sm text-muted-foreground text-center leading-relaxed">
+                Por ahora Washero está disponible en <span className="font-semibold text-foreground">C.A.B.A. y Zona Norte</span> (desde Vicente López hasta Escobar).
+                Si querés, dejanos tus datos y te avisamos cuando lleguemos a tu zona.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowOutOfAreaModal(false)}
+                >
+                  Entendido
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowOutOfAreaModal(false);
+                    // Navigate to early access with out-of-area tag
+                    window.open("/#early-access", "_blank");
+                  }}
+                  className="bg-primary text-primary-foreground"
+                >
+                  Avisarme cuando lleguen
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
