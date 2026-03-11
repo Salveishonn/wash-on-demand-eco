@@ -628,24 +628,28 @@ export function MessagesTab() {
 
             {/* Composer */}
             <div className="p-4 border-t border-border">
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-end">
                 <Textarea
+                  ref={composerRef}
                   placeholder="Escribe un mensaje..."
                   value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
+                  onChange={(e) => {
+                    setMessageText(e.target.value);
+                    autoResizeTextarea(e.target);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       handleSend();
                     }
                   }}
-                  className="min-h-[44px] max-h-32 resize-none"
+                  className="min-h-[44px] max-h-[200px] resize-none overflow-y-auto"
                   rows={1}
                 />
                 <Button
                   onClick={handleSend}
                   disabled={!messageText.trim() || isSending}
-                  className="px-4"
+                  className="px-4 shrink-0"
                 >
                   {isSending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
