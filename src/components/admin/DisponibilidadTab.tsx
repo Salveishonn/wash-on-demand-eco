@@ -828,6 +828,22 @@ export function DisponibilidadTab() {
             </Button>
           </div>
 
+          {/* Quick block mode toggle */}
+          <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-muted/30 border border-border">
+            <Switch checked={quickBlockMode} onCheckedChange={setQuickBlockMode} />
+            <div className="flex-1">
+              <Label className="font-medium">Modo bloqueo rápido</Label>
+              <p className="text-xs text-muted-foreground">
+                {quickBlockMode
+                  ? "Hacé clic en cualquier fecha para bloquear/desbloquear al instante"
+                  : "Hacé clic en una fecha para editar detalles (recargo, horarios, nota)"}
+              </p>
+            </div>
+            {quickBlockMode && (
+              <Badge variant="destructive" className="shrink-0">Activo</Badge>
+            )}
+          </div>
+
           {/* Calendar grid */}
           <div className="grid grid-cols-7 gap-1">
             {WEEKDAYS_SHORT.map((day) => (
