@@ -31,6 +31,7 @@ interface CreateBookingRequest {
   bookingDate: string;
   bookingTime: string;
   address: string;
+  barrio?: string;
   notes?: string;
   userId?: string;
   subscriptionId?: string;
@@ -48,7 +49,7 @@ interface CreateBookingRequest {
 // LAUNCH DATE GUARD
 // Bookings before this date are blocked
 // ============================================
-const LAUNCH_DATE = "2025-04-15";
+const LAUNCH_DATE = "2026-04-15";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -269,6 +270,10 @@ serve(async (req) => {
       console.log("[create-booking] Customer upserted:", customerId);
     }
 
+    // Normalize barrio
+    const barrio = data.barrio?.trim() || null;
+    const barrioGroupKey = barrio && data.bookingDate ? `${barrio.toLowerCase()}::${data.bookingDate}` : null;
+
     // Create the booking with new pricing structure
     const bookingInsertData = {
       user_id: data.userId || null,
@@ -303,6 +308,8 @@ serve(async (req) => {
       total_price_ars: data.totalPriceArs || Math.round(totalPriceCents / 100),
       booking_source: data.bookingSource || "direct",
       whatsapp_opt_in: whatsappOptIn,
+      barrio: barrio,
+      barrio_group_key: barrioGroupKey,
     };
 
     console.log("[create-booking] Insert payload:", JSON.stringify(bookingInsertData, null, 2));
@@ -339,12 +346,39 @@ serve(async (req) => {
 
     console.log("[create-booking] Booking created:", booking.id);
 
+    // Apply discount engine (fire and forget for speed, but await for payment intent accuracy)
+    let discountResult = null;
+    try {
+      const discountUrl = `${supabaseUrl}/functions/v1/apply-booking-discount`;
+      const discountResp = await fetch(discountUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({ bookingId: booking.id }),
+      });
+      discountResult = await discountResp.json();
+      console.log("[create-booking] Discount result:", discountResult);
+    } catch (discountErr) {
+      console.error("[create-booking] Discount engine error:", discountErr);
+    }
+
+    // Get updated booking with discount applied
+    const { data: updatedBooking } = await supabase
+      .from("bookings")
+      .select("final_price_ars, discount_type, discount_percent, discount_amount_ars, is_launch_founder_slot")
+      .eq("id", booking.id)
+      .single();
+
+    const finalPriceArs = updatedBooking?.final_price_ars || data.totalPriceArs || Math.round(totalPriceCents / 100);
+
     // Create payment intent for non-subscription bookings
     let paymentIntent = null;
     let paymentUrl = null;
     
     if (!isSubscription) {
-      const totalAmountArs = data.totalPriceArs || Math.round(totalPriceCents / 100);
+      const totalAmountArs = finalPriceArs;
       
       const { data: intentData, error: intentError } = await supabase
         .from("payment_intents")
@@ -544,6 +578,13 @@ serve(async (req) => {
         isTransfer,
         isPayLater,
         isSubscription,
+        discount: updatedBooking ? {
+          type: updatedBooking.discount_type,
+          percent: updatedBooking.discount_percent,
+          amount: updatedBooking.discount_amount_ars,
+          finalPrice: updatedBooking.final_price_ars,
+          isFounderSlot: updatedBooking.is_launch_founder_slot,
+        } : null,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

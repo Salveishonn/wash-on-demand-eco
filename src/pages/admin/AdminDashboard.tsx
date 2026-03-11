@@ -18,7 +18,8 @@ import {
   MessageCircle,
   Eye,
   Send,
-  Mail
+  Mail,
+  Gift
 } from 'lucide-react';
 import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
 import { SubscriptionsTab } from '@/components/admin/SubscriptionsTab';
@@ -74,6 +75,14 @@ interface Booking {
   is_test: boolean;
   created_at: string;
   confirmed_at: string | null;
+  // Discount fields
+  total_price_ars: number | null;
+  final_price_ars: number | null;
+  discount_type: string | null;
+  discount_percent: number | null;
+  discount_amount_ars: number | null;
+  is_launch_founder_slot: boolean | null;
+  barrio: string | null;
 }
 
 interface NotificationLog {
@@ -572,6 +581,7 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
     completed: bookings.filter(b => b.status === 'completed').length,
     cancelled: bookings.filter(b => b.status === 'cancelled').length,
     pendingPayment: bookings.filter(b => b.payment_status === 'pending' && b.status !== 'cancelled').length,
+    founderSlots: bookings.filter(b => b.is_launch_founder_slot && !b.is_test).length,
   };
 
   const getStatusBadge = (status: string) => {
@@ -708,7 +718,7 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
       <div className="container mx-auto px-4 py-8">
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-4 mb-8">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -725,6 +735,23 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             </div>
           </motion.div>
           
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="bg-background rounded-xl p-4 shadow-sm"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+                <Gift className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.founderSlots} / 30</p>
+                <p className="text-xs text-muted-foreground">Founder Slots</p>
+              </div>
+            </div>
+          </motion.div>
+
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -901,6 +928,7 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Servicio</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Fecha/Hora</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Total</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Descuento</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Estado</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Pago</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Test</th>
@@ -949,9 +977,43 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                             <p className="text-xs text-muted-foreground">{booking.booking_time} hs</p>
                           </td>
                           <td className="px-4 py-4">
-                            <span className="font-medium text-sm">
-                              {formatPrice(booking.service_price_cents + (booking.car_type_extra_cents || 0))}
-                            </span>
+                            <div>
+                              {booking.discount_type && booking.final_price_ars != null ? (
+                                <>
+                                  <span className="font-medium text-sm text-primary">
+                                    ${(booking.final_price_ars || 0).toLocaleString('es-AR')}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground line-through ml-1">
+                                    ${(booking.total_price_ars || 0).toLocaleString('es-AR')}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="font-medium text-sm">
+                                  ${(booking.total_price_ars || Math.round((booking.service_price_cents + (booking.car_type_extra_cents || 0)) / 100)).toLocaleString('es-AR')}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            {booking.discount_type ? (
+                              <div className="flex flex-col gap-1">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  booking.discount_type === 'barrio' ? 'bg-blue-100 text-blue-800' : 'bg-primary/10 text-primary'
+                                }`}>
+                                  {booking.discount_type === 'barrio' ? `Barrio -${booking.discount_percent}%` : `Lanzamiento -${booking.discount_percent}%`}
+                                </span>
+                                {booking.is_launch_founder_slot && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                    Founder
+                                  </span>
+                                )}
+                                {booking.barrio && (
+                                  <span className="text-xs text-muted-foreground">{booking.barrio}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-4">
                             {getStatusBadge(booking.status)}

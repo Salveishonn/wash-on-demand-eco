@@ -70,6 +70,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     service: "",
     vehicleSize: "small",
     address: "",
+    barrio: "",
     name: "",
     email: "",
     phone: "",
@@ -275,6 +276,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
             bookingDate: formatDateKey(date),
             bookingTime: selectedTime,
             address: formData.address.trim(),
+            barrio: formData.barrio.trim() || undefined,
             notes: formData.notes.trim(),
             paymentMethod: bookingPaymentMethod,
             bookingType: isSubscriptionBooking ? "subscription" : "single",
@@ -564,6 +566,19 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                 />
               </div>
 
+              {/* Barrio / Zona */}
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">Barrio / Zona</Label>
+                <Input
+                  placeholder="Ej: Olivos, Martínez, San Isidro"
+                  value={formData.barrio}
+                  onChange={(e) => handleInputChange("barrio", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Si 3+ autos de tu barrio reservan el mismo día, todos reciben 30% OFF
+                </p>
+              </div>
+
               {/* Contact Information */}
               <div className="space-y-4">
                 <Label className="text-base font-semibold">Datos de contacto</Label>
@@ -715,6 +730,14 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                   <div className="flex justify-between pt-2 border-t border-border font-bold text-lg">
                     <span>Total</span>
                     <span className="text-primary">{formatPrice(getTotalPrice())}</span>
+                  </div>
+                  {/* Discount notice */}
+                  <div className="mt-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
+                    <p className="text-xs text-primary font-medium text-center">
+                      🎉 Los primeros 30 lavados tienen 20% OFF automático.
+                      {formData.barrio.trim() && " Si tu barrio suma 3+ reservas el mismo día: 30% OFF."}
+                      {" "}El descuento se aplica automáticamente al confirmar.
+                    </p>
                   </div>
                 </div>
               </div>

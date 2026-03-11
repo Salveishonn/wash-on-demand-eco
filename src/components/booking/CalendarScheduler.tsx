@@ -94,8 +94,9 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
         const { count } = await supabase
           .from("bookings")
           .select("*", { count: "exact", head: true })
-          .gte("booking_date", LAUNCH_DATE)
-          .neq("status", "cancelled");
+          .eq("is_launch_founder_slot", true)
+          .eq("is_test", false)
+          .in("status", ["pending", "confirmed", "completed"]);
         const used = count ?? 0;
         setFoundingSlotsRemaining(Math.max(0, FOUNDING_SLOTS_TOTAL - used));
       } catch {
@@ -232,8 +233,9 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
     supabase
       .from("bookings")
       .select("*", { count: "exact", head: true })
-      .gte("booking_date", LAUNCH_DATE)
-      .neq("status", "cancelled")
+      .eq("is_launch_founder_slot", true)
+      .eq("is_test", false)
+      .in("status", ["pending", "confirmed", "completed"])
       .then(({ count }) => {
         setFoundingSlotsRemaining(Math.max(0, FOUNDING_SLOTS_TOTAL - (count ?? 0)));
       });

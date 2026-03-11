@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle, Calendar, Clock, MapPin, Loader2, Phone, CreditCard, Wallet } from 'lucide-react';
+import { CheckCircle, Calendar, Clock, MapPin, Loader2, Phone, CreditCard, Wallet, Gift, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Layout } from '@/components/layout/Layout';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,19 +15,24 @@ interface BookingDetails {
   booking_date: string;
   booking_time: string;
   address: string | null;
-  service_price_cents: number;
-  car_type_extra_cents: number;
+  total_price_ars: number | null;
+  final_price_ars: number | null;
+  discount_type: string | null;
+  discount_percent: number | null;
+  discount_amount_ars: number | null;
+  is_launch_founder_slot: boolean | null;
   requires_payment: boolean;
   is_subscription_booking: boolean;
   payment_status: string;
+  barrio: string | null;
 }
 
-const formatPrice = (cents: number) => {
+const formatPriceArs = (amount: number) => {
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
     minimumFractionDigits: 0,
-  }).format(cents / 100);
+  }).format(amount);
 };
 
 const formatDate = (date: string) => {
@@ -59,7 +64,7 @@ export default function ReservaConfirmada() {
       try {
         const { data, error: fetchError } = await supabase
           .from('bookings')
-          .select('id, customer_name, customer_email, service_name, booking_date, booking_time, address, service_price_cents, car_type_extra_cents, requires_payment, is_subscription_booking, payment_status')
+          .select('id, customer_name, customer_email, service_name, booking_date, booking_time, address, total_price_ars, final_price_ars, discount_type, discount_percent, discount_amount_ars, is_launch_founder_slot, requires_payment, is_subscription_booking, payment_status, barrio')
           .eq('id', bookingId)
           .maybeSingle();
 
@@ -122,14 +127,13 @@ export default function ReservaConfirmada() {
     );
   }
 
-  const totalPrice = booking.service_price_cents + (booking.car_type_extra_cents || 0);
+  const totalPrice = booking.total_price_ars || 0;
+  const finalPrice = booking.final_price_ars || totalPrice;
+  const hasDiscount = booking.discount_type && booking.discount_amount_ars && booking.discount_amount_ars > 0;
   
-  // Determine payment method from booking data or URL param
   const isPayLater = !booking.requires_payment && !booking.is_subscription_booking;
   const isSubscription = booking.is_subscription_booking;
-  const isPaidOnline = booking.requires_payment && booking.payment_status === 'approved';
 
-  // Determine display content based on payment method
   const getPaymentInfo = () => {
     if (isSubscription) {
       return {
@@ -199,6 +203,31 @@ export default function ReservaConfirmada() {
             transition={{ delay: 0.2 }}
             className="max-w-lg mx-auto"
           >
+            {/* Discount Badge */}
+            {hasDiscount && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mb-4 p-4 rounded-2xl border-2 border-primary/30 bg-primary/5 text-center"
+              >
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  {booking.discount_type === 'barrio' ? (
+                    <Users className="w-5 h-5 text-primary" />
+                  ) : (
+                    <Gift className="w-5 h-5 text-primary" />
+                  )}
+                  <span className="font-bold text-primary text-lg">
+                    {booking.discount_percent}% OFF aplicado
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {booking.discount_type === 'barrio'
+                    ? 'Beneficio por barrio aplicado automáticamente'
+                    : 'Descuento de lanzamiento aplicado automáticamente'}
+                </p>
+              </motion.div>
+            )}
+
             <div className="bg-secondary rounded-2xl p-8">
               <h2 className="font-display text-xl font-bold text-foreground mb-6">
                 Detalles de tu Reserva
@@ -247,6 +276,18 @@ export default function ReservaConfirmada() {
                   </div>
                 )}
 
+                {booking.barrio && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <Users className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Barrio</p>
+                      <p className="font-semibold text-foreground">{booking.barrio}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Payment Method Badge */}
                 <div className="flex items-start gap-3">
                   <div className={`w-10 h-10 rounded-lg ${paymentInfo.bgColor} flex items-center justify-center shrink-0`}>
@@ -258,15 +299,40 @@ export default function ReservaConfirmada() {
                   </div>
                 </div>
 
-                <div className="border-t border-border pt-4 mt-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">
-                      {isPayLater ? "Total a Pagar" : "Total Pagado"}
-                    </span>
-                    <span className="font-display text-2xl font-black text-primary">
-                      {formatPrice(totalPrice)}
-                    </span>
-                  </div>
+                {/* Price breakdown */}
+                <div className="border-t border-border pt-4 mt-4 space-y-2">
+                  {hasDiscount ? (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Precio original</span>
+                        <span className="line-through text-muted-foreground">{formatPriceArs(totalPrice)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-primary font-medium">
+                          {booking.discount_type === 'barrio' ? 'Beneficio por barrio' : 'Descuento lanzamiento'}
+                          {' '}(-{booking.discount_percent}%)
+                        </span>
+                        <span className="text-primary font-medium">-{formatPriceArs(booking.discount_amount_ars || 0)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1">
+                        <span className="text-muted-foreground font-medium">
+                          {isPayLater ? "Total a Pagar" : "Total Pagado"}
+                        </span>
+                        <span className="font-display text-2xl font-black text-primary">
+                          {formatPriceArs(finalPrice)}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">
+                        {isPayLater ? "Total a Pagar" : "Total Pagado"}
+                      </span>
+                      <span className="font-display text-2xl font-black text-primary">
+                        {formatPriceArs(totalPrice)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-primary/10 rounded-lg p-4 mt-4">
