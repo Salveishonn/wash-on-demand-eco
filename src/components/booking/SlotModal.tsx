@@ -654,31 +654,33 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
               <div className="space-y-4">
                 <Label className="text-base font-semibold">Datos de contacto</Label>
                 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       placeholder="Nombre completo"
                       value={formData.name}
                       onChange={(e) => handleInputChange("name", e.target.value)}
-                      className="pl-10"
+                      className={`pl-10 ${fieldErrors.name ? "border-destructive" : ""}`}
                     />
                   </div>
+                  {fieldErrors.name && <p className="text-xs text-destructive">{fieldErrors.name}</p>}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       placeholder="Teléfono (ej: 11 2345-6789)"
                       value={formData.phone}
                       onChange={(e) => handleInputChange("phone", e.target.value)}
-                      className="pl-10"
+                      className={`pl-10 ${fieldErrors.phone ? "border-destructive" : ""}`}
                     />
                   </div>
+                  {fieldErrors.phone && <p className="text-xs text-destructive">{fieldErrors.phone}</p>}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -686,9 +688,10 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                       placeholder="Email"
                       value={formData.email}
                       onChange={(e) => handleInputChange("email", e.target.value)}
-                      className="pl-10"
+                      className={`pl-10 ${fieldErrors.email ? "border-destructive" : ""}`}
                     />
                   </div>
+                  {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
                 </div>
 
                 <Textarea
