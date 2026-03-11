@@ -150,6 +150,8 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear field error on change
+    setFieldErrors((prev) => ({ ...prev, [field]: "" }));
     if (field === "email" || field === "phone") {
       setHasCheckedSubscription(false);
       setSubscriptionInfo(null);
@@ -157,6 +159,51 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
         setPaymentMethod("pay_later");
       }
     }
+  };
+
+  const handleAddressSelect = (selection: PlaceSelection) => {
+    handleInputChange("address", selection.address);
+    // Auto-detect zone from address
+    const result = detectZoneFromAddress(selection.address);
+    setZoneResult(result);
+    if (result.zone) {
+      setFormData((prev) => ({ ...prev, barrio: result.zone! }));
+    }
+    if (!result.isInOperativeArea) {
+      setShowOutOfAreaModal(true);
+    }
+  };
+
+  const handleAddressTextChange = (text: string) => {
+    handleInputChange("address", text);
+    // Re-detect zone on text change (debounced by typing)
+    const result = detectZoneFromAddress(text);
+    setZoneResult(result);
+    if (result.zone) {
+      setFormData((prev) => ({ ...prev, barrio: result.zone! }));
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!formData.email.trim() || !isValidEmail(formData.email)) {
+      errors.email = "Ingresá un email válido";
+    }
+    if (!formData.phone.trim() || !isValidArgentinaPhone(formData.phone)) {
+      errors.phone = "Ingresá un teléfono válido";
+    }
+    if (!formData.name.trim()) {
+      errors.name = "Ingresá tu nombre";
+    }
+    if (!formData.address.trim()) {
+      errors.address = "Ingresá una dirección";
+    }
+    // Check operative area
+    if (formData.address.trim() && zoneResult && !zoneResult.isInOperativeArea) {
+      errors.address = "Dirección fuera de nuestra zona operativa";
+    }
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const toggleExtra = (code: string) => {
