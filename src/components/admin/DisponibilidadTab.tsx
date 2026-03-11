@@ -693,7 +693,95 @@ export function DisponibilidadTab() {
         </CardContent>
       </Card>
 
-      {/* Section 2: Date Overrides Calendar */}
+      {/* Section 2: Quick Blocking Tools */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="w-5 h-5" />
+            Bloqueo Rápido de Fechas
+          </CardTitle>
+          <CardDescription>
+            Bloqueá fechas en bloque para feriados, vacaciones o antes del lanzamiento
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Block until date */}
+          <div className="p-4 rounded-lg border border-border bg-muted/30 space-y-3">
+            <div className="flex items-center gap-2">
+              <Ban className="w-4 h-4 text-destructive" />
+              <Label className="font-semibold">Bloquear todas las fechas hasta…</Label>
+            </div>
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Fecha límite</Label>
+                <Input
+                  type="date"
+                  value={blockUntilDate}
+                  onChange={(e) => setBlockUntilDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <Button
+                onClick={handleBlockUntilDate}
+                disabled={!blockUntilDate || isBlockingUntil}
+                variant="destructive"
+                size="sm"
+              >
+                {isBlockingUntil ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Ban className="w-4 h-4 mr-1" />}
+                Bloquear
+              </Button>
+            </div>
+          </div>
+
+          {/* Range blocking */}
+          <div className="p-4 rounded-lg border border-border bg-muted/30 space-y-3">
+            <div className="flex items-center gap-2">
+              <CalendarRange className="w-4 h-4" />
+              <Label className="font-semibold">Bloquear rango de fechas</Label>
+            </div>
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Desde</Label>
+                <Input
+                  type="date"
+                  value={rangeFromDate}
+                  onChange={(e) => setRangeFromDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Hasta</Label>
+                <Input
+                  type="date"
+                  value={rangeToDate}
+                  onChange={(e) => setRangeToDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Nota (opcional)</Label>
+                <Input
+                  value={rangeNote}
+                  onChange={(e) => setRangeNote(e.target.value)}
+                  placeholder="Ej: Vacaciones"
+                  className="w-44"
+                />
+              </div>
+              <Button
+                onClick={handleBlockRange}
+                disabled={!rangeFromDate || !rangeToDate || isBlockingRange}
+                variant="destructive"
+                size="sm"
+              >
+                {isBlockingRange ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Ban className="w-4 h-4 mr-1" />}
+                Bloquear rango
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section 3: Date Overrides Calendar */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
