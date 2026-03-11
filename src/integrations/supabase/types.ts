@@ -172,6 +172,9 @@ export type Database = {
           addons: Json | null
           addons_total_cents: number | null
           address: string | null
+          barrio: string | null
+          barrio_discount_qualified_at: string | null
+          barrio_group_key: string | null
           base_price_ars: number | null
           booking_date: string
           booking_source: string | null
@@ -185,8 +188,14 @@ export type Database = {
           customer_id: string | null
           customer_name: string
           customer_phone: string
+          discount_amount_ars: number | null
+          discount_locked: boolean | null
+          discount_percent: number | null
+          discount_type: string | null
           extras_total_ars: number | null
+          final_price_ars: number | null
           id: string
+          is_launch_founder_slot: boolean | null
           is_subscription_booking: boolean | null
           is_test: boolean
           mercadopago_payment_id: string | null
@@ -219,6 +228,9 @@ export type Database = {
           addons?: Json | null
           addons_total_cents?: number | null
           address?: string | null
+          barrio?: string | null
+          barrio_discount_qualified_at?: string | null
+          barrio_group_key?: string | null
           base_price_ars?: number | null
           booking_date: string
           booking_source?: string | null
@@ -232,8 +244,14 @@ export type Database = {
           customer_id?: string | null
           customer_name: string
           customer_phone: string
+          discount_amount_ars?: number | null
+          discount_locked?: boolean | null
+          discount_percent?: number | null
+          discount_type?: string | null
           extras_total_ars?: number | null
+          final_price_ars?: number | null
           id?: string
+          is_launch_founder_slot?: boolean | null
           is_subscription_booking?: boolean | null
           is_test?: boolean
           mercadopago_payment_id?: string | null
@@ -266,6 +284,9 @@ export type Database = {
           addons?: Json | null
           addons_total_cents?: number | null
           address?: string | null
+          barrio?: string | null
+          barrio_discount_qualified_at?: string | null
+          barrio_group_key?: string | null
           base_price_ars?: number | null
           booking_date?: string
           booking_source?: string | null
@@ -279,8 +300,14 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string
           customer_phone?: string
+          discount_amount_ars?: number | null
+          discount_locked?: boolean | null
+          discount_percent?: number | null
+          discount_type?: string | null
           extras_total_ars?: number | null
+          final_price_ars?: number | null
           id?: string
+          is_launch_founder_slot?: boolean | null
           is_subscription_booking?: boolean | null
           is_test?: boolean
           mercadopago_payment_id?: string | null
