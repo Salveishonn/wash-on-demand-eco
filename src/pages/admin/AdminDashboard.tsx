@@ -18,7 +18,8 @@ import {
   MessageCircle,
   Eye,
   Send,
-  Mail
+  Mail,
+  Gift
 } from 'lucide-react';
 import { KipperLeadsTab } from '@/components/admin/KipperLeadsTab';
 import { SubscriptionsTab } from '@/components/admin/SubscriptionsTab';
