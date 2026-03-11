@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
-import { X, Clock, Loader2, User, Phone, Mail, CreditCard, Wallet, RefreshCw, Check, AlertCircle, MessageCircle, Sparkles, Armchair, Wind, Waves, Car } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, Clock, Loader2, User, Phone, Mail, CreditCard, Wallet, RefreshCw, Check, AlertCircle, MessageCircle, Sparkles, Armchair, Wind, Waves, Car, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { AddressAutocomplete, PlaceSelection } from "./AddressAutocomplete";
 import { formatDateKey } from "@/lib/dateUtils";
 import { usePricing, formatPrice, type PricingItem } from "@/hooks/usePricing";
 import { trackEvent } from "@/lib/gtag";
+import { detectZoneFromAddress, isValidEmail, isValidArgentinaPhone, type ZoneDetectionResult } from "@/config/operativeZones";
 
 interface SlotInfo {
   time: string;
