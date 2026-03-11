@@ -49,7 +49,7 @@ interface CreateBookingRequest {
 // LAUNCH DATE GUARD
 // Bookings before this date are blocked
 // ============================================
-const LAUNCH_DATE = "2025-04-15";
+const LAUNCH_DATE = "2026-04-15";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
