@@ -809,7 +809,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                   <div className="mt-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
                     <p className="text-xs text-primary font-medium text-center">
                       🎉 Los primeros 30 lavados tienen 20% OFF automático.
-                      {formData.barrio.trim() && " Si tu barrio suma 3+ reservas el mismo día: 30% OFF."}
+                      {formData.barrio.trim() && " Si tu zona suma 3+ reservas el mismo día: 30% OFF."}
                       {" "}El descuento se aplica automáticamente al confirmar.
                     </p>
                   </div>
@@ -820,7 +820,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
               <Button
                 className="w-full"
                 size="lg"
-                onClick={handleSubmit}
+                onClick={handleSubmitWithValidation}
                 disabled={!canSubmit() || isSubmitting}
               >
                 {isSubmitting ? (
@@ -838,6 +838,56 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
           )}
         </div>
       </motion.div>
+
+      {/* Out of Area Modal */}
+      <AnimatePresence>
+        {showOutOfAreaModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+            onClick={() => setShowOutOfAreaModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md bg-background rounded-2xl shadow-xl border border-border p-6 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-12 h-12 rounded-xl bg-yellow-100 flex items-center justify-center mx-auto">
+                <MapPin className="w-6 h-6 text-yellow-600" />
+              </div>
+              <h3 className="text-lg font-display font-bold text-foreground text-center">
+                Todavía no operamos en esa zona
+              </h3>
+              <p className="text-sm text-muted-foreground text-center leading-relaxed">
+                Por ahora Washero está disponible en <span className="font-semibold text-foreground">C.A.B.A. y Zona Norte</span> (desde Vicente López hasta Escobar).
+                Si querés, dejanos tus datos y te avisamos cuando lleguemos a tu zona.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowOutOfAreaModal(false)}
+                >
+                  Entendido
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowOutOfAreaModal(false);
+                    // Navigate to early access with out-of-area tag
+                    window.open("/#early-access", "_blank");
+                  }}
+                  className="bg-primary text-primary-foreground"
+                >
+                  Avisarme cuando lleguen
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
