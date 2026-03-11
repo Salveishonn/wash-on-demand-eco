@@ -731,6 +731,14 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                     <span>Total</span>
                     <span className="text-primary">{formatPrice(getTotalPrice())}</span>
                   </div>
+                  {/* Discount notice */}
+                  <div className="mt-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
+                    <p className="text-xs text-primary font-medium text-center">
+                      🎉 Los primeros 30 lavados tienen 20% OFF automático.
+                      {formData.barrio.trim() && " Si tu barrio suma 3+ reservas el mismo día: 30% OFF."}
+                      {" "}El descuento se aplica automáticamente al confirmar.
+                    </p>
+                  </div>
                 </div>
               </div>
 
