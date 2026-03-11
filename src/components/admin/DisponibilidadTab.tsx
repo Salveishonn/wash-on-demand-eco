@@ -466,7 +466,120 @@ export function DisponibilidadTab() {
     }
   };
 
-  // Calendar helpers
+  // Quick toggle block/unblock a single date
+  const handleQuickToggleBlock = async (dateStr: string) => {
+    const existingOverride = overrides.find((o) => o.date === dateStr);
+    const isClosed = existingOverride?.is_closed;
+    
+    try {
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error("No authenticated");
+
+      const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (isClosed) {
+        // Unblock: delete override
+        await fetch(`${baseUrl}/functions/v1/admin-update-availability`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ type: "delete_date_override", date: dateStr }),
+        });
+        toast({ title: "Desbloqueado", description: `${dateStr} ahora está abierto` });
+      } else {
+        // Block: create closed override
+        await fetch(`${baseUrl}/functions/v1/admin-update-availability`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ type: "date_override", date: dateStr, is_closed: true, note: "Bloqueado manualmente" }),
+        });
+        toast({ title: "Bloqueado", description: `${dateStr} ahora está cerrado` });
+      }
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    }
+  };
+
+  // Block a date range
+  const handleBlockRange = async () => {
+    if (!rangeFromDate || !rangeToDate) return;
+    if (rangeFromDate > rangeToDate) {
+      toast({ variant: "destructive", title: "Error", description: "La fecha de inicio debe ser anterior a la fecha de fin" });
+      return;
+    }
+    
+    setIsBlockingRange(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error("No authenticated");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-availability`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({
+            type: "block_date_range",
+            from_date: rangeFromDate,
+            to_date: rangeToDate,
+            note: rangeNote || "Bloqueado por rango",
+          }),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      
+      toast({ title: "Rango bloqueado", description: `${result.count || "Varias"} fechas bloqueadas` });
+      setRangeFromDate("");
+      setRangeToDate("");
+      setRangeNote("");
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsBlockingRange(false);
+    }
+  };
+
+  // Block all dates until a specific date
+  const handleBlockUntilDate = async () => {
+    if (!blockUntilDate) return;
+    
+    setIsBlockingUntil(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error("No authenticated");
+
+      const todayStr = formatDateKey(new Date());
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-availability`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({
+            type: "block_date_range",
+            from_date: todayStr,
+            to_date: blockUntilDate,
+            note: "Bloqueado hasta lanzamiento",
+          }),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      
+      toast({ title: "Fechas bloqueadas", description: `Todas las fechas bloqueadas hasta ${blockUntilDate}` });
+      setBlockUntilDate("");
+      fetchData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsBlockingUntil(false);
+    }
+  };
+
   const getMonthDays = (year: number, month: number) => {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
