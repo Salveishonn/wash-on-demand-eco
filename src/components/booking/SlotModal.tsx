@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Clock, Loader2, User, Phone, Mail, CreditCard, Wallet, RefreshCw, Check, AlertCircle, MessageCircle, Sparkles, Armchair, Wind, Waves, Car, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -97,6 +97,10 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
 
   // Validation errors
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Anti-bot: honeypot + timing
+  const [honeypot, setHoneypot] = useState("");
+  const formTimestamp = useRef(Date.now());
 
   // Set default service when pricing loads
   useEffect(() => {
@@ -339,6 +343,8 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
             address: formData.address.trim(),
             barrio: formData.barrio.trim() || undefined,
             notes: formData.notes.trim(),
+            _hp: honeypot,
+            _ts: formTimestamp.current,
             paymentMethod: bookingPaymentMethod,
             bookingType: isSubscriptionBooking ? "subscription" : "single",
             isSubscriptionBooking: !!isSubscriptionBooking,

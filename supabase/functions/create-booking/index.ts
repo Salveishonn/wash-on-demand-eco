@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logError, isRateLimited, isHoneypotTriggered, isTooFastSubmission } from "../_shared/securityUtils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -98,7 +99,38 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const data: CreateBookingRequest = await req.json();
+    // Rate limiting: max 5 booking attempts per IP per 5 minutes
+    const rateLimited = await isRateLimited("create-booking", 5, 5, req);
+    if (rateLimited) {
+      await logError("create-booking", "rate_limit", "Rate limit exceeded for booking creation", {}, req);
+      return new Response(
+        JSON.stringify({ error: "Demasiados intentos. Esperá un momento antes de intentar de nuevo." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const data: CreateBookingRequest & { _hp?: string; _ts?: number } = await req.json();
+
+    // Anti-bot: Honeypot check
+    if (isHoneypotTriggered(data._hp)) {
+      console.log("[create-booking] BLOCKED: honeypot triggered");
+      await logError("create-booking", "honeypot", "Bot detected via honeypot", {}, req);
+      // Return fake success to confuse bots
+      return new Response(
+        JSON.stringify({ success: true, bookingId: "00000000-0000-0000-0000-000000000000" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Anti-bot: Timing check
+    if (isTooFastSubmission(data._ts)) {
+      console.log("[create-booking] BLOCKED: submission too fast");
+      await logError("create-booking", "too_fast", "Submission completed too quickly", {}, req);
+      return new Response(
+        JSON.stringify({ success: true, bookingId: "00000000-0000-0000-0000-000000000000" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
     console.log("[create-booking] Creating booking for:", data.customerName);
     console.log("[create-booking] Payment method:", data.paymentMethod);
@@ -656,6 +688,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("[create-booking] Error:", error);
+    await logError("create-booking", "unhandled", error.message, { stack: error.stack }, req);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }

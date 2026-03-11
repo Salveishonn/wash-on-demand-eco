@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,8 @@ export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupPr
     barrio: "",
     wantsBarrioCoordination: false,
   });
+  const [honeypot, setHoneypot] = useState("");
+  const formTimestamp = useRef(Date.now());
 
   // Auto-open on first visit
   useEffect(() => {
@@ -81,6 +83,8 @@ export const EarlyAccessPopup = ({ forceOpen, onForceClose }: EarlyAccessPopupPr
       phone: formData.phone,
       barrio: formData.barrio || null,
       wantsBarrioCoordination: formData.wantsBarrioCoordination,
+      _hp: honeypot,
+      _ts: formTimestamp.current,
     };
     console.log('[EARLY_ACCESS] submit start', payload);
     setIsSubmitting(true);

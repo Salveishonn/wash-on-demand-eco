@@ -86,6 +86,42 @@ export type Database = {
         }
         Relationships: []
       }
+      app_error_logs: {
+        Row: {
+          created_at: string
+          details: Json | null
+          error_type: string
+          id: string
+          message: string | null
+          request_ip: string | null
+          resolved: boolean
+          source: string
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          error_type: string
+          id?: string
+          message?: string | null
+          request_ip?: string | null
+          resolved?: boolean
+          source: string
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          error_type?: string
+          id?: string
+          message?: string | null
+          request_ip?: string | null
+          resolved?: boolean
+          source?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       availability_override_slots: {
         Row: {
           date: string
@@ -656,6 +692,33 @@ export type Database = {
           },
         ]
       }
+      login_attempts: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          ip_address: string | null
+          success: boolean
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          ip_address?: string | null
+          success?: boolean
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          ip_address?: string | null
+          success?: boolean
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       notification_logs: {
         Row: {
           booking_id: string | null
@@ -1075,6 +1138,27 @@ export type Database = {
           phone?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          count: number
+          id: string
+          key: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          id?: string
+          key: string
+          window_start?: string
+        }
+        Update: {
+          count?: number
+          id?: string
+          key?: string
+          window_start?: string
         }
         Relationships: []
       }
