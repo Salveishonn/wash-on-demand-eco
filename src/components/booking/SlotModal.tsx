@@ -620,23 +620,33 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                   key={step === "form" ? "form-open" : "form-closed"}
                   initialValue={formData.address}
                   placeholder="Ej: Av. Corrientes 1234, CABA"
-                  onTextChange={(text) => handleInputChange("address", text)}
-                  onSelect={(selection: PlaceSelection) => {
-                    handleInputChange("address", selection.address);
-                  }}
+                  onTextChange={handleAddressTextChange}
+                  onSelect={handleAddressSelect}
                 />
+                {fieldErrors.address && (
+                  <p className="text-xs text-destructive flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {fieldErrors.address}
+                  </p>
+                )}
+                {zoneResult?.isInOperativeArea && zoneResult.zone && (
+                  <p className="text-xs text-primary flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    Zona detectada: {zoneResult.zone}
+                  </p>
+                )}
               </div>
 
-              {/* Barrio / Zona */}
+              {/* Barrio / Zona (auto-filled, editable as fallback) */}
               <div className="space-y-2">
                 <Label className="text-base font-semibold">Barrio / Zona</Label>
                 <Input
-                  placeholder="Ej: Olivos, Martínez, San Isidro"
+                  placeholder="Se detecta automáticamente de la dirección"
                   value={formData.barrio}
                   onChange={(e) => handleInputChange("barrio", e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Si 3+ autos de tu barrio reservan el mismo día, todos reciben 30% OFF
+                  Beneficio por zona: si 3+ autos de tu zona reservan el mismo día, todos reciben 30% OFF automáticamente
                 </p>
               </div>
 
