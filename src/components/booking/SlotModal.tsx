@@ -98,6 +98,10 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
   // Validation errors
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  // Anti-bot: honeypot + timing
+  const [honeypot, setHoneypot] = useState("");
+  const formTimestamp = useRef(Date.now());
+
   // Set default service when pricing loads
   useEffect(() => {
     if (pricing?.services.length && !formData.service) {
