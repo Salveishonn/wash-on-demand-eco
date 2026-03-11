@@ -99,6 +99,13 @@ const getStatusIcon = (status: string) => {
 export function MessagesTab() {
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea helper
+  const autoResizeTextarea = useCallback((el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, []);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
