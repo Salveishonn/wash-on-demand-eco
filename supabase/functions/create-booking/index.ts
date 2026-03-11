@@ -31,6 +31,7 @@ interface CreateBookingRequest {
   bookingDate: string;
   bookingTime: string;
   address: string;
+  barrio?: string;
   notes?: string;
   userId?: string;
   subscriptionId?: string;
