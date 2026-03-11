@@ -578,6 +578,13 @@ serve(async (req) => {
         isTransfer,
         isPayLater,
         isSubscription,
+        discount: updatedBooking ? {
+          type: updatedBooking.discount_type,
+          percent: updatedBooking.discount_percent,
+          amount: updatedBooking.discount_amount_ars,
+          finalPrice: updatedBooking.final_price_ars,
+          isFounderSlot: updatedBooking.is_launch_founder_slot,
+        } : null,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
