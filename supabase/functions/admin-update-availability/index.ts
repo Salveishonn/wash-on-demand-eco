@@ -237,6 +237,65 @@ serve(async (req) => {
         break;
       }
 
+      case "block_date_range": {
+        const { from_date, to_date, note } = payload as BlockDateRangePayload;
+        
+        // Generate date array
+        const dates: string[] = [];
+        const current = new Date(from_date + "T12:00:00Z");
+        const end = new Date(to_date + "T12:00:00Z");
+        while (current <= end) {
+          dates.push(current.toISOString().split("T")[0]);
+          current.setUTCDate(current.getUTCDate() + 1);
+        }
+
+        // Upsert all dates as closed
+        const rows = dates.map(d => ({
+          date: d,
+          is_closed: true,
+          note: note || "Bloqueado por rango",
+          updated_at: new Date().toISOString(),
+        }));
+
+        for (const row of rows) {
+          const { error } = await supabase
+            .from("availability_overrides")
+            .upsert(row, { onConflict: "date" });
+          if (error) {
+            console.error("[admin-update-availability] Block range error for", row.date, error);
+          }
+        }
+
+        result = { message: `Blocked ${dates.length} dates from ${from_date} to ${to_date}`, count: dates.length };
+        break;
+      }
+
+      case "unblock_date_range": {
+        const { from_date, to_date } = payload as UnblockDateRangePayload;
+        
+        const { error, count } = await supabase
+          .from("availability_overrides")
+          .delete()
+          .gte("date", from_date)
+          .lte("date", to_date)
+          .eq("is_closed", true);
+
+        if (error) {
+          console.error("[admin-update-availability] Unblock range error:", error);
+          throw error;
+        }
+
+        // Also delete slot overrides in range
+        await supabase
+          .from("availability_override_slots")
+          .delete()
+          .gte("date", from_date)
+          .lte("date", to_date);
+
+        result = { message: `Unblocked dates from ${from_date} to ${to_date}`, count };
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: "Invalid payload type" }),
