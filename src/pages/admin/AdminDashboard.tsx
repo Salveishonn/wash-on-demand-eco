@@ -958,9 +958,43 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                             <p className="text-xs text-muted-foreground">{booking.booking_time} hs</p>
                           </td>
                           <td className="px-4 py-4">
-                            <span className="font-medium text-sm">
-                              {formatPrice(booking.service_price_cents + (booking.car_type_extra_cents || 0))}
-                            </span>
+                            <div>
+                              {booking.discount_type && booking.final_price_ars != null ? (
+                                <>
+                                  <span className="font-medium text-sm text-primary">
+                                    ${(booking.final_price_ars || 0).toLocaleString('es-AR')}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground line-through ml-1">
+                                    ${(booking.total_price_ars || 0).toLocaleString('es-AR')}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="font-medium text-sm">
+                                  ${(booking.total_price_ars || Math.round((booking.service_price_cents + (booking.car_type_extra_cents || 0)) / 100)).toLocaleString('es-AR')}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            {booking.discount_type ? (
+                              <div className="flex flex-col gap-1">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  booking.discount_type === 'barrio' ? 'bg-blue-100 text-blue-800' : 'bg-primary/10 text-primary'
+                                }`}>
+                                  {booking.discount_type === 'barrio' ? `Barrio -${booking.discount_percent}%` : `Lanzamiento -${booking.discount_percent}%`}
+                                </span>
+                                {booking.is_launch_founder_slot && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                    Founder
+                                  </span>
+                                )}
+                                {booking.barrio && (
+                                  <span className="text-xs text-muted-foreground">{booking.barrio}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-4">
                             {getStatusBadge(booking.status)}
