@@ -30,12 +30,32 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { name, email, phone, barrio, wantsBarrioCoordination }: EarlyAccessRequest = await req.json();
+    // Rate limiting: max 3 signups per IP per 10 minutes
+    const rateLimited = await isRateLimited("early-access", 3, 10, req);
+    if (rateLimited) {
+      await logError("early-access-signup", "rate_limit", "Rate limit exceeded", {}, req);
+      return new Response(
+        JSON.stringify({ error: "Demasiados intentos. Esperá un momento." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const body: EarlyAccessRequest & { _hp?: string; _ts?: number } = await req.json();
+    const { name, email, phone, barrio, wantsBarrioCoordination } = body;
+
+    // Anti-bot checks
+    if (isHoneypotTriggered(body._hp) || isTooFastSubmission(body._ts)) {
+      console.log("[early-access-signup] Bot detected");
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     console.log("[early-access-signup] Processing signup for:", email, { barrio, wantsBarrioCoordination });
 
     // Validate email
-    if (!email || !email.includes("@")) {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email.trim())) {
       throw new Error("Email inválido");
     }
 
