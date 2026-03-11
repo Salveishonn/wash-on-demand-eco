@@ -270,6 +270,10 @@ serve(async (req) => {
       console.log("[create-booking] Customer upserted:", customerId);
     }
 
+    // Normalize barrio
+    const barrio = data.barrio?.trim() || null;
+    const barrioGroupKey = barrio && data.bookingDate ? `${barrio.toLowerCase()}::${data.bookingDate}` : null;
+
     // Create the booking with new pricing structure
     const bookingInsertData = {
       user_id: data.userId || null,
@@ -304,6 +308,8 @@ serve(async (req) => {
       total_price_ars: data.totalPriceArs || Math.round(totalPriceCents / 100),
       booking_source: data.bookingSource || "direct",
       whatsapp_opt_in: whatsappOptIn,
+      barrio: barrio,
+      barrio_group_key: barrioGroupKey,
     };
 
     console.log("[create-booking] Insert payload:", JSON.stringify(bookingInsertData, null, 2));
