@@ -276,6 +276,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
             bookingDate: formatDateKey(date),
             bookingTime: selectedTime,
             address: formData.address.trim(),
+            barrio: formData.barrio.trim() || undefined,
             notes: formData.notes.trim(),
             paymentMethod: bookingPaymentMethod,
             bookingType: isSubscriptionBooking ? "subscription" : "single",
