@@ -38,6 +38,7 @@ import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { BookingPricingDebug } from '@/components/admin/BookingPricingDebug';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -655,22 +656,17 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
   };
 
   const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      confirmed: 'bg-blue-100 text-blue-800',
-      completed: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
+    const config: Record<string, { bg: string; dot: string; label: string }> = {
+      pending: { bg: 'bg-yellow-50 text-yellow-700 ring-yellow-200', dot: 'bg-yellow-500', label: 'Pendiente' },
+      confirmed: { bg: 'bg-blue-50 text-blue-700 ring-blue-200', dot: 'bg-blue-500', label: 'Aceptada' },
+      completed: { bg: 'bg-green-50 text-green-700 ring-green-200', dot: 'bg-green-500', label: 'Completada' },
+      cancelled: { bg: 'bg-red-50 text-red-700 ring-red-200', dot: 'bg-red-500', label: 'Cancelada' },
     };
-    // Spanish labels: Aceptada for confirmed (operational meaning)
-    const labels: Record<string, string> = {
-      pending: 'Pendiente',
-      confirmed: 'Aceptada',
-      completed: 'Completada',
-      cancelled: 'Cancelada',
-    };
+    const s = config[status] || { bg: 'bg-muted text-muted-foreground ring-border', dot: 'bg-muted-foreground', label: status };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {labels[status] || status}
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 ring-inset ${s.bg}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+        {s.label}
       </span>
     );
   };
@@ -747,28 +743,28 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Header */}
-      <header className="bg-washero-charcoal text-background">
-        <div className="container mx-auto px-4 py-4">
+      <header className="bg-washero-charcoal text-background sticky top-0 z-30">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <img src={washeroLogo} alt="Washero" className="w-10 h-10 rounded-lg object-cover" />
-              <div>
-                <h1 className="font-display text-xl font-bold">Panel Admin</h1>
-                <p className="text-sm text-background/70">{user?.email}</p>
+            <div className="flex items-center gap-3">
+              <img src={washeroLogo} alt="Washero" className="w-9 h-9 rounded-lg object-cover" />
+              <div className="hidden sm:block">
+                <h1 className="font-display text-lg font-bold leading-tight">Panel Admin</h1>
+                <p className="text-xs text-background/60 truncate max-w-[200px]">{user?.email}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {!PAYMENTS_ENABLED && (
-                <span className="px-3 py-1 bg-orange-500/20 text-orange-200 text-xs rounded-full">
-                  Modo Sin Pagos
+                <span className="px-2.5 py-1 bg-orange-500/20 text-orange-200 text-[10px] font-semibold rounded-full uppercase tracking-wide">
+                  Sin Pagos
                 </span>
               )}
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="text-background hover:bg-background/10"
+                className="text-background/80 hover:text-background hover:bg-background/10 h-9 w-9"
               >
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               </Button>
@@ -776,140 +772,52 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                 variant="ghost"
                 size="sm"
                 onClick={signOut}
-                className="text-background hover:bg-background/10"
+                className="text-background/80 hover:text-background hover:bg-background/10 h-9 gap-1.5"
               >
-                <LogOut className="w-4 h-4 mr-2" />
-                Salir
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline text-xs">Salir</span>
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-7 gap-4 mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
-            </div>
-          </motion.div>
-          
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <Gift className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.founderSlots} / 30</p>
-                <p className="text-xs text-muted-foreground">Founder Slots</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.pending}</p>
-                <p className="text-xs text-muted-foreground">Pendientes</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.pendingPayment}</p>
-                <p className="text-xs text-muted-foreground">Sin Pago</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.confirmed}</p>
-                <p className="text-xs text-muted-foreground">Aceptadas</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.completed}</p>
-                <p className="text-xs text-muted-foreground">Completadas</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                <XCircle className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.cancelled}</p>
-                <p className="text-xs text-muted-foreground">Canceladas</p>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Navigation */}
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        {/* Navigation first on mobile for faster access */}
         <AdminNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {/* Stats - compact row */}
+        {activeTab === 'bookings' && (
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3 mb-5">
+            {[
+              { icon: Calendar, value: stats.total, label: 'Total', iconBg: 'bg-primary/10', iconColor: 'text-primary' },
+              { icon: Gift, value: `${stats.founderSlots}/30`, label: 'Founders', iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
+              { icon: AlertCircle, value: stats.pending, label: 'Pendientes', iconBg: 'bg-yellow-50', iconColor: 'text-yellow-600' },
+              { icon: DollarSign, value: stats.pendingPayment, label: 'Sin Pago', iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
+              { icon: Clock, value: stats.confirmed, label: 'Aceptadas', iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
+              { icon: CheckCircle, value: stats.completed, label: 'Completadas', iconBg: 'bg-green-50', iconColor: 'text-green-600' },
+              { icon: XCircle, value: stats.cancelled, label: 'Canceladas', iconBg: 'bg-red-50', iconColor: 'text-red-600' },
+            ].map((stat, i) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.03 }}
+                className="admin-stat-card"
+              >
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg ${stat.iconBg} flex items-center justify-center shrink-0`}>
+                    <stat.icon className={`w-4 h-4 ${stat.iconColor}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg sm:text-xl font-bold leading-tight">{stat.value}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.label}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
 
         {/* Bookings Tab */}
         {activeTab === 'bookings' && (
@@ -919,23 +827,23 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
           >
             {/* Filters */}
             <div className="space-y-3 mb-4">
-              <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
+              <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2 sm:gap-3">
                 <AdminDateFilter onDateRangeChange={setBookingDateRange} />
                 <AdminTestFilter value={bookingTestFilter} onChange={setBookingTestFilter} />
               </div>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Filter className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Estado:</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-medium text-muted-foreground mr-1">Estado:</span>
                   {(['all', 'pending', 'confirmed', 'completed', 'cancelled'] as StatusFilter[]).map((status) => (
                     <button
                       key={status}
                       onClick={() => setStatusFilter(status)}
-                      className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                      className={cn(
+                        "px-3 py-1.5 rounded-full text-xs font-medium transition-all",
                         statusFilter === status
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted hover:bg-muted/80'
-                      }`}
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                      )}
                     >
                       {status === 'all' ? 'Todas' : 
                        status === 'pending' ? 'Pendientes' :
@@ -982,196 +890,201 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             </div>
 
             {/* Bookings Table */}
-            <div className="bg-background rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-background rounded-xl shadow-sm overflow-hidden border border-border/50">
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-2 py-3 text-left">
+                <table className="w-full admin-table">
+                  <thead>
+                    <tr className="bg-muted/40 border-b border-border">
+                      <th className="px-2 py-3 w-10">
                         <Checkbox
                           checked={selectedBookingIds.size === filteredBookings.length && filteredBookings.length > 0}
                           onCheckedChange={toggleAllBookings}
                         />
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">ID</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Cliente</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Servicio</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Fecha/Hora</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Total</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Descuento</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Estado</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Pago</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Test</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Acciones</th>
+                      <th>ID</th>
+                      <th>Cliente</th>
+                      <th className="hidden lg:table-cell">Servicio</th>
+                      <th>Fecha</th>
+                      <th className="hidden md:table-cell">Total</th>
+                      <th className="hidden xl:table-cell">Descuento</th>
+                      <th>Estado</th>
+                      <th className="hidden sm:table-cell">Pago</th>
+                      <th className="hidden lg:table-cell w-12">Test</th>
+                      <th className="w-28">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody>
                     {isLoading ? (
                       <tr>
-                         <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
-                          Cargando...
+                         <td colSpan={11} className="px-4 py-16 text-center">
+                          <div className="flex flex-col items-center gap-2">
+                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                            <span className="text-sm text-muted-foreground">Cargando reservas...</span>
+                          </div>
                         </td>
                       </tr>
                     ) : filteredBookings.length === 0 ? (
                       <tr>
-                         <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
-                          No hay reservas
+                         <td colSpan={11} className="px-4 py-16 text-center">
+                          <div className="flex flex-col items-center gap-2">
+                            <Calendar className="w-8 h-8 text-muted-foreground/30" />
+                            <span className="text-sm font-medium text-muted-foreground">No hay reservas con estos filtros</span>
+                            <span className="text-xs text-muted-foreground/60">Probá ajustando el rango de fecha o estado</span>
+                          </div>
                         </td>
                       </tr>
                     ) : (
                       filteredBookings.map((booking) => (
-                        <tr key={booking.id} className={`hover:bg-muted/30 ${booking.is_test ? 'opacity-60' : ''}`}>
-                          <td className="px-2 py-4">
+                        <tr key={booking.id} className={cn(
+                          "transition-colors",
+                          booking.is_test && 'opacity-50 bg-muted/20',
+                          booking.status === 'pending' && !booking.is_test && 'bg-yellow-50/30',
+                        )}>
+                          <td className="px-2">
                             <Checkbox
                               checked={selectedBookingIds.has(booking.id)}
                               onCheckedChange={() => toggleBookingSelect(booking.id)}
                             />
                           </td>
-                          <td className="px-4 py-4">
-                            <span className="font-mono text-xs">{booking.id.substring(0, 8).toUpperCase()}</span>
+                          <td className="px-2">
+                            <span className="font-mono text-[11px] text-muted-foreground">{booking.id.substring(0, 8).toUpperCase()}</span>
                           </td>
-                          <td className="px-4 py-4">
+                          <td>
                             <div>
-                              <p className="font-medium text-sm">{booking.customer_name}</p>
+                              <p className="font-semibold text-sm leading-tight">{booking.customer_name}</p>
                               <p className="text-xs text-muted-foreground">{booking.customer_phone}</p>
+                              {/* Show service on mobile since column is hidden */}
+                              <p className="text-xs text-muted-foreground lg:hidden mt-0.5">{booking.service_name}</p>
                             </div>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="hidden lg:table-cell">
                             <p className="text-sm">{booking.service_name}</p>
                             {booking.car_type && (
-                              <p className="text-xs text-muted-foreground">{booking.car_type}</p>
+                              <p className="text-[11px] text-muted-foreground">{booking.car_type}</p>
                             )}
                           </td>
-                          <td className="px-4 py-4">
-                            <p className="text-sm">{formatDate(booking.booking_date)}</p>
-                            <p className="text-xs text-muted-foreground">{booking.booking_time} hs</p>
+                          <td>
+                            <p className="text-sm font-medium">{formatDate(booking.booking_date)}</p>
+                            <p className="text-[11px] text-muted-foreground">{booking.booking_time} hs</p>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="hidden md:table-cell">
                             <div>
                               {booking.discount_type && booking.final_price_ars != null ? (
-                                <>
-                                  <span className="font-medium text-sm text-primary">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-sm text-primary">
                                     ${(booking.final_price_ars || 0).toLocaleString('es-AR')}
                                   </span>
-                                  <span className="text-xs text-muted-foreground line-through ml-1">
+                                  <span className="text-[11px] text-muted-foreground line-through">
                                     ${(booking.total_price_ars || 0).toLocaleString('es-AR')}
                                   </span>
-                                </>
+                                </div>
                               ) : (
-                                <span className="font-medium text-sm">
+                                <span className="font-bold text-sm">
                                   ${(booking.total_price_ars || Math.round((booking.service_price_cents + (booking.car_type_extra_cents || 0)) / 100)).toLocaleString('es-AR')}
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="hidden xl:table-cell">
                             {booking.discount_type ? (
-                              <div className="flex flex-col gap-1">
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  booking.discount_type === 'barrio' ? 'bg-blue-100 text-blue-800' : 'bg-primary/10 text-primary'
-                                }`}>
-                                  {booking.discount_type === 'barrio' ? `Barrio -${booking.discount_percent}%` : `Lanzamiento -${booking.discount_percent}%`}
+                              <div className="flex flex-col gap-0.5">
+                                <span className={cn(
+                                  "status-badge text-[11px]",
+                                  booking.discount_type === 'barrio' ? 'bg-blue-50 text-blue-700' : 'bg-primary/10 text-primary'
+                                )}>
+                                  {booking.discount_type === 'barrio' ? `Barrio -${booking.discount_percent}%` : `-${booking.discount_percent}%`}
                                 </span>
                                 {booking.is_launch_founder_slot && (
-                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                    Founder
-                                  </span>
-                                )}
-                                {booking.barrio && (
-                                  <span className="text-xs text-muted-foreground">{booking.barrio}</span>
+                                  <span className="status-badge text-[11px] bg-amber-50 text-amber-700">Founder</span>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
+                              <span className="text-xs text-muted-foreground/50">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-4">
+                          <td>
                             {getStatusBadge(booking.status)}
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="hidden sm:table-cell">
                             {getPaymentBadge(booking.payment_status, booking.is_subscription_booking, booking.requires_payment)}
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="hidden lg:table-cell">
                             <Checkbox
                               checked={booking.is_test}
                               onCheckedChange={(checked) => handleToggleBookingTest(booking.id, !!checked)}
                             />
                           </td>
-                          <td className="px-4 py-4">
-                            <div className="flex gap-1">
+                          <td>
+                            <div className="flex gap-0.5">
                               <Button
-                                size="sm"
+                                size="icon"
                                 variant="ghost"
                                 onClick={() => openBookingDetail(booking)}
-                                className="text-primary hover:text-primary/80"
+                                className="h-8 w-8 text-primary hover:text-primary/80"
+                                title="Ver detalle"
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
-                              {/* Aceptar: only for pending bookings - moves to calendar */}
                               {booking.status === 'pending' && (
                                 <Button
-                                  size="sm"
+                                  size="icon"
                                   variant="ghost"
                                   onClick={() => handleUpdateBookingStatus(booking.id, 'confirmed')}
-                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                  title="Aceptar (aparece en calendario)"
+                                  className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title="Aceptar"
                                 >
                                   <CheckCircle className="w-4 h-4" />
                                 </Button>
                               )}
-                              {/* Marcar pagado: only if payment pending */}
                               {booking.payment_status === 'pending' && booking.status !== 'cancelled' && !booking.is_subscription_booking && (
                                 <Button
-                                  size="sm"
+                                  size="icon"
                                   variant="ghost"
                                   onClick={() => handleMarkAsPaid(booking.id)}
-                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                  title="Marcar como pagado"
+                                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  title="Marcar pagado"
                                 >
                                   <DollarSign className="w-4 h-4" />
                                 </Button>
                               )}
-                              {/* Completar: only for confirmed/accepted bookings - removes from calendar */}
                               {booking.status === 'confirmed' && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleUpdateBookingStatus(booking.id, 'completed')}
-                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                  title="Completar (desaparece del calendario)"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                </Button>
+                                <>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleUpdateBookingStatus(booking.id, 'completed')}
+                                    className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    title="Completar"
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleSendOnMyWay(booking)}
+                                    disabled={sendingOnMyWayId === booking.id}
+                                    className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                    title="En camino"
+                                  >
+                                    {sendingOnMyWayId === booking.id ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : notifiedBookings.has(booking.id) ? (
+                                      <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                                    ) : (
+                                      <Send className="w-3.5 h-3.5" />
+                                    )}
+                                  </Button>
+                                </>
                               )}
-                              {/* Cancelar: for pending or confirmed */}
                               {(booking.status === 'pending' || booking.status === 'confirmed') && (
                                 <Button
-                                  size="sm"
+                                  size="icon"
                                   variant="ghost"
                                   onClick={() => handleUpdateBookingStatus(booking.id, 'cancelled')}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Cancelar reserva"
+                                  className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                  title="Cancelar"
                                 >
                                   <XCircle className="w-4 h-4" />
-                                </Button>
-                              )}
-                              {/* En camino: for confirmed bookings */}
-                              {booking.status === 'confirmed' && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleSendOnMyWay(booking)}
-                                  disabled={sendingOnMyWayId === booking.id}
-                                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                  title="Enviar 'En camino'"
-                                >
-                                  {sendingOnMyWayId === booking.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : notifiedBookings.has(booking.id) ? (
-                                    <CheckCircle className="w-4 h-4 text-green-600" />
-                                  ) : (
-                                    <Send className="w-4 h-4" />
-                                  )}
                                 </Button>
                               )}
                             </div>
@@ -1399,10 +1312,10 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
       {/* Booking Detail Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display">Detalle de Reserva</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="font-display text-lg">Detalle de Reserva</DialogTitle>
+            <DialogDescription className="font-mono text-xs">
               ID: {selectedBooking?.id.substring(0, 8).toUpperCase()}
             </DialogDescription>
           </DialogHeader>

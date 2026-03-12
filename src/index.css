@@ -193,23 +193,33 @@ html {
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--washero-gold));
-  border-radius: 4px;
+  background: hsl(var(--border));
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--washero-gold-dark));
+  background: hsl(var(--muted-foreground) / 0.4);
 }
 
-/* Google Places Autocomplete dropdown - must be above modals (z-50 = 50, dialog typically 50-100) */
+/* Hide scrollbar utility */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Google Places Autocomplete dropdown */
 .pac-container {
   z-index: 2147483647 !important;
   background: hsl(var(--popover));
@@ -236,3 +246,27 @@ html {
 .pac-matched {
   color: hsl(var(--primary));
 }
+
+/* Admin stat cards */
+.admin-stat-card {
+  @apply bg-background rounded-xl p-4 shadow-sm border border-border/50 transition-all hover:shadow-md;
+}
+
+/* Admin table improvements */
+.admin-table th {
+  @apply px-4 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider;
+}
+
+.admin-table td {
+  @apply px-4 py-3.5;
+}
+
+.admin-table tbody tr {
+  @apply border-b border-border/50 hover:bg-muted/30 transition-colors;
+}
+
+/* Status badge base */
+.status-badge {
+  @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+}
+

@@ -519,11 +519,11 @@ export function MessagesTab() {
     return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   }, [selectedConversation?.last_inbound_at]);
 
-  return (
+    return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex flex-col h-[calc(100vh-280px)] min-h-[500px]"
+      className="flex flex-col h-[calc(100vh-220px)] min-h-[400px]"
     >
       {/* Config Warning Banner */}
       {configWarning && (
@@ -534,18 +534,18 @@ export function MessagesTab() {
         </Alert>
       )}
       
-      <div className="flex flex-1 bg-background rounded-xl shadow-sm overflow-hidden border border-border">
+      <div className="flex flex-1 bg-background rounded-xl shadow-sm overflow-hidden border border-border/50">
       {/* Left: Conversations List */}
-      <div className="w-80 border-r border-border flex flex-col">
+      <div className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 border-r border-border flex-col`}>
         {/* Search */}
-        <div className="p-3 border-b border-border">
+        <div className="p-3 border-b border-border bg-muted/20">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar..."
+              placeholder="Buscar conversación..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 h-9 text-sm"
             />
           </div>
         </div>
@@ -553,24 +553,31 @@ export function MessagesTab() {
         {/* Conversations */}
         <ScrollArea className="flex-1">
           {isLoadingConversations ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : filteredConversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <MessageCircle className="w-12 h-12 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                {searchQuery ? 'No se encontraron conversaciones' : 'No hay conversaciones aún'}
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
+                <MessageCircle className="w-7 h-7 text-muted-foreground/40" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground mb-1">
+                {searchQuery ? 'Sin resultados' : 'No hay conversaciones'}
+              </p>
+              <p className="text-xs text-muted-foreground/60">
+                {searchQuery ? 'Intentá con otro término' : 'Las conversaciones aparecerán aquí'}
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div>
               {filteredConversations.map((conv) => (
                 <button
                   key={conv.id}
                   onClick={() => setSelectedConversation(conv)}
-                  className={`w-full p-3 text-left hover:bg-muted/50 transition-colors ${
-                    selectedConversation?.id === conv.id ? 'bg-muted' : ''
+                  className={`w-full p-3 text-left transition-colors border-b border-border/30 ${
+                    selectedConversation?.id === conv.id 
+                      ? 'bg-primary/5 border-l-2 border-l-primary' 
+                      : 'hover:bg-muted/40'
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -579,19 +586,19 @@ export function MessagesTab() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-sm truncate">
+                        <span className="font-semibold text-sm truncate">
                           {conv.customer_name || conv.customer_phone_e164}
                         </span>
-                        <span className="text-xs text-muted-foreground flex-shrink-0">
+                        <span className="text-[11px] text-muted-foreground flex-shrink-0">
                           {formatRelativeDate(conv.last_message_at)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-2 mt-0.5">
-                        <p className="text-xs text-muted-foreground truncate">
+                        <p className="text-xs text-muted-foreground truncate leading-relaxed">
                           {conv.last_message_preview || 'Sin mensajes'}
                         </p>
                         {conv.unread_count > 0 && (
-                          <Badge variant="default" className="h-5 min-w-5 flex items-center justify-center text-xs">
+                          <Badge variant="default" className="h-5 min-w-5 flex items-center justify-center text-[10px]">
                             {conv.unread_count}
                           </Badge>
                         )}
@@ -606,27 +613,36 @@ export function MessagesTab() {
       </div>
 
       {/* Right: Chat */}
-      <div className="flex-1 flex flex-col">
+      <div className={`${selectedConversation ? 'flex' : 'hidden md:flex'} flex-1 flex-col`}>
         {selectedConversation ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-border flex items-center justify-between">
+            <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between gap-3 bg-muted/10">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="w-5 h-5 text-primary" />
+                {/* Back button on mobile */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 md:hidden shrink-0"
+                  onClick={() => setSelectedConversation(null)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </Button>
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <User className="w-4 h-4 text-primary" />
                 </div>
-                <div>
-                  <h3 className="font-medium">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-sm truncate">
                     {selectedConversation.customer_name || selectedConversation.customer_phone_e164}
                   </h3>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                     <Phone className="w-3 h-3" />
-                    {selectedConversation.customer_phone_e164}
+                    <span className="truncate">{selectedConversation.customer_phone_e164}</span>
                   </div>
                 </div>
               </div>
-              <Badge variant={isWithin24h ? 'default' : 'secondary'} className={isWithin24h ? 'bg-green-500' : 'bg-yellow-500'}>
-                {isWithin24h ? 'Ventana 24h' : 'Requiere plantilla'}
+              <Badge variant={isWithin24h ? 'default' : 'secondary'} className={`text-[10px] shrink-0 ${isWithin24h ? 'bg-green-500' : 'bg-yellow-500'}`}>
+                {isWithin24h ? '24h ✓' : 'Plantilla'}
               </Badge>
             </div>
 
@@ -684,12 +700,12 @@ export function MessagesTab() {
             </ScrollArea>
 
             {/* Quick Actions */}
-            <div className="px-4 py-2 border-t border-border">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-muted-foreground">Último mensaje entrante:</span>
-                <Badge variant="outline" className="text-xs">{lastInboundDisplay}</Badge>
+            <div className="px-3 sm:px-4 py-2 border-t border-border bg-muted/10">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Último entrante:</span>
+                <Badge variant="outline" className="text-[10px] h-5">{lastInboundDisplay}</Badge>
               </div>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-1.5 flex-wrap">
                 {QUICK_ACTIONS.map((qa) => (
                   <Button
                     key={qa.label}
@@ -697,7 +713,7 @@ export function MessagesTab() {
                     size="sm"
                     onClick={() => handleQuickAction(qa.action)}
                     disabled={sendingAction === qa.action}
-                    className="text-xs"
+                    className="text-[11px] h-7 px-2.5"
                   >
                     {sendingAction === qa.action ? (
                       <Loader2 className="w-3 h-3 mr-1 animate-spin" />
@@ -711,7 +727,7 @@ export function MessagesTab() {
             </div>
 
             {/* Composer */}
-            <div className="p-4 border-t border-border">
+            <div className="p-3 sm:p-4 border-t border-border">
               <div className="flex gap-2 items-end">
                 <Textarea
                   ref={composerRef}
@@ -727,13 +743,13 @@ export function MessagesTab() {
                       handleSend();
                     }
                   }}
-                  className="min-h-[44px] max-h-[200px] resize-none overflow-y-auto"
+                  className="min-h-[40px] max-h-[200px] resize-none overflow-y-auto text-sm"
                   rows={1}
                 />
                 <Button
                   onClick={handleSend}
                   disabled={!messageText.trim() || isSending}
-                  className="px-4 shrink-0"
+                  className="px-3 shrink-0 h-10"
                 >
                   {isSending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -746,12 +762,12 @@ export function MessagesTab() {
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
-              <MessageCircle className="w-10 h-10 text-muted-foreground" />
+            <div className="w-16 h-16 rounded-full bg-muted/60 flex items-center justify-center mb-4">
+              <MessageCircle className="w-8 h-8 text-muted-foreground/40" />
             </div>
-            <h3 className="text-lg font-medium mb-2">Mensajes WhatsApp</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">
-              Selecciona una conversación para ver los mensajes o envía un nuevo mensaje desde una reserva.
+            <h3 className="text-base font-semibold mb-1.5">Mensajes WhatsApp</h3>
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+              Seleccioná una conversación para ver los mensajes y responder.
             </p>
           </div>
         )}
