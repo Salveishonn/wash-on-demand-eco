@@ -22,10 +22,63 @@ import {
   Timer,
   CheckCircle,
   CalendarX,
-  AlertTriangle,
-  Mic,
+   AlertTriangle,
+   Mic,
+   Download,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+/* ── Inline Audio Player with error handling & download fallback ── */
+function AudioPlayer({ url, mime }: { url?: string | null; mime?: string | null }) {
+  const [error, setError] = useState(false);
+
+  if (!url) {
+    return (
+      <div className="flex flex-col gap-1 min-w-[200px]">
+        <div className="flex items-center gap-2">
+          <Mic className="w-4 h-4 flex-shrink-0" />
+          <span className="text-xs font-medium">Audio</span>
+        </div>
+        <p className="text-xs italic opacity-70">Audio recibido — no disponible para reproducir</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[200px]">
+      <div className="flex items-center gap-2">
+        <Mic className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs font-medium">Audio</span>
+      </div>
+      {!error ? (
+        <audio
+          controls
+          preload="auto"
+          className="w-full max-w-[260px] h-8"
+          style={{ minWidth: '200px' }}
+          onError={() => setError(true)}
+        >
+          {/* Provide source without type first so browser auto-detects */}
+          <source src={url} />
+          {mime && <source src={url} type={mime} />}
+        </audio>
+      ) : (
+        <p className="text-xs italic opacity-70">No se pudo reproducir este audio</p>
+      )}
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        download
+        className="inline-flex items-center gap-1 text-xs text-primary hover:underline w-fit"
+      >
+        <Download className="w-3 h-3" />
+        Descargar audio
+      </a>
+    </div>
+  );
+}
+
 
 interface Conversation {
   id: string;
@@ -607,21 +660,8 @@ export function MessagesTab() {
                           }`}
                         >
                           {/* Audio player for voice notes */}
-                          {(msg.message_type === 'audio' || msg.message_type === 'voice') ? (
-                            <div className="flex flex-col gap-1.5 min-w-[200px]">
-                              <div className="flex items-center gap-2">
-                                <Mic className="w-4 h-4 flex-shrink-0" />
-                                <span className="text-xs font-medium">Audio</span>
-                              </div>
-                              {msg.media_url ? (
-                                <audio controls preload="metadata" className="w-full max-w-[260px] h-8" style={{ minWidth: '200px' }}>
-                                  <source src={msg.media_url} type={msg.media_mime_type || 'audio/ogg'} />
-                                  Tu navegador no soporta audio.
-                                </audio>
-                              ) : (
-                                <p className="text-xs italic opacity-70">Audio recibido — no disponible para reproducir</p>
-                              )}
-                            </div>
+                           {(msg.message_type === 'audio' || msg.message_type === 'voice') ? (
+                            <AudioPlayer url={msg.media_url} mime={msg.media_mime_type} />
                           ) : (
                             <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
                           )}

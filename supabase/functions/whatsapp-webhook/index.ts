@@ -176,7 +176,9 @@ async function handleInboundMessages(
         if (downloaded) {
           mediaMime = downloaded.mimeType;
           const ext = mimeToExtension(downloaded.mimeType);
-          const storagePath = `${fromPhone.replace("+", "")}/${waMessageId}.${ext}`;
+          // Sanitize waMessageId for safe storage paths (remove =, +, / etc.)
+          const safeId = waMessageId.replace(/[^a-zA-Z0-9_-]/g, "");
+          const storagePath = `${fromPhone.replace("+", "")}/${safeId}.${ext}`;
 
           // Upload to Supabase Storage using service-role client
           const storageClient = createClient(supabaseUrl, supabaseServiceKey);
