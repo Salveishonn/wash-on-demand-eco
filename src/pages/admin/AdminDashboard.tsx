@@ -34,6 +34,7 @@ import { EarlyAccessTab } from '@/components/admin/EarlyAccessTab';
 import { ContactsTab } from '@/components/admin/ContactsTab';
 import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
+import { BookingPricingDebug } from '@/components/admin/BookingPricingDebug';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -76,14 +77,24 @@ interface Booking {
   is_test: boolean;
   created_at: string;
   confirmed_at: string | null;
-  // Discount fields
+  // Discount & pricing debug fields
   total_price_ars: number | null;
   final_price_ars: number | null;
+  base_price_ars: number | null;
+  vehicle_extra_ars: number | null;
+  extras_total_ars: number | null;
   discount_type: string | null;
   discount_percent: number | null;
   discount_amount_ars: number | null;
   is_launch_founder_slot: boolean | null;
+  cluster_size: number | null;
+  cluster_discount_percent: number | null;
   barrio: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  pricing_version_id: string | null;
+  vehicle_size: string | null;
+  service_code: string | null;
 }
 
 interface NotificationLog {
@@ -1443,6 +1454,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                   <p className="text-sm text-muted-foreground">{selectedBooking.notes}</p>
                 </div>
               )}
+
+              {/* Pricing Debug - collapsible */}
+              <BookingPricingDebug booking={selectedBooking} />
 
               {/* Status */}
               <div className="flex items-center gap-4">

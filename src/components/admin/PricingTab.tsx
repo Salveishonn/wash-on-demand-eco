@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Save, Loader2, Plus, DollarSign, Car, Sparkles, CreditCard } from 'lucide-react';
+import { PricingAnalytics } from '@/components/admin/PricingAnalytics';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -202,6 +203,9 @@ export function PricingTab() {
           ⚠️ Tenés cambios sin guardar. Al guardar se creará una nueva versión de precios.
         </div>
       )}
+
+      {/* Pricing Analytics Summary */}
+      <PricingAnalytics />
 
       <Tabs defaultValue="services" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
