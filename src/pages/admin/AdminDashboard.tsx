@@ -916,20 +916,31 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                   <tbody>
                     {isLoading ? (
                       <tr>
-                         <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
-                          Cargando...
+                         <td colSpan={11} className="px-4 py-16 text-center">
+                          <div className="flex flex-col items-center gap-2">
+                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                            <span className="text-sm text-muted-foreground">Cargando reservas...</span>
+                          </div>
                         </td>
                       </tr>
                     ) : filteredBookings.length === 0 ? (
                       <tr>
-                         <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
-                          No hay reservas
+                         <td colSpan={11} className="px-4 py-16 text-center">
+                          <div className="flex flex-col items-center gap-2">
+                            <Calendar className="w-8 h-8 text-muted-foreground/30" />
+                            <span className="text-sm font-medium text-muted-foreground">No hay reservas con estos filtros</span>
+                            <span className="text-xs text-muted-foreground/60">Probá ajustando el rango de fecha o estado</span>
+                          </div>
                         </td>
                       </tr>
                     ) : (
                       filteredBookings.map((booking) => (
-                        <tr key={booking.id} className={`hover:bg-muted/30 ${booking.is_test ? 'opacity-60' : ''}`}>
-                          <td className="px-2 py-4">
+                        <tr key={booking.id} className={cn(
+                          "transition-colors",
+                          booking.is_test && 'opacity-50 bg-muted/20',
+                          booking.status === 'pending' && !booking.is_test && 'bg-yellow-50/30',
+                        )}>
+                          <td className="px-2">
                             <Checkbox
                               checked={selectedBookingIds.has(booking.id)}
                               onCheckedChange={() => toggleBookingSelect(booking.id)}
