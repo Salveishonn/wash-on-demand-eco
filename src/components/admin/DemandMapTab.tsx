@@ -1,14 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, RefreshCw, MapPin, TrendingUp } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Loader2, RefreshCw, MapPin, TrendingUp, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { loadGoogleMaps } from '@/lib/googleMapsLoader';
 import { formatPrice } from '@/hooks/usePricing';
 
-type TimeFilter = 'today' | 'week' | 'month' | 'all';
-
-interface MapBooking {
+/** Minimal booking shape needed by the map – matches AdminDashboard's Booking interface */
+export interface MapBooking {
   id: string;
   customer_name: string;
   service_name: string;
@@ -31,6 +30,13 @@ interface MapBooking {
   is_test: boolean;
 }
 
+interface DemandMapTabProps {
+  /** Already-filtered bookings from the parent (same as Reservas). */
+  bookings: MapBooking[];
+  /** Total bookings before location filter (to show coverage stats). */
+  totalFiltered: number;
+}
+
 const DISCOUNT_COLORS: Record<string, { bg: string; border: string; label: string }> = {
   none: { bg: '#22c55e', border: '#16a34a', label: 'Precio completo' },
   founder: { bg: '#eab308', border: '#ca8a04', label: 'Fundador' },
@@ -47,47 +53,19 @@ function getBookingColor(booking: MapBooking) {
   return DISCOUNT_COLORS.none;
 }
 
-function getDateRange(filter: TimeFilter): { from: string; to: string } {
-  const now = new Date();
-  const to = new Date(now);
-  to.setHours(23, 59, 59, 999);
-
-  switch (filter) {
-    case 'today': {
-      const from = new Date(now);
-      from.setHours(0, 0, 0, 0);
-      return { from: from.toISOString().split('T')[0], to: to.toISOString().split('T')[0] };
-    }
-    case 'week': {
-      const from = new Date(now);
-      from.setDate(from.getDate() - 7);
-      return { from: from.toISOString().split('T')[0], to: to.toISOString().split('T')[0] };
-    }
-    case 'month': {
-      const from = new Date(now);
-      from.setMonth(from.getMonth() - 1);
-      return { from: from.toISOString().split('T')[0], to: to.toISOString().split('T')[0] };
-    }
-    default:
-      return { from: '2020-01-01', to: '2099-12-31' };
-  }
-}
-
-export function DemandMapTab() {
+export function DemandMapTab({ bookings, totalFiltered }: DemandMapTabProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const infoWindowRef = useRef<any>(null);
 
-  const [bookings, setBookings] = useState<MapBooking[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('month');
 
-  const geoBookings = bookings.filter(b => b.latitude && b.longitude && !b.is_test);
+  const geoBookings = bookings.filter(b => b.latitude && b.longitude);
+  const missingLocation = totalFiltered - geoBookings.length;
 
-  // Stats
+  // Stats from the passed-in (already filtered) data
   const stats = {
     total: geoBookings.length,
     withDiscount: geoBookings.filter(b => b.discount_type && b.status !== 'cancelled').length,
@@ -107,29 +85,7 @@ export function DemandMapTab() {
     })(),
   };
 
-  const fetchBookings = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const { from, to } = getDateRange(timeFilter);
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('id,customer_name,service_name,booking_date,booking_time,address,barrio,status,payment_status,latitude,longitude,discount_type,discount_percent,is_launch_founder_slot,cluster_size,cluster_discount_percent,base_price_ars,final_price_ars,total_price_ars,is_test')
-        .gte('booking_date', from)
-        .lte('booking_date', to)
-        .order('booking_date', { ascending: false });
-
-      if (error) throw error;
-      setBookings(data || []);
-    } catch (err) {
-      console.error('[DemandMap] Fetch error:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [timeFilter]);
-
-  useEffect(() => { fetchBookings(); }, [fetchBookings]);
-
-  // Load Google Maps
+  // Load Google Maps once
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -153,14 +109,13 @@ export function DemandMapTab() {
     return () => { cancelled = true; };
   }, []);
 
-  // Render map + markers
+  // Render map + markers whenever data or map readiness changes
   useEffect(() => {
     if (!mapReady || !mapRef.current || !window.google?.maps) return;
 
     const gmaps = (window as any).google?.maps;
     if (!gmaps) return;
 
-    // Init map centered on Buenos Aires area
     if (!googleMapRef.current) {
       googleMapRef.current = new gmaps.Map(mapRef.current, {
         center: { lat: -34.45, lng: -58.7 },
@@ -188,7 +143,6 @@ export function DemandMapTab() {
 
       const color = getBookingColor(booking);
 
-      // Create colored pin element
       const pinEl = document.createElement('div');
       pinEl.style.cssText = `
         width: 16px; height: 16px; border-radius: 50%;
@@ -243,40 +197,28 @@ export function DemandMapTab() {
     }
   }, [mapReady, geoBookings]);
 
-  const filterButtons: { key: TimeFilter; label: string }[] = [
-    { key: 'today', label: 'Hoy' },
-    { key: 'week', label: 'Semana' },
-    { key: 'month', label: 'Mes' },
-    { key: 'all', label: 'Todo' },
-  ];
-
   return (
     <div className="space-y-4">
-      {/* Header + Filters */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-display font-bold flex items-center gap-2">
             <MapPin className="w-6 h-6 text-primary" />
             Mapa de Demanda
           </h2>
-          <p className="text-sm text-muted-foreground">{geoBookings.length} reservas con ubicación</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {filterButtons.map(f => (
-            <Button
-              key={f.key}
-              size="sm"
-              variant={timeFilter === f.key ? 'default' : 'outline'}
-              onClick={() => setTimeFilter(f.key)}
-            >
-              {f.label}
-            </Button>
-          ))}
-          <Button size="sm" variant="outline" onClick={fetchBookings} disabled={isLoading}>
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
+          <p className="text-sm text-muted-foreground">
+            {totalFiltered} reservas filtradas · {geoBookings.length} con ubicación · {missingLocation} sin ubicación
+          </p>
         </div>
       </div>
+
+      {/* Coverage warning */}
+      {missingLocation > 0 && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+          <span>{missingLocation} reserva(s) no tienen coordenadas y no aparecen en el mapa.</span>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -317,11 +259,6 @@ export function DemandMapTab() {
         <div className="lg:col-span-3">
           <Card className="overflow-hidden">
             <CardContent className="p-0 relative">
-              {isLoading && (
-                <div className="absolute inset-0 z-10 bg-background/60 flex items-center justify-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                </div>
-              )}
               {mapError ? (
                 <div className="h-[500px] flex items-center justify-center text-muted-foreground text-sm">
                   <div className="text-center space-y-2">
@@ -374,6 +311,18 @@ export function DemandMapTab() {
                   <span className="font-bold text-primary">{count}</span>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+
+          {/* Debug panel */}
+          <Card className="mt-3">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs text-muted-foreground uppercase tracking-wider">Debug Sync</CardTitle>
+            </CardHeader>
+            <CardContent className="text-xs space-y-1 text-muted-foreground">
+              <p>Filtradas: <span className="font-mono text-foreground">{totalFiltered}</span></p>
+              <p>Con coords: <span className="font-mono text-foreground">{geoBookings.length}</span></p>
+              <p>Sin coords: <span className="font-mono text-foreground">{missingLocation}</span></p>
             </CardContent>
           </Card>
         </div>
