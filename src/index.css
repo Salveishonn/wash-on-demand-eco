@@ -249,7 +249,7 @@ html {
 
 /* Admin stat cards */
 .admin-stat-card {
-  @apply bg-background rounded-xl p-4 shadow-sm border border-border/50 transition-all hover:shadow-md;
+  @apply bg-background rounded-xl p-2.5 sm:p-4 shadow-sm border border-border/50 transition-all hover:shadow-md;
 }
 
 /* Admin table improvements */
