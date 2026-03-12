@@ -613,27 +613,36 @@ export function MessagesTab() {
       </div>
 
       {/* Right: Chat */}
-      <div className="flex-1 flex flex-col">
+      <div className={`${selectedConversation ? 'flex' : 'hidden md:flex'} flex-1 flex-col`}>
         {selectedConversation ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-border flex items-center justify-between">
+            <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between gap-3 bg-muted/10">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="w-5 h-5 text-primary" />
+                {/* Back button on mobile */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 md:hidden shrink-0"
+                  onClick={() => setSelectedConversation(null)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </Button>
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <User className="w-4 h-4 text-primary" />
                 </div>
-                <div>
-                  <h3 className="font-medium">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-sm truncate">
                     {selectedConversation.customer_name || selectedConversation.customer_phone_e164}
                   </h3>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                     <Phone className="w-3 h-3" />
-                    {selectedConversation.customer_phone_e164}
+                    <span className="truncate">{selectedConversation.customer_phone_e164}</span>
                   </div>
                 </div>
               </div>
-              <Badge variant={isWithin24h ? 'default' : 'secondary'} className={isWithin24h ? 'bg-green-500' : 'bg-yellow-500'}>
-                {isWithin24h ? 'Ventana 24h' : 'Requiere plantilla'}
+              <Badge variant={isWithin24h ? 'default' : 'secondary'} className={`text-[10px] shrink-0 ${isWithin24h ? 'bg-green-500' : 'bg-yellow-500'}`}>
+                {isWithin24h ? '24h ✓' : 'Plantilla'}
               </Badge>
             </div>
 
