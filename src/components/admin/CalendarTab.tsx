@@ -297,7 +297,7 @@ export function CalendarTab() {
     });
     // Sort bookings within each date by time
     Object.keys(grouped).forEach((date) => {
-      grouped[date].sort((a, b) => a.booking_time.localeCompare(b.booking_time));
+      grouped[date].sort((a, b) => (a.booking_time || '').localeCompare(b.booking_time || ''));
     });
     return grouped;
   }, [bookings]);
