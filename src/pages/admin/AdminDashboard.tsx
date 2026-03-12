@@ -38,6 +38,7 @@ import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { BookingPricingDebug } from '@/components/admin/BookingPricingDebug';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
