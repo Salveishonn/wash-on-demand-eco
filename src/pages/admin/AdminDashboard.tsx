@@ -1381,7 +1381,17 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
         {activeTab === 'disponibilidad' && <ErrorBoundaryCalendar><DisponibilidadTab /></ErrorBoundaryCalendar>}
 
         {/* Pricing Tab */}
-        {activeTab === 'pricing' && <ErrorBoundaryCalendar><PricingTab /></ErrorBoundaryCalendar>}
+        {activeTab === 'pricing' && (
+          <ErrorBoundaryCalendar>
+            <PricingTab />
+            <div className="mt-8">
+              <DiscountControlPanel />
+            </div>
+          </ErrorBoundaryCalendar>
+        )}
+
+        {/* Demand Map Tab */}
+        {activeTab === 'demand-map' && <ErrorBoundaryCalendar><DemandMapTab /></ErrorBoundaryCalendar>}
 
         {/* WhatsApp Config Tab */}
         {activeTab === 'whatsapp-config' && <ErrorBoundaryCalendar><WhatsAppSettingsTab /></ErrorBoundaryCalendar>}
