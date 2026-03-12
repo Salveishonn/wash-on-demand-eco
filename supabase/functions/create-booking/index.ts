@@ -485,6 +485,8 @@ serve(async (req) => {
       whatsapp_opt_in: whatsappOptIn,
       barrio: barrio,
       barrio_group_key: barrioGroupKey,
+      latitude: data.latitude || null,
+      longitude: data.longitude || null,
     };
 
     console.log("[create-booking] Insert payload:", JSON.stringify(bookingInsertData, null, 2));
