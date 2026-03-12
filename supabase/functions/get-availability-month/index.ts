@@ -15,6 +15,8 @@ interface DayAvailability {
   surchargeAmount: number | null;
   surchargePercent: number | null;
   note: string | null;
+  clusterCount: number;
+  clusterEmoji: string;
 }
 
 interface AvailabilityRule {
