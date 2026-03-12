@@ -157,9 +157,12 @@ export function DemandMapTab() {
   useEffect(() => {
     if (!mapReady || !mapRef.current || !window.google?.maps) return;
 
+    const gmaps = (window as any).google?.maps;
+    if (!gmaps) return;
+
     // Init map centered on Buenos Aires area
     if (!googleMapRef.current) {
-      googleMapRef.current = new google.maps.Map(mapRef.current, {
+      googleMapRef.current = new gmaps.Map(mapRef.current, {
         center: { lat: -34.45, lng: -58.7 },
         zoom: 11,
         mapId: 'washero-demand-map',
