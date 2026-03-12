@@ -251,13 +251,14 @@ export default function AdminDashboard() {
   const logAdminAction = async (action: string, details: Record<string, unknown> = {}, affectedTable?: string) => {
     try {
       if (!user?.id) return;
-      await supabase.from('admin_logs').insert({
+      await supabase.from('admin_logs').insert([{
         admin_user_id: user.id,
         action,
-        details,
+        details: details as any,
         affected_table: affectedTable || 'bookings',
         affected_count: 1,
-      });
+      }]);
+
     } catch (e) {
       console.error('[Admin] Audit log error:', e);
     }
