@@ -894,30 +894,30 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
             </div>
 
             {/* Bookings Table */}
-            <div className="bg-background rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-background rounded-xl shadow-sm overflow-hidden border border-border/50">
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-2 py-3 text-left">
+                <table className="w-full admin-table">
+                  <thead>
+                    <tr className="bg-muted/40 border-b border-border">
+                      <th className="px-2 py-3 w-10">
                         <Checkbox
                           checked={selectedBookingIds.size === filteredBookings.length && filteredBookings.length > 0}
                           onCheckedChange={toggleAllBookings}
                         />
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">ID</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Cliente</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Servicio</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Fecha/Hora</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Total</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Descuento</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Estado</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Pago</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Test</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Acciones</th>
+                      <th>ID</th>
+                      <th>Cliente</th>
+                      <th className="hidden lg:table-cell">Servicio</th>
+                      <th>Fecha</th>
+                      <th className="hidden md:table-cell">Total</th>
+                      <th className="hidden xl:table-cell">Descuento</th>
+                      <th>Estado</th>
+                      <th className="hidden sm:table-cell">Pago</th>
+                      <th className="hidden lg:table-cell w-12">Test</th>
+                      <th className="w-28">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody>
                     {isLoading ? (
                       <tr>
                          <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
