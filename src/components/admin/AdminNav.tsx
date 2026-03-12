@@ -5,6 +5,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -16,6 +18,7 @@ import {
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Badge } from '@/components/ui/badge';
 
 export type AdminTabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'facturas' | 'mensajes' | 'disponibilidad' | 'whatsapp-config' | 'pricing' | 'early-access' | 'contacts' | 'demand-map';
 
@@ -23,25 +26,37 @@ interface AdminSection {
   key: AdminTabType;
   label: string;
   icon: LucideIcon;
-  activeClass?: string;
+  group: 'ops' | 'crm' | 'config';
 }
 
+const adminSectionGroups = {
+  ops: { label: 'Operaciones', color: 'text-primary' },
+  crm: { label: 'CRM & Ventas', color: 'text-blue-600' },
+  config: { label: 'Configuración', color: 'text-muted-foreground' },
+};
+
 export const adminSections: AdminSection[] = [
-  { key: 'bookings', label: 'Reservas', icon: Calendar },
-  { key: 'notifications', label: 'Notificaciones', icon: Bell },
-  { key: 'early-access', label: 'Early Access', icon: Sparkles, activeClass: 'bg-amber-600 hover:bg-amber-700 text-white' },
-  { key: 'contacts', label: 'Contactos', icon: Mail, activeClass: 'bg-cyan-600 hover:bg-cyan-700 text-white' },
-  { key: 'kipper', label: 'Leads Kipper', icon: Shield, activeClass: 'bg-[#8B1E2F] hover:bg-[#6B1726] text-white' },
-  { key: 'subscriptions', label: 'Suscripciones', icon: Users },
-  { key: 'calendario', label: 'Calendario', icon: CalendarDays },
-  { key: 'finanzas', label: 'Finanzas', icon: DollarSign, activeClass: 'bg-green-600 hover:bg-green-700 text-white' },
-  { key: 'facturas', label: 'Facturas', icon: FileText, activeClass: 'bg-blue-600 hover:bg-blue-700 text-white' },
-  { key: 'pricing', label: 'Precios', icon: Tag, activeClass: 'bg-indigo-600 hover:bg-indigo-700 text-white' },
-  { key: 'mensajes', label: 'Mensajes', icon: MessageCircle, activeClass: 'bg-green-600 hover:bg-green-700 text-white' },
-  { key: 'disponibilidad', label: 'Disponibilidad', icon: Clock, activeClass: 'bg-orange-600 hover:bg-orange-700 text-white' },
-  { key: 'whatsapp-config', label: 'WhatsApp Config', icon: Settings, activeClass: 'bg-purple-600 hover:bg-purple-700 text-white' },
-  { key: 'demand-map', label: 'Mapa Demanda', icon: Map, activeClass: 'bg-teal-600 hover:bg-teal-700 text-white' },
+  // Operations
+  { key: 'bookings', label: 'Reservas', icon: Calendar, group: 'ops' },
+  { key: 'calendario', label: 'Calendario', icon: CalendarDays, group: 'ops' },
+  { key: 'mensajes', label: 'Mensajes', icon: MessageCircle, group: 'ops' },
+  { key: 'disponibilidad', label: 'Disponibilidad', icon: Clock, group: 'ops' },
+  // CRM
+  { key: 'suscripciones' as AdminTabType, label: 'Suscripciones', icon: Users, group: 'crm' },
+  { key: 'contacts', label: 'Contactos', icon: Mail, group: 'crm' },
+  { key: 'early-access', label: 'Early Access', icon: Sparkles, group: 'crm' },
+  { key: 'kipper', label: 'Leads Kipper', icon: Shield, group: 'crm' },
+  // Config & Analytics
+  { key: 'finanzas', label: 'Finanzas', icon: DollarSign, group: 'config' },
+  { key: 'facturas', label: 'Facturas', icon: FileText, group: 'config' },
+  { key: 'pricing', label: 'Precios', icon: Tag, group: 'config' },
+  { key: 'demand-map', label: 'Mapa Demanda', icon: Map, group: 'config' },
+  { key: 'notifications', label: 'Notificaciones', icon: Bell, group: 'config' },
+  { key: 'whatsapp-config', label: 'WhatsApp Config', icon: Settings, group: 'config' },
 ];
+
+// Fix the subscriptions key
+adminSections[4].key = 'subscriptions';
 
 interface AdminNavProps {
   activeTab: AdminTabType;
@@ -55,31 +70,32 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
   const currentSection = adminSections.find(s => s.key === activeTab) || adminSections[0];
   const CurrentIcon = currentSection.icon;
 
-  // Number of visible tabs on desktop before overflow
-  const VISIBLE_TABS_DESKTOP = 6;
-  const visibleSections = adminSections.slice(0, VISIBLE_TABS_DESKTOP);
-  const overflowSections = adminSections.slice(VISIBLE_TABS_DESKTOP);
-  const isOverflowActive = overflowSections.some(s => s.key === activeTab);
-
   const handleSelectTab = (tab: AdminTabType) => {
     onTabChange(tab);
     setIsDrawerOpen(false);
   };
 
-  // Mobile: Dropdown + Hamburger menu
+  // Primary tabs always visible on desktop
+  const primaryTabs: AdminTabType[] = ['bookings', 'calendario', 'mensajes', 'disponibilidad', 'subscriptions'];
+  const secondaryTabs = adminSections.filter(s => !primaryTabs.includes(s.key));
+  const primarySections = adminSections.filter(s => primaryTabs.includes(s.key));
+  const isSecondaryActive = secondaryTabs.some(s => s.key === activeTab);
+
+  // Mobile: full-width dropdown + drawer
   if (isMobile) {
     return (
-      <div className="flex items-center gap-2 mb-6">
-        {/* Dropdown Selector */}
+      <div className="flex items-center gap-2 mb-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button 
               variant="outline" 
-              className="flex-1 justify-between bg-background border-border"
+              className="flex-1 justify-between h-11 bg-background border-border"
             >
-              <div className="flex items-center gap-2">
-                <CurrentIcon className="w-4 h-4 text-primary" />
-                <span className="font-medium">{currentSection.label}</span>
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center">
+                  <CurrentIcon className="w-4 h-4 text-primary" />
+                </div>
+                <span className="font-semibold text-sm">{currentSection.label}</span>
               </div>
               <ChevronDown className="w-4 h-4 text-muted-foreground" />
             </Button>
@@ -88,65 +104,79 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
             align="start" 
             className="w-[calc(100vw-2rem)] max-w-sm bg-background border border-border z-50"
           >
-            {adminSections.map((section) => {
-              const Icon = section.icon;
-              const isActive = section.key === activeTab;
-              return (
-                <DropdownMenuItem
-                  key={section.key}
-                  onClick={() => handleSelectTab(section.key)}
-                  className={cn(
-                    "flex items-center gap-3 py-3 cursor-pointer",
-                    isActive && "bg-primary/10 text-primary font-medium"
-                  )}
-                >
-                  <Icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
-                  <span>{section.label}</span>
-                  {isActive && (
-                    <span className="ml-auto w-2 h-2 rounded-full bg-primary" />
-                  )}
-                </DropdownMenuItem>
-              );
-            })}
+            {(['ops', 'crm', 'config'] as const).map((group) => (
+              <div key={group}>
+                <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wider px-3 py-1.5">
+                  {adminSectionGroups[group].label}
+                </DropdownMenuLabel>
+                {adminSections.filter(s => s.group === group).map((section) => {
+                  const Icon = section.icon;
+                  const isActive = section.key === activeTab;
+                  return (
+                    <DropdownMenuItem
+                      key={section.key}
+                      onClick={() => handleSelectTab(section.key)}
+                      className={cn(
+                        "flex items-center gap-3 py-2.5 px-3 cursor-pointer rounded-md mx-1",
+                        isActive && "bg-primary/10 text-primary font-semibold"
+                      )}
+                    >
+                      <Icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
+                      <span className="text-sm">{section.label}</span>
+                      {isActive && (
+                        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })}
+                {group !== 'config' && <DropdownMenuSeparator />}
+              </div>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Hamburger for quick access */}
         <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="shrink-0">
+            <Button variant="outline" size="icon" className="shrink-0 h-11 w-11">
               <Menu className="w-4 h-4" />
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-72 p-0">
             <SheetHeader className="p-4 border-b bg-muted/30">
-              <SheetTitle className="text-left flex items-center gap-2">
+              <SheetTitle className="text-left flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Calendar className="w-4 h-4 text-primary" />
                 </div>
-                <span>Admin Panel</span>
+                <span className="font-display">Panel Admin</span>
               </SheetTitle>
             </SheetHeader>
-            <nav className="p-2">
-              {adminSections.map((section) => {
-                const Icon = section.icon;
-                const isActive = section.key === activeTab;
-                return (
-                  <button
-                    key={section.key}
-                    onClick={() => handleSelectTab(section.key)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors",
-                      isActive 
-                        ? "bg-primary text-primary-foreground" 
-                        : "hover:bg-muted/50 text-foreground"
-                    )}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span className="font-medium">{section.label}</span>
-                  </button>
-                );
-              })}
+            <nav className="p-2 space-y-1">
+              {(['ops', 'crm', 'config'] as const).map((group) => (
+                <div key={group} className="mb-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-3 py-2">
+                    {adminSectionGroups[group].label}
+                  </p>
+                  {adminSections.filter(s => s.group === group).map((section) => {
+                    const Icon = section.icon;
+                    const isActive = section.key === activeTab;
+                    return (
+                      <button
+                        key={section.key}
+                        onClick={() => handleSelectTab(section.key)}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all text-sm",
+                          isActive 
+                            ? "bg-primary text-primary-foreground font-semibold shadow-sm" 
+                            : "hover:bg-muted/60 text-foreground"
+                        )}
+                      >
+                        <Icon className="w-4.5 h-4.5" />
+                        <span>{section.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </nav>
           </SheetContent>
         </Sheet>
@@ -154,77 +184,96 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
     );
   }
 
-  // Desktop: Horizontal tabs with overflow dropdown
+  // Desktop: Horizontal tabs with grouped overflow
   return (
-    <div className="flex items-center gap-2 mb-6 flex-wrap lg:flex-nowrap">
-      {/* Admin label */}
-      <div className="hidden lg:flex items-center gap-2 pr-3 border-r border-border mr-1">
-        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Calendar className="w-4 h-4 text-primary" />
-        </div>
-        <span className="text-sm font-semibold text-muted-foreground">Admin</span>
-      </div>
-
-      {/* Visible tabs */}
-      {visibleSections.map((section) => {
+    <div className="flex items-center gap-1.5 mb-6 overflow-x-auto pb-1 scrollbar-none">
+      {/* Primary operation tabs */}
+      {primarySections.map((section) => {
         const Icon = section.icon;
         const isActive = section.key === activeTab;
-        const activeClass = section.activeClass || '';
         
         return (
           <Button
             key={section.key}
-            variant={isActive ? 'default' : 'outline'}
+            variant={isActive ? 'default' : 'ghost'}
             size="sm"
             onClick={() => onTabChange(section.key)}
             className={cn(
-              "gap-2 transition-all",
-              isActive && activeClass
+              "gap-2 transition-all shrink-0 h-9",
+              isActive 
+                ? "bg-primary text-primary-foreground shadow-sm font-semibold" 
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
             )}
           >
             <Icon className="w-4 h-4" />
-            <span className="hidden sm:inline">{section.label}</span>
+            <span>{section.label}</span>
           </Button>
         );
       })}
 
-      {/* Overflow dropdown for extra items */}
-      {overflowSections.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant={isOverflowActive ? 'default' : 'outline'}
-              size="sm"
-              className={cn(
-                "gap-2",
-                isOverflowActive && "bg-primary"
-              )}
-            >
-              <MoreHorizontal className="w-4 h-4" />
-              <span className="hidden sm:inline">Más</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-background border border-border z-50">
-            {overflowSections.map((section) => {
-              const Icon = section.icon;
-              const isActive = section.key === activeTab;
-              return (
-                <DropdownMenuItem
-                  key={section.key}
-                  onClick={() => onTabChange(section.key)}
-                  className={cn(
-                    "flex items-center gap-3 py-2 cursor-pointer",
-                    isActive && "bg-primary/10 text-primary font-medium"
-                  )}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{section.label}</span>
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      {/* Separator */}
+      <div className="w-px h-6 bg-border mx-1 shrink-0" />
+
+      {/* Overflow dropdown for secondary items */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant={isSecondaryActive ? 'default' : 'ghost'}
+            size="sm"
+            className={cn(
+              "gap-2 shrink-0 h-9",
+              isSecondaryActive 
+                ? "bg-primary text-primary-foreground shadow-sm font-semibold" 
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+            )}
+          >
+            {isSecondaryActive ? (
+              <>
+                {(() => { const S = adminSections.find(s => s.key === activeTab); return S ? <S.icon className="w-4 h-4" /> : null; })()}
+                <span>{adminSections.find(s => s.key === activeTab)?.label}</span>
+              </>
+            ) : (
+              <>
+                <MoreHorizontal className="w-4 h-4" />
+                <span>Más</span>
+              </>
+            )}
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56 bg-background border border-border z-50">
+          {(['crm', 'config'] as const).map((group) => {
+            const groupItems = secondaryTabs.filter(s => s.group === group);
+            if (groupItems.length === 0) return null;
+            return (
+              <div key={group}>
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  {adminSectionGroups[group].label}
+                </DropdownMenuLabel>
+                {groupItems.map((section) => {
+                  const Icon = section.icon;
+                  const isActive = section.key === activeTab;
+                  return (
+                    <DropdownMenuItem
+                      key={section.key}
+                      onClick={() => onTabChange(section.key)}
+                      className={cn(
+                        "flex items-center gap-3 py-2 cursor-pointer",
+                        isActive && "bg-primary/10 text-primary font-semibold"
+                      )}
+                    >
+                      <Icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
+                      <span className="text-sm">{section.label}</span>
+                      {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+                    </DropdownMenuItem>
+                  );
+                })}
+                {group !== 'config' && <DropdownMenuSeparator />}
+              </div>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
