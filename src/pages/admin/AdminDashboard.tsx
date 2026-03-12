@@ -1311,7 +1311,11 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
         {activeTab === 'subscriptions' && <SubscriptionsTab />}
 
         {/* Calendario Tab */}
-        {activeTab === 'calendario' && <CalendarTab />}
+        {activeTab === 'calendario' && (
+          <ErrorBoundaryCalendar>
+            <CalendarTab />
+          </ErrorBoundaryCalendar>
+        )}
 
         {/* Finanzas Tab */}
         {activeTab === 'finanzas' && (
