@@ -30,6 +30,8 @@ import { MessagesTab } from '@/components/admin/MessagesTab';
 import { DisponibilidadTab } from '@/components/admin/DisponibilidadTab';
 import { WhatsAppSettingsTab } from '@/components/admin/WhatsAppSettingsTab';
 import { PricingTab } from '@/components/admin/PricingTab';
+import { DemandMapTab } from '@/components/admin/DemandMapTab';
+import { DiscountControlPanel } from '@/components/admin/DiscountControlPanel';
 import { EarlyAccessTab } from '@/components/admin/EarlyAccessTab';
 import { ContactsTab } from '@/components/admin/ContactsTab';
 import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
