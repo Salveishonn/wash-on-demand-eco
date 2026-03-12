@@ -607,21 +607,8 @@ export function MessagesTab() {
                           }`}
                         >
                           {/* Audio player for voice notes */}
-                          {(msg.message_type === 'audio' || msg.message_type === 'voice') ? (
-                            <div className="flex flex-col gap-1.5 min-w-[200px]">
-                              <div className="flex items-center gap-2">
-                                <Mic className="w-4 h-4 flex-shrink-0" />
-                                <span className="text-xs font-medium">Audio</span>
-                              </div>
-                              {msg.media_url ? (
-                                <audio controls preload="metadata" className="w-full max-w-[260px] h-8" style={{ minWidth: '200px' }}>
-                                  <source src={msg.media_url} type={msg.media_mime_type || 'audio/ogg'} />
-                                  Tu navegador no soporta audio.
-                                </audio>
-                              ) : (
-                                <p className="text-xs italic opacity-70">Audio recibido — no disponible para reproducir</p>
-                              )}
-                            </div>
+                           {(msg.message_type === 'audio' || msg.message_type === 'voice') ? (
+                            <AudioPlayer url={msg.media_url} mime={msg.media_mime_type} />
                           ) : (
                             <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
                           )}
