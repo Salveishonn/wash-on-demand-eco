@@ -90,6 +90,14 @@ interface CalendarBooking {
   created_at: string;
   confirmed_at: string | null;
   booking_source: string | null;
+  cluster_size?: number;
+  cluster_discount_percent?: number;
+  discount_type?: string | null;
+  discount_percent?: number | null;
+  discount_amount_ars?: number | null;
+  final_price_ars?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 type ViewMode = 'day' | 'week' | 'month';
