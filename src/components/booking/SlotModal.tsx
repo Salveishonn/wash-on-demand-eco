@@ -14,6 +14,7 @@ import { formatDateKey } from "@/lib/dateUtils";
 import { usePricing, formatPrice, type PricingItem } from "@/hooks/usePricing";
 import { trackEvent } from "@/lib/gtag";
 import { detectZoneFromAddress, isValidEmail, isValidArgentinaPhone, type ZoneDetectionResult } from "@/config/operativeZones";
+import { useClusterPricing } from "@/hooks/useClusterPricing";
 
 interface SlotInfo {
   time: string;
