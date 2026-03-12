@@ -700,12 +700,12 @@ export function MessagesTab() {
             </ScrollArea>
 
             {/* Quick Actions */}
-            <div className="px-4 py-2 border-t border-border">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-muted-foreground">Último mensaje entrante:</span>
-                <Badge variant="outline" className="text-xs">{lastInboundDisplay}</Badge>
+            <div className="px-3 sm:px-4 py-2 border-t border-border bg-muted/10">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Último entrante:</span>
+                <Badge variant="outline" className="text-[10px] h-5">{lastInboundDisplay}</Badge>
               </div>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-1.5 flex-wrap">
                 {QUICK_ACTIONS.map((qa) => (
                   <Button
                     key={qa.label}
@@ -713,7 +713,7 @@ export function MessagesTab() {
                     size="sm"
                     onClick={() => handleQuickAction(qa.action)}
                     disabled={sendingAction === qa.action}
-                    className="text-xs"
+                    className="text-[11px] h-7 px-2.5"
                   >
                     {sendingAction === qa.action ? (
                       <Loader2 className="w-3 h-3 mr-1 animate-spin" />
@@ -727,7 +727,7 @@ export function MessagesTab() {
             </div>
 
             {/* Composer */}
-            <div className="p-4 border-t border-border">
+            <div className="p-3 sm:p-4 border-t border-border">
               <div className="flex gap-2 items-end">
                 <Textarea
                   ref={composerRef}
@@ -743,13 +743,13 @@ export function MessagesTab() {
                       handleSend();
                     }
                   }}
-                  className="min-h-[44px] max-h-[200px] resize-none overflow-y-auto"
+                  className="min-h-[40px] max-h-[200px] resize-none overflow-y-auto text-sm"
                   rows={1}
                 />
                 <Button
                   onClick={handleSend}
                   disabled={!messageText.trim() || isSending}
-                  className="px-4 shrink-0"
+                  className="px-3 shrink-0 h-10"
                 >
                   {isSending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -762,12 +762,12 @@ export function MessagesTab() {
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
-              <MessageCircle className="w-10 h-10 text-muted-foreground" />
+            <div className="w-16 h-16 rounded-full bg-muted/60 flex items-center justify-center mb-4">
+              <MessageCircle className="w-8 h-8 text-muted-foreground/40" />
             </div>
-            <h3 className="text-lg font-medium mb-2">Mensajes WhatsApp</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">
-              Selecciona una conversación para ver los mensajes o envía un nuevo mensaje desde una reserva.
+            <h3 className="text-base font-semibold mb-1.5">Mensajes WhatsApp</h3>
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+              Seleccioná una conversación para ver los mensajes y responder.
             </p>
           </div>
         )}
