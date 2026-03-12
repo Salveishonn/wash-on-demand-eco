@@ -205,54 +205,66 @@ export function MessagesTab() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Realtime subscriptions
+  // Optional realtime — never blocks rendering
   useEffect(() => {
-    const messagesChannel = supabase
-      .channel('whatsapp-messages-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'whatsapp_messages',
-        },
-        (payload) => {
-          console.log('[MessagesTab] Realtime message update:', payload);
-          if (payload.eventType === 'INSERT') {
-            const newMsg = payload.new as Message;
-            if (selectedConversation && newMsg.conversation_id === selectedConversation.id) {
-              setMessages(prev => [...prev, newMsg]);
-            }
-            // Refresh conversations to update preview
-            fetchConversations();
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedMsg = payload.new as Message;
-            setMessages(prev =>
-              prev.map(m => (m.id === updatedMsg.id ? updatedMsg : m))
-            );
-          }
-        }
-      )
-      .subscribe();
+    let messagesChannel: ReturnType<typeof supabase.channel> | null = null;
+    let conversationsChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    const conversationsChannel = supabase
-      .channel('whatsapp-conversations-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'whatsapp_conversations',
-        },
-        () => {
-          fetchConversations();
-        }
-      )
-      .subscribe();
+    try {
+      messagesChannel = supabase
+        .channel('whatsapp-messages-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'whatsapp_messages' },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              const newMsg = payload.new as Message;
+              if (selectedConversation && newMsg.conversation_id === selectedConversation.id) {
+                setMessages(prev => [...prev, newMsg]);
+              }
+              fetchConversations();
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedMsg = payload.new as Message;
+              setMessages(prev =>
+                prev.map(m => (m.id === updatedMsg.id ? updatedMsg : m))
+              );
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('[MessagesTab] Realtime unavailable, using polling');
+            if (messagesChannel) supabase.removeChannel(messagesChannel);
+          }
+        });
+
+      conversationsChannel = supabase
+        .channel('whatsapp-conversations-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'whatsapp_conversations' },
+          () => fetchConversations()
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('[MessagesTab] Conversations realtime unavailable');
+            if (conversationsChannel) supabase.removeChannel(conversationsChannel);
+          }
+        });
+    } catch (e) {
+      console.warn('[MessagesTab] Realtime setup failed, using polling:', e);
+    }
+
+    // Polling fallback: refresh conversations every 15s
+    const pollInterval = setInterval(() => {
+      fetchConversations();
+      if (selectedConversation) fetchMessages(selectedConversation.id);
+    }, 15000);
 
     return () => {
-      supabase.removeChannel(messagesChannel);
-      supabase.removeChannel(conversationsChannel);
+      clearInterval(pollInterval);
+      if (messagesChannel) supabase.removeChannel(messagesChannel);
+      if (conversationsChannel) supabase.removeChannel(conversationsChannel);
     };
   }, [selectedConversation?.id]);
 
