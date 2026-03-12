@@ -381,7 +381,31 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
       );
 
       if (bookingError) {
-        throw new Error(bookingError.message || "Error al crear la reserva");
+        // Extract real error message from edge function response
+        let realMessage = "Error al crear la reserva";
+        try {
+          if (bookingError.context) {
+            const body = await bookingError.context.json();
+            realMessage = body?.message || body?.error || realMessage;
+            // Handle slot taken scenario from error response
+            if (body?.slotTaken) {
+              toast({
+                variant: "destructive",
+                title: "Horario no disponible",
+                description: "Ese horario ya fue reservado. Elegí otro.",
+              });
+              await fetchSlots();
+              setStep("slots");
+              setSelectedTime(null);
+              setIsSubmitting(false);
+              return;
+            }
+          }
+        } catch (_) {
+          // If parsing fails, use the original error message
+          realMessage = bookingError.message || realMessage;
+        }
+        throw new Error(realMessage);
       }
 
       if (bookingResponse?.slotTaken) {
