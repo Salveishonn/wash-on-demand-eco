@@ -1455,6 +1455,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                 </div>
               )}
 
+              {/* Pricing Debug - collapsible */}
+              <BookingPricingDebug booking={selectedBooking} />
+
               {/* Status */}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
