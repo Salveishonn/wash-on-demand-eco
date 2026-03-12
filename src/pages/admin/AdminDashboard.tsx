@@ -747,28 +747,28 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Header */}
-      <header className="bg-washero-charcoal text-background">
-        <div className="container mx-auto px-4 py-4">
+      <header className="bg-washero-charcoal text-background sticky top-0 z-30">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <img src={washeroLogo} alt="Washero" className="w-10 h-10 rounded-lg object-cover" />
-              <div>
-                <h1 className="font-display text-xl font-bold">Panel Admin</h1>
-                <p className="text-sm text-background/70">{user?.email}</p>
+            <div className="flex items-center gap-3">
+              <img src={washeroLogo} alt="Washero" className="w-9 h-9 rounded-lg object-cover" />
+              <div className="hidden sm:block">
+                <h1 className="font-display text-lg font-bold leading-tight">Panel Admin</h1>
+                <p className="text-xs text-background/60 truncate max-w-[200px]">{user?.email}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {!PAYMENTS_ENABLED && (
-                <span className="px-3 py-1 bg-orange-500/20 text-orange-200 text-xs rounded-full">
-                  Modo Sin Pagos
+                <span className="px-2.5 py-1 bg-orange-500/20 text-orange-200 text-[10px] font-semibold rounded-full uppercase tracking-wide">
+                  Sin Pagos
                 </span>
               )}
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="text-background hover:bg-background/10"
+                className="text-background/80 hover:text-background hover:bg-background/10 h-9 w-9"
               >
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               </Button>
@@ -776,140 +776,52 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                 variant="ghost"
                 size="sm"
                 onClick={signOut}
-                className="text-background hover:bg-background/10"
+                className="text-background/80 hover:text-background hover:bg-background/10 h-9 gap-1.5"
               >
-                <LogOut className="w-4 h-4 mr-2" />
-                Salir
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline text-xs">Salir</span>
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-7 gap-4 mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
-            </div>
-          </motion.div>
-          
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <Gift className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.founderSlots} / 30</p>
-                <p className="text-xs text-muted-foreground">Founder Slots</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.pending}</p>
-                <p className="text-xs text-muted-foreground">Pendientes</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.pendingPayment}</p>
-                <p className="text-xs text-muted-foreground">Sin Pago</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.confirmed}</p>
-                <p className="text-xs text-muted-foreground">Aceptadas</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.completed}</p>
-                <p className="text-xs text-muted-foreground">Completadas</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="bg-background rounded-xl p-4 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                <XCircle className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.cancelled}</p>
-                <p className="text-xs text-muted-foreground">Canceladas</p>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Navigation */}
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        {/* Navigation first on mobile for faster access */}
         <AdminNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {/* Stats - compact row */}
+        {activeTab === 'bookings' && (
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3 mb-5">
+            {[
+              { icon: Calendar, value: stats.total, label: 'Total', iconBg: 'bg-primary/10', iconColor: 'text-primary' },
+              { icon: Gift, value: `${stats.founderSlots}/30`, label: 'Founders', iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
+              { icon: AlertCircle, value: stats.pending, label: 'Pendientes', iconBg: 'bg-yellow-50', iconColor: 'text-yellow-600' },
+              { icon: DollarSign, value: stats.pendingPayment, label: 'Sin Pago', iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
+              { icon: Clock, value: stats.confirmed, label: 'Aceptadas', iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
+              { icon: CheckCircle, value: stats.completed, label: 'Completadas', iconBg: 'bg-green-50', iconColor: 'text-green-600' },
+              { icon: XCircle, value: stats.cancelled, label: 'Canceladas', iconBg: 'bg-red-50', iconColor: 'text-red-600' },
+            ].map((stat, i) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.03 }}
+                className="admin-stat-card"
+              >
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg ${stat.iconBg} flex items-center justify-center shrink-0`}>
+                    <stat.icon className={`w-4 h-4 ${stat.iconColor}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg sm:text-xl font-bold leading-tight">{stat.value}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.label}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
 
         {/* Bookings Tab */}
         {activeTab === 'bookings' && (
