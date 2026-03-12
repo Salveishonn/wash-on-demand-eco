@@ -201,7 +201,7 @@ serve(async (req) => {
     // Query all bookings in the date range (excluding cancelled)
     const { data: bookings, error: bookingsError } = await supabase
       .from("bookings")
-      .select("booking_date, booking_time")
+      .select("booking_date, booking_time, latitude, longitude")
       .gte("booking_date", from)
       .lte("booking_date", to)
       .in("status", ["pending", "confirmed"]);
