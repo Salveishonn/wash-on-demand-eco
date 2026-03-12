@@ -45,6 +45,9 @@ interface Message {
   status: string;
   created_at: string;
   error: string | null;
+  message_type?: string;
+  media_url?: string | null;
+  media_mime_type?: string | null;
 }
 
 // Quick actions mapped to smart-send action types
