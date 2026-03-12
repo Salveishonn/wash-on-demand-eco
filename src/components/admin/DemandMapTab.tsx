@@ -196,7 +196,7 @@ export function DemandMapTab() {
         box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;
       `;
 
-      const marker = new google.maps.marker.AdvancedMarkerElement({
+      const marker = new gmaps.marker.AdvancedMarkerElement({
         position: pos,
         map: googleMapRef.current!,
         content: pinEl,
