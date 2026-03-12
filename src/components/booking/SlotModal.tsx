@@ -874,10 +874,6 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                   )}
                 </div>
               </div>
-                    </p>
-                  </div>
-                </div>
-              </div>
 
               {/* Submit Button */}
               <Button
