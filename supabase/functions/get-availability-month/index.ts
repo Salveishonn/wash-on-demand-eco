@@ -211,14 +211,19 @@ serve(async (req) => {
       throw bookingsError;
     }
 
-    // Count bookings per date
+    // Count bookings per date + count bookings with coordinates per date
     const bookingsPerDate: Record<string, Set<string>> = {};
+    const geoBookingsPerDate: Record<string, number> = {};
     for (const booking of bookings || []) {
       const date = booking.booking_date;
       if (!bookingsPerDate[date]) {
         bookingsPerDate[date] = new Set();
+        geoBookingsPerDate[date] = 0;
       }
       bookingsPerDate[date].add(booking.booking_time);
+      if (booking.latitude != null && booking.longitude != null) {
+        geoBookingsPerDate[date]++;
+      }
     }
 
     // Generate availability for each date in range
