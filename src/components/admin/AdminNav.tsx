@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LucideIcon, Calendar, Bell, Shield, Users, Clock, DollarSign, MessageCircle, CalendarDays, ChevronDown, Menu, MoreHorizontal, Settings, Tag, FileText, Sparkles, Mail } from 'lucide-react';
+import { LucideIcon, Calendar, Bell, Shield, Users, Clock, DollarSign, MessageCircle, CalendarDays, ChevronDown, Menu, MoreHorizontal, Settings, Tag, FileText, Sparkles, Mail, Map } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,7 +17,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-export type AdminTabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'facturas' | 'mensajes' | 'disponibilidad' | 'whatsapp-config' | 'pricing' | 'early-access' | 'contacts';
+export type AdminTabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'facturas' | 'mensajes' | 'disponibilidad' | 'whatsapp-config' | 'pricing' | 'early-access' | 'contacts' | 'demand-map';
 
 interface AdminSection {
   key: AdminTabType;
@@ -40,6 +40,7 @@ export const adminSections: AdminSection[] = [
   { key: 'mensajes', label: 'Mensajes', icon: MessageCircle, activeClass: 'bg-green-600 hover:bg-green-700 text-white' },
   { key: 'disponibilidad', label: 'Disponibilidad', icon: Clock, activeClass: 'bg-orange-600 hover:bg-orange-700 text-white' },
   { key: 'whatsapp-config', label: 'WhatsApp Config', icon: Settings, activeClass: 'bg-purple-600 hover:bg-purple-700 text-white' },
+  { key: 'demand-map', label: 'Mapa Demanda', icon: Map, activeClass: 'bg-teal-600 hover:bg-teal-700 text-white' },
 ];
 
 interface AdminNavProps {

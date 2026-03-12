@@ -30,6 +30,8 @@ import { MessagesTab } from '@/components/admin/MessagesTab';
 import { DisponibilidadTab } from '@/components/admin/DisponibilidadTab';
 import { WhatsAppSettingsTab } from '@/components/admin/WhatsAppSettingsTab';
 import { PricingTab } from '@/components/admin/PricingTab';
+import { DemandMapTab } from '@/components/admin/DemandMapTab';
+import { DiscountControlPanel } from '@/components/admin/DiscountControlPanel';
 import { EarlyAccessTab } from '@/components/admin/EarlyAccessTab';
 import { ContactsTab } from '@/components/admin/ContactsTab';
 import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
@@ -1379,7 +1381,17 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
         {activeTab === 'disponibilidad' && <ErrorBoundaryCalendar><DisponibilidadTab /></ErrorBoundaryCalendar>}
 
         {/* Pricing Tab */}
-        {activeTab === 'pricing' && <ErrorBoundaryCalendar><PricingTab /></ErrorBoundaryCalendar>}
+        {activeTab === 'pricing' && (
+          <ErrorBoundaryCalendar>
+            <PricingTab />
+            <div className="mt-8">
+              <DiscountControlPanel />
+            </div>
+          </ErrorBoundaryCalendar>
+        )}
+
+        {/* Demand Map Tab */}
+        {activeTab === 'demand-map' && <ErrorBoundaryCalendar><DemandMapTab /></ErrorBoundaryCalendar>}
 
         {/* WhatsApp Config Tab */}
         {activeTab === 'whatsapp-config' && <ErrorBoundaryCalendar><WhatsAppSettingsTab /></ErrorBoundaryCalendar>}
