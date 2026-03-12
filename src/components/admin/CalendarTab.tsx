@@ -393,7 +393,7 @@ export function CalendarTab() {
   const selectedDayBookings = useMemo(() => {
     if (!selectedDay) return [];
     const dateStr = format(selectedDay, 'yyyy-MM-dd');
-    return (bookingsByDate[dateStr] || []).sort((a, b) => a.booking_time.localeCompare(b.booking_time));
+    return (bookingsByDate[dateStr] || []).sort((a, b) => (a.booking_time || '').localeCompare(b.booking_time || ''));
   }, [selectedDay, bookingsByDate]);
 
   // Calculate day stats
