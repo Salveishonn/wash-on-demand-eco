@@ -204,6 +204,9 @@ export function PricingTab() {
         </div>
       )}
 
+      {/* Pricing Analytics Summary */}
+      <PricingAnalytics />
+
       <Tabs defaultValue="services" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="services" className="gap-2">
