@@ -120,7 +120,6 @@ export function DemandMapTab({ bookings, totalFiltered }: DemandMapTabProps) {
       googleMapRef.current = new gmaps.Map(mapRef.current, {
         center: { lat: -34.45, lng: -58.7 },
         zoom: 11,
-        mapId: 'washero-demand-map',
         disableDefaultUI: false,
         zoomControl: true,
         streetViewControl: false,
@@ -130,12 +129,21 @@ export function DemandMapTab({ bookings, totalFiltered }: DemandMapTabProps) {
     }
 
     // Clear old markers
-    markersRef.current.forEach(m => (m.map = null));
+    markersRef.current.forEach(m => m.setMap(null));
     markersRef.current = [];
 
     if (!geoBookings.length) return;
 
     const bounds = new gmaps.LatLngBounds();
+
+    const buildSvgIcon = (bg: string, border: string) => {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><circle cx="9" cy="9" r="7" fill="${bg}" stroke="${border}" stroke-width="2.5"/></svg>`;
+      return {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new gmaps.Size(18, 18),
+        anchor: new gmaps.Point(9, 9),
+      };
+    };
 
     geoBookings.forEach(booking => {
       const pos = { lat: booking.latitude!, lng: booking.longitude! };
@@ -143,17 +151,10 @@ export function DemandMapTab({ bookings, totalFiltered }: DemandMapTabProps) {
 
       const color = getBookingColor(booking);
 
-      const pinEl = document.createElement('div');
-      pinEl.style.cssText = `
-        width: 16px; height: 16px; border-radius: 50%;
-        background: ${color.bg}; border: 2.5px solid ${color.border};
-        box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;
-      `;
-
-      const marker = new gmaps.marker.AdvancedMarkerElement({
+      const marker = new gmaps.Marker({
         position: pos,
         map: googleMapRef.current!,
-        content: pinEl,
+        icon: buildSvgIcon(color.bg, color.border),
         title: booking.customer_name,
       });
 
