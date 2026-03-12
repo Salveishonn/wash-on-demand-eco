@@ -788,15 +788,15 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* Stats - compact row */}
         {activeTab === 'bookings' && (
-          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3 mb-5">
+          <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 sm:gap-3 mb-5">
             {[
               { icon: Calendar, value: stats.total, label: 'Total', iconBg: 'bg-primary/10', iconColor: 'text-primary' },
               { icon: Gift, value: `${stats.founderSlots}/30`, label: 'Founders', iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
-              { icon: AlertCircle, value: stats.pending, label: 'Pendientes', iconBg: 'bg-yellow-50', iconColor: 'text-yellow-600' },
-              { icon: DollarSign, value: stats.pendingPayment, label: 'Sin Pago', iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
-              { icon: Clock, value: stats.confirmed, label: 'Aceptadas', iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
-              { icon: CheckCircle, value: stats.completed, label: 'Completadas', iconBg: 'bg-green-50', iconColor: 'text-green-600' },
-              { icon: XCircle, value: stats.cancelled, label: 'Canceladas', iconBg: 'bg-red-50', iconColor: 'text-red-600' },
+              { icon: AlertCircle, value: stats.pending, label: 'Pend.', iconBg: 'bg-yellow-50', iconColor: 'text-yellow-600' },
+              { icon: DollarSign, value: stats.pendingPayment, label: 'S/Pago', iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
+              { icon: Clock, value: stats.confirmed, label: 'Acept.', iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
+              { icon: CheckCircle, value: stats.completed, label: 'Compl.', iconBg: 'bg-green-50', iconColor: 'text-green-600' },
+              { icon: XCircle, value: stats.cancelled, label: 'Cancel.', iconBg: 'bg-red-50', iconColor: 'text-red-600' },
             ].map((stat, i) => (
               <motion.div
                 key={stat.label}
@@ -805,13 +805,13 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                 transition={{ delay: i * 0.03 }}
                 className="admin-stat-card"
               >
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg ${stat.iconBg} flex items-center justify-center shrink-0`}>
-                    <stat.icon className={`w-4 h-4 ${stat.iconColor}`} />
+                <div className="flex items-center gap-1.5 sm:gap-3">
+                  <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg ${stat.iconBg} flex items-center justify-center shrink-0`}>
+                    <stat.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${stat.iconColor}`} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-lg sm:text-xl font-bold leading-tight">{stat.value}</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.label}</p>
+                    <p className="text-base sm:text-xl font-bold leading-tight">{stat.value}</p>
+                    <p className="text-[9px] sm:text-xs text-muted-foreground truncate">{stat.label}</p>
                   </div>
                 </div>
               </motion.div>

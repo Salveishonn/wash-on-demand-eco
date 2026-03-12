@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Badge } from '@/components/ui/badge';
 
 export type AdminTabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'facturas' | 'mensajes' | 'disponibilidad' | 'whatsapp-config' | 'pricing' | 'early-access' | 'contacts' | 'demand-map';
 
@@ -41,22 +40,19 @@ export const adminSections: AdminSection[] = [
   { key: 'calendario', label: 'Calendario', icon: CalendarDays, group: 'ops' },
   { key: 'mensajes', label: 'Mensajes', icon: MessageCircle, group: 'ops' },
   { key: 'disponibilidad', label: 'Disponibilidad', icon: Clock, group: 'ops' },
-  // CRM
-  { key: 'suscripciones' as AdminTabType, label: 'Suscripciones', icon: Users, group: 'crm' },
+  // CRM & Ventas — includes Finanzas and Mapa Demanda now
+  { key: 'subscriptions', label: 'Suscripciones', icon: Users, group: 'crm' },
   { key: 'contacts', label: 'Contactos', icon: Mail, group: 'crm' },
   { key: 'early-access', label: 'Early Access', icon: Sparkles, group: 'crm' },
   { key: 'kipper', label: 'Leads Kipper', icon: Shield, group: 'crm' },
-  // Config & Analytics
-  { key: 'finanzas', label: 'Finanzas', icon: DollarSign, group: 'config' },
+  { key: 'finanzas', label: 'Finanzas', icon: DollarSign, group: 'crm' },
+  { key: 'demand-map', label: 'Mapa Demanda', icon: Map, group: 'crm' },
+  // Config
   { key: 'facturas', label: 'Facturas', icon: FileText, group: 'config' },
   { key: 'pricing', label: 'Precios', icon: Tag, group: 'config' },
-  { key: 'demand-map', label: 'Mapa Demanda', icon: Map, group: 'config' },
   { key: 'notifications', label: 'Notificaciones', icon: Bell, group: 'config' },
   { key: 'whatsapp-config', label: 'WhatsApp Config', icon: Settings, group: 'config' },
 ];
-
-// Fix the subscriptions key
-adminSections[4].key = 'subscriptions';
 
 interface AdminNavProps {
   activeTab: AdminTabType;
@@ -89,10 +85,10 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
           <DropdownMenuTrigger asChild>
             <Button 
               variant="outline" 
-              className="flex-1 justify-between h-11 bg-background border-border"
+              className="flex-1 justify-between h-12 bg-background border-border"
             >
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
                   <CurrentIcon className="w-4 h-4 text-primary" />
                 </div>
                 <span className="font-semibold text-sm">{currentSection.label}</span>
@@ -117,7 +113,7 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
                       key={section.key}
                       onClick={() => handleSelectTab(section.key)}
                       className={cn(
-                        "flex items-center gap-3 py-2.5 px-3 cursor-pointer rounded-md mx-1",
+                        "flex items-center gap-3 py-3 px-3 cursor-pointer rounded-md mx-1",
                         isActive && "bg-primary/10 text-primary font-semibold"
                       )}
                     >
@@ -137,8 +133,8 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
 
         <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="shrink-0 h-11 w-11">
-              <Menu className="w-4 h-4" />
+            <Button variant="outline" size="icon" className="shrink-0 h-12 w-12">
+              <Menu className="w-5 h-5" />
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-72 p-0">
@@ -164,13 +160,13 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
                         key={section.key}
                         onClick={() => handleSelectTab(section.key)}
                         className={cn(
-                          "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all text-sm",
+                          "w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all text-sm",
                           isActive 
                             ? "bg-primary text-primary-foreground font-semibold shadow-sm" 
-                            : "hover:bg-muted/60 text-foreground"
+                            : "hover:bg-muted/60 text-foreground active:bg-muted"
                         )}
                       >
-                        <Icon className="w-4.5 h-4.5" />
+                        <Icon className="w-5 h-5" />
                         <span>{section.label}</span>
                       </button>
                     );
@@ -187,7 +183,6 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
   // Desktop: Horizontal tabs with grouped overflow
   return (
     <div className="flex items-center gap-1.5 mb-6 overflow-x-auto pb-1 scrollbar-none">
-      {/* Primary operation tabs */}
       {primarySections.map((section) => {
         const Icon = section.icon;
         const isActive = section.key === activeTab;
