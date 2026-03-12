@@ -75,9 +75,9 @@ function getDateRange(filter: TimeFilter): { from: string; to: string } {
 
 export function DemandMapTab() {
   const mapRef = useRef<HTMLDivElement>(null);
-  const googleMapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
-  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  const googleMapRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const infoWindowRef = useRef<any>(null);
 
   const [bookings, setBookings] = useState<MapBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
