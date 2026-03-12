@@ -22,59 +22,139 @@ import {
   Timer,
   CheckCircle,
   CalendarX,
-   AlertTriangle,
-   Mic,
-   Download,
+  AlertTriangle,
+  Mic,
+  Download,
+  Play,
+  Pause,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-/* ── Inline Audio Player with error handling & download fallback ── */
+/* ── Inline Audio Player ── */
 function AudioPlayer({ url, mime }: { url?: string | null; mime?: string | null }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [error, setError] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
 
   if (!url) {
     return (
-      <div className="flex flex-col gap-1 min-w-[200px]">
-        <div className="flex items-center gap-2">
-          <Mic className="w-4 h-4 flex-shrink-0" />
-          <span className="text-xs font-medium">Audio</span>
-        </div>
-        <p className="text-xs italic opacity-70">Audio recibido — no disponible para reproducir</p>
+      <div className="flex items-center gap-2 min-w-[180px] py-1">
+        <Mic className="w-4 h-4 flex-shrink-0 opacity-60" />
+        <span className="text-xs italic opacity-70">Audio no disponible</span>
       </div>
     );
   }
 
-  return (
-    <div className="flex flex-col gap-1.5 min-w-[200px]">
-      <div className="flex items-center gap-2">
-        <Mic className="w-4 h-4 flex-shrink-0" />
-        <span className="text-xs font-medium">Audio</span>
-      </div>
-      {!error ? (
-        <audio
-          controls
-          preload="auto"
-          className="w-full max-w-[260px] h-8"
-          style={{ minWidth: '200px' }}
-          onError={() => setError(true)}
+  const togglePlay = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      setIsLoading(true);
+      try {
+        await audio.play();
+      } catch (e) {
+        console.error('Audio play failed:', e);
+        setError(true);
+      }
+      setIsLoading(false);
+    }
+  };
+
+  const formatDuration = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const pct = x / rect.width;
+    audio.currentTime = pct * duration;
+  };
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-1.5 min-w-[180px]">
+        <div className="flex items-center gap-2 text-xs opacity-70">
+          <Mic className="w-3.5 h-3.5" />
+          <span>No se pudo reproducir</span>
+        </div>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-fit"
         >
-          {/* Provide source without type first so browser auto-detects */}
-          <source src={url} />
-          {mime && <source src={url} type={mime} />}
-        </audio>
-      ) : (
-        <p className="text-xs italic opacity-70">No se pudo reproducir este audio</p>
-      )}
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        download
-        className="inline-flex items-center gap-1 text-xs text-primary hover:underline w-fit"
+          <Download className="w-3 h-3" />
+          Descargar audio
+        </a>
+      </div>
+    );
+  }
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  return (
+    <div className="flex items-center gap-2.5 min-w-[200px] max-w-[280px]">
+      <audio
+        ref={audioRef}
+        src={url}
+        preload="metadata"
+        onLoadedMetadata={() => {
+          if (audioRef.current) setDuration(audioRef.current.duration);
+        }}
+        onTimeUpdate={() => {
+          if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+        }}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
+        onError={() => setError(true)}
+      />
+      
+      {/* Play/Pause button */}
+      <button
+        onClick={togglePlay}
+        className="w-9 h-9 rounded-full bg-primary/20 hover:bg-primary/30 flex items-center justify-center flex-shrink-0 transition-colors active:scale-95"
       >
-        <Download className="w-3 h-3" />
-        Descargar audio
-      </a>
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : isPlaying ? (
+          <Pause className="w-4 h-4" />
+        ) : (
+          <Play className="w-4 h-4 ml-0.5" />
+        )}
+      </button>
+
+      {/* Waveform / progress bar */}
+      <div className="flex-1 min-w-0">
+        <div
+          className="h-2 bg-primary/10 rounded-full cursor-pointer overflow-hidden"
+          onClick={handleSeek}
+        >
+          <div
+            className="h-full bg-primary/60 rounded-full transition-[width] duration-100"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <div className="flex justify-between mt-0.5">
+          <span className="text-[10px] opacity-60">
+            {currentTime > 0 ? formatDuration(currentTime) : '0:00'}
+          </span>
+          <span className="text-[10px] opacity-60">
+            {duration > 0 ? formatDuration(duration) : '—'}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -106,9 +186,9 @@ interface Message {
 
 // Quick actions mapped to smart-send action types
 const QUICK_ACTIONS = [
-  { label: 'Estamos en camino 🚐', icon: Truck, action: 'on_the_way' },
-  { label: 'Llegamos en 10 min ⏱️', icon: Timer, action: 'arriving_10_min' },
-  { label: 'Ya llegamos ✅', icon: CheckCircle, action: 'arrived' },
+  { label: 'En camino 🚐', icon: Truck, action: 'on_the_way' },
+  { label: '10 min ⏱️', icon: Timer, action: 'arriving_10_min' },
+  { label: 'Llegamos ✅', icon: CheckCircle, action: 'arrived' },
   { label: 'Reprogramar 📅', icon: CalendarX, action: 'reschedule' },
 ];
 
@@ -178,7 +258,6 @@ export function MessagesTab() {
   // Load conversations with last_inbound_at for 24h window tracking
   const fetchConversations = async () => {
     try {
-      // Use both view and table to get last_inbound_at
       const { data, error } = await supabase
         .from('whatsapp_conversations')
         .select('id, customer_phone_e164, customer_name, last_message_preview, last_message_at, last_inbound_at, is_open')
@@ -186,7 +265,6 @@ export function MessagesTab() {
 
       if (error) throw error;
       
-      // Add unread_count (simplified - just set to 0 for now)
       const conversationsWithUnread = (data || []).map(c => ({
         ...c,
         unread_count: 0,
@@ -225,7 +303,6 @@ export function MessagesTab() {
         .update({ last_admin_seen_at: new Date().toISOString() })
         .eq('id', conversationId);
 
-      // Update local state
       setConversations(prev =>
         prev.map(c =>
           c.id === conversationId ? { ...c, unread_count: 0 } : c
@@ -243,12 +320,10 @@ export function MessagesTab() {
     }
   };
 
-  // Initial load
   useEffect(() => {
     fetchConversations();
   }, []);
 
-  // Load messages when conversation selected
   useEffect(() => {
     if (selectedConversation) {
       fetchMessages(selectedConversation.id);
@@ -257,12 +332,11 @@ export function MessagesTab() {
     }
   }, [selectedConversation?.id]);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Optional realtime — never blocks rendering
+  // Optional realtime
   useEffect(() => {
     let messagesChannel: ReturnType<typeof supabase.channel> | null = null;
     let conversationsChannel: ReturnType<typeof supabase.channel> | null = null;
@@ -312,7 +386,6 @@ export function MessagesTab() {
       console.warn('[MessagesTab] Realtime setup failed, using polling:', e);
     }
 
-    // Polling fallback: refresh conversations every 15s
     const pollInterval = setInterval(() => {
       fetchConversations();
       if (selectedConversation) fetchMessages(selectedConversation.id);
@@ -336,7 +409,6 @@ export function MessagesTab() {
     }
     setIsSending(true);
 
-    // Optimistic update
     const optimisticMsg: Message = {
       id: `temp-${Date.now()}`,
       conversation_id: selectedConversation.id,
@@ -376,14 +448,12 @@ export function MessagesTab() {
         throw new Error(result.error || 'Failed to send');
       }
 
-      // Replace optimistic message with real one
       if (result.message) {
         setMessages(prev =>
           prev.map(m => (m.id === optimisticMsg.id ? result.message : m))
         );
       }
 
-      // Check if it was stub mode (no provider configured)
       if (result.stub || result.provider === 'stub') {
         setConfigWarning('WhatsApp no configurado. Los mensajes se guardan pero no se envían.');
         toast({
@@ -399,15 +469,12 @@ export function MessagesTab() {
         });
       }
 
-      // Refresh conversations
       fetchConversations();
     } catch (error: any) {
       console.error('Error sending message:', error);
-      // Remove optimistic message on error
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
-      setMessageText(textToSend); // Restore text
+      setMessageText(textToSend);
       
-      // Check for specific error types
       if (error.message?.includes('META_') || error.message?.includes('outside 24h')) {
         setConfigWarning('Error: Fuera de la ventana de 24h. Use una plantilla aprobada.');
       }
@@ -422,7 +489,7 @@ export function MessagesTab() {
     }
   };
 
-  // Handle quick action - uses smart send with template support
+  // Handle quick action
   const handleQuickAction = async (action: string) => {
     if (!selectedConversation) return;
     
@@ -455,7 +522,6 @@ export function MessagesTab() {
         throw new Error(result.error || 'Failed to send');
       }
 
-      // Show success with template info
       const templateInfo = result.used_template 
         ? `(Template: ${result.template_name})` 
         : '(Texto libre)';
@@ -465,7 +531,6 @@ export function MessagesTab() {
         description: `Enviado ${templateInfo}`,
       });
 
-      // Refresh messages
       fetchMessages(selectedConversation.id);
       fetchConversations();
     } catch (error: any) {
@@ -485,7 +550,6 @@ export function MessagesTab() {
     }
   };
 
-  // Filter conversations
   const filteredConversations = useMemo(() => {
     if (!searchQuery) return conversations;
     const query = searchQuery.toLowerCase();
@@ -497,14 +561,12 @@ export function MessagesTab() {
     );
   }, [conversations, searchQuery]);
 
-  // Check if within 24h window using conversation's last_inbound_at
   const isWithin24h = useMemo(() => {
     if (!selectedConversation?.last_inbound_at) return false;
     const diff = Date.now() - new Date(selectedConversation.last_inbound_at).getTime();
     return diff < 24 * 60 * 60 * 1000;
   }, [selectedConversation?.last_inbound_at]);
   
-  // Format last inbound time for display
   const lastInboundDisplay = useMemo(() => {
     if (!selectedConversation?.last_inbound_at) return 'Nunca';
     const date = new Date(selectedConversation.last_inbound_at);
@@ -519,18 +581,18 @@ export function MessagesTab() {
     return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   }, [selectedConversation?.last_inbound_at]);
 
-    return (
+  return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex flex-col h-[calc(100vh-220px)] min-h-[400px]"
+      className="flex flex-col h-[calc(100vh-180px)] sm:h-[calc(100vh-220px)] min-h-[400px]"
     >
       {/* Config Warning Banner */}
       {configWarning && (
         <Alert variant="destructive" className="mb-2">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Configuración</AlertTitle>
-          <AlertDescription>{configWarning}</AlertDescription>
+          <AlertDescription className="text-xs">{configWarning}</AlertDescription>
         </Alert>
       )}
       
@@ -545,7 +607,7 @@ export function MessagesTab() {
               placeholder="Buscar conversación..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 text-sm"
+              className="pl-9 h-10 text-sm"
             />
           </div>
         </div>
@@ -574,10 +636,10 @@ export function MessagesTab() {
                 <button
                   key={conv.id}
                   onClick={() => setSelectedConversation(conv)}
-                  className={`w-full p-3 text-left transition-colors border-b border-border/30 ${
+                  className={`w-full p-3 sm:p-3.5 text-left transition-colors border-b border-border/30 min-h-[64px] ${
                     selectedConversation?.id === conv.id 
                       ? 'bg-primary/5 border-l-2 border-l-primary' 
-                      : 'hover:bg-muted/40'
+                      : 'hover:bg-muted/40 active:bg-muted/60'
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -617,13 +679,13 @@ export function MessagesTab() {
         {selectedConversation ? (
           <>
             {/* Chat Header */}
-            <div className="p-3 sm:p-4 border-b border-border flex items-center justify-between gap-3 bg-muted/10">
-              <div className="flex items-center gap-3">
+            <div className="p-3 border-b border-border flex items-center justify-between gap-2 bg-muted/10">
+              <div className="flex items-center gap-2.5 min-w-0">
                 {/* Back button on mobile */}
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 md:hidden shrink-0"
+                  className="h-9 w-9 md:hidden shrink-0"
                   onClick={() => setSelectedConversation(null)}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -647,7 +709,7 @@ export function MessagesTab() {
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea className="flex-1 p-3 sm:p-4">
               {isLoadingMessages ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -658,7 +720,7 @@ export function MessagesTab() {
                   <p className="text-sm text-muted-foreground">No hay mensajes en esta conversación</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <AnimatePresence mode="popLayout">
                     {messages.map((msg) => (
                       <motion.div
@@ -669,22 +731,22 @@ export function MessagesTab() {
                         className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className={`max-w-[70%] rounded-lg px-3 py-2 ${
+                          className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-3 py-2 ${
                             msg.direction === 'outbound'
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted'
+                              ? 'bg-primary text-primary-foreground rounded-br-sm'
+                              : 'bg-muted rounded-bl-sm'
                           }`}
                         >
                           {/* Audio player for voice notes */}
-                           {(msg.message_type === 'audio' || msg.message_type === 'voice') ? (
+                          {(msg.message_type === 'audio' || msg.message_type === 'voice') ? (
                             <AudioPlayer url={msg.media_url} mime={msg.media_mime_type} />
                           ) : (
-                            <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
+                            <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
                           )}
                           <div className={`flex items-center justify-end gap-1 mt-1 ${
                             msg.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground'
                           }`}>
-                            <span className="text-xs">{formatTime(msg.created_at)}</span>
+                            <span className="text-[10px]">{formatTime(msg.created_at)}</span>
                             {msg.direction === 'outbound' && getStatusIcon(msg.status)}
                           </div>
                           {msg.error && msg.error !== 'TWILIO_NOT_CONFIGURED_STUB' && (
@@ -700,20 +762,20 @@ export function MessagesTab() {
             </ScrollArea>
 
             {/* Quick Actions */}
-            <div className="px-3 sm:px-4 py-2 border-t border-border bg-muted/10">
+            <div className="px-3 py-2 border-t border-border bg-muted/10">
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Último entrante:</span>
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Último msg:</span>
                 <Badge variant="outline" className="text-[10px] h-5">{lastInboundDisplay}</Badge>
               </div>
-              <div className="flex gap-1.5 flex-wrap">
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
                 {QUICK_ACTIONS.map((qa) => (
                   <Button
-                    key={qa.label}
+                    key={qa.action}
                     variant="outline"
                     size="sm"
                     onClick={() => handleQuickAction(qa.action)}
                     disabled={sendingAction === qa.action}
-                    className="text-[11px] h-7 px-2.5"
+                    className="text-[11px] h-8 px-2.5 shrink-0"
                   >
                     {sendingAction === qa.action ? (
                       <Loader2 className="w-3 h-3 mr-1 animate-spin" />
@@ -727,7 +789,7 @@ export function MessagesTab() {
             </div>
 
             {/* Composer */}
-            <div className="p-3 sm:p-4 border-t border-border">
+            <div className="p-3 border-t border-border">
               <div className="flex gap-2 items-end">
                 <Textarea
                   ref={composerRef}
@@ -743,13 +805,14 @@ export function MessagesTab() {
                       handleSend();
                     }
                   }}
-                  className="min-h-[40px] max-h-[200px] resize-none overflow-y-auto text-sm"
+                  className="min-h-[44px] max-h-[200px] resize-none overflow-y-auto text-sm"
                   rows={1}
                 />
                 <Button
                   onClick={handleSend}
                   disabled={!messageText.trim() || isSending}
-                  className="px-3 shrink-0 h-10"
+                  className="px-3 shrink-0 h-11 w-11"
+                  size="icon"
                 >
                   {isSending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
