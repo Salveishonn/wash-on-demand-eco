@@ -940,74 +940,74 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                               onCheckedChange={() => toggleBookingSelect(booking.id)}
                             />
                           </td>
-                          <td className="px-4 py-4">
-                            <span className="font-mono text-xs">{booking.id.substring(0, 8).toUpperCase()}</span>
+                          <td className="px-2">
+                            <span className="font-mono text-[11px] text-muted-foreground">{booking.id.substring(0, 8).toUpperCase()}</span>
                           </td>
-                          <td className="px-4 py-4">
+                          <td>
                             <div>
-                              <p className="font-medium text-sm">{booking.customer_name}</p>
+                              <p className="font-semibold text-sm leading-tight">{booking.customer_name}</p>
                               <p className="text-xs text-muted-foreground">{booking.customer_phone}</p>
+                              {/* Show service on mobile since column is hidden */}
+                              <p className="text-xs text-muted-foreground lg:hidden mt-0.5">{booking.service_name}</p>
                             </div>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="hidden lg:table-cell">
                             <p className="text-sm">{booking.service_name}</p>
                             {booking.car_type && (
-                              <p className="text-xs text-muted-foreground">{booking.car_type}</p>
+                              <p className="text-[11px] text-muted-foreground">{booking.car_type}</p>
                             )}
                           </td>
-                          <td className="px-4 py-4">
-                            <p className="text-sm">{formatDate(booking.booking_date)}</p>
-                            <p className="text-xs text-muted-foreground">{booking.booking_time} hs</p>
+                          <td>
+                            <p className="text-sm font-medium">{formatDate(booking.booking_date)}</p>
+                            <p className="text-[11px] text-muted-foreground">{booking.booking_time} hs</p>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="hidden md:table-cell">
                             <div>
                               {booking.discount_type && booking.final_price_ars != null ? (
-                                <>
-                                  <span className="font-medium text-sm text-primary">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-sm text-primary">
                                     ${(booking.final_price_ars || 0).toLocaleString('es-AR')}
                                   </span>
-                                  <span className="text-xs text-muted-foreground line-through ml-1">
+                                  <span className="text-[11px] text-muted-foreground line-through">
                                     ${(booking.total_price_ars || 0).toLocaleString('es-AR')}
                                   </span>
-                                </>
+                                </div>
                               ) : (
-                                <span className="font-medium text-sm">
+                                <span className="font-bold text-sm">
                                   ${(booking.total_price_ars || Math.round((booking.service_price_cents + (booking.car_type_extra_cents || 0)) / 100)).toLocaleString('es-AR')}
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="hidden xl:table-cell">
                             {booking.discount_type ? (
-                              <div className="flex flex-col gap-1">
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  booking.discount_type === 'barrio' ? 'bg-blue-100 text-blue-800' : 'bg-primary/10 text-primary'
-                                }`}>
-                                  {booking.discount_type === 'barrio' ? `Barrio -${booking.discount_percent}%` : `Lanzamiento -${booking.discount_percent}%`}
+                              <div className="flex flex-col gap-0.5">
+                                <span className={cn(
+                                  "status-badge text-[11px]",
+                                  booking.discount_type === 'barrio' ? 'bg-blue-50 text-blue-700' : 'bg-primary/10 text-primary'
+                                )}>
+                                  {booking.discount_type === 'barrio' ? `Barrio -${booking.discount_percent}%` : `-${booking.discount_percent}%`}
                                 </span>
                                 {booking.is_launch_founder_slot && (
-                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                    Founder
-                                  </span>
-                                )}
-                                {booking.barrio && (
-                                  <span className="text-xs text-muted-foreground">{booking.barrio}</span>
+                                  <span className="status-badge text-[11px] bg-amber-50 text-amber-700">Founder</span>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
+                              <span className="text-xs text-muted-foreground/50">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-4">
+                          <td>
                             {getStatusBadge(booking.status)}
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="hidden sm:table-cell">
                             {getPaymentBadge(booking.payment_status, booking.is_subscription_booking, booking.requires_payment)}
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="hidden lg:table-cell">
                             <Checkbox
                               checked={booking.is_test}
                               onCheckedChange={(checked) => handleToggleBookingTest(booking.id, !!checked)}
+                            />
+                          </td>
                             />
                           </td>
                           <td className="px-4 py-4">
