@@ -1009,80 +1009,76 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                             />
                           </td>
                           <td>
-                            <div className="flex gap-1">
+                            <div className="flex gap-0.5">
                               <Button
-                                size="sm"
+                                size="icon"
                                 variant="ghost"
                                 onClick={() => openBookingDetail(booking)}
-                                className="text-primary hover:text-primary/80"
+                                className="h-8 w-8 text-primary hover:text-primary/80"
+                                title="Ver detalle"
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
-                              {/* Aceptar: only for pending bookings - moves to calendar */}
                               {booking.status === 'pending' && (
                                 <Button
-                                  size="sm"
+                                  size="icon"
                                   variant="ghost"
                                   onClick={() => handleUpdateBookingStatus(booking.id, 'confirmed')}
-                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                  title="Aceptar (aparece en calendario)"
+                                  className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title="Aceptar"
                                 >
                                   <CheckCircle className="w-4 h-4" />
                                 </Button>
                               )}
-                              {/* Marcar pagado: only if payment pending */}
                               {booking.payment_status === 'pending' && booking.status !== 'cancelled' && !booking.is_subscription_booking && (
                                 <Button
-                                  size="sm"
+                                  size="icon"
                                   variant="ghost"
                                   onClick={() => handleMarkAsPaid(booking.id)}
-                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                  title="Marcar como pagado"
+                                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  title="Marcar pagado"
                                 >
                                   <DollarSign className="w-4 h-4" />
                                 </Button>
                               )}
-                              {/* Completar: only for confirmed/accepted bookings - removes from calendar */}
                               {booking.status === 'confirmed' && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleUpdateBookingStatus(booking.id, 'completed')}
-                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                  title="Completar (desaparece del calendario)"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                </Button>
+                                <>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleUpdateBookingStatus(booking.id, 'completed')}
+                                    className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    title="Completar"
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleSendOnMyWay(booking)}
+                                    disabled={sendingOnMyWayId === booking.id}
+                                    className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                    title="En camino"
+                                  >
+                                    {sendingOnMyWayId === booking.id ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : notifiedBookings.has(booking.id) ? (
+                                      <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                                    ) : (
+                                      <Send className="w-3.5 h-3.5" />
+                                    )}
+                                  </Button>
+                                </>
                               )}
-                              {/* Cancelar: for pending or confirmed */}
                               {(booking.status === 'pending' || booking.status === 'confirmed') && (
                                 <Button
-                                  size="sm"
+                                  size="icon"
                                   variant="ghost"
                                   onClick={() => handleUpdateBookingStatus(booking.id, 'cancelled')}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Cancelar reserva"
+                                  className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                  title="Cancelar"
                                 >
                                   <XCircle className="w-4 h-4" />
-                                </Button>
-                              )}
-                              {/* En camino: for confirmed bookings */}
-                              {booking.status === 'confirmed' && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleSendOnMyWay(booking)}
-                                  disabled={sendingOnMyWayId === booking.id}
-                                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                  title="Enviar 'En camino'"
-                                >
-                                  {sendingOnMyWayId === booking.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : notifiedBookings.has(booking.id) ? (
-                                    <CheckCircle className="w-4 h-4 text-green-600" />
-                                  ) : (
-                                    <Send className="w-4 h-4" />
-                                  )}
                                 </Button>
                               )}
                             </div>
