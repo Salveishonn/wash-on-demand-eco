@@ -831,23 +831,23 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
           >
             {/* Filters */}
             <div className="space-y-3 mb-4">
-              <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
+              <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2 sm:gap-3">
                 <AdminDateFilter onDateRangeChange={setBookingDateRange} />
                 <AdminTestFilter value={bookingTestFilter} onChange={setBookingTestFilter} />
               </div>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Filter className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Estado:</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-medium text-muted-foreground mr-1">Estado:</span>
                   {(['all', 'pending', 'confirmed', 'completed', 'cancelled'] as StatusFilter[]).map((status) => (
                     <button
                       key={status}
                       onClick={() => setStatusFilter(status)}
-                      className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                      className={cn(
+                        "px-3 py-1.5 rounded-full text-xs font-medium transition-all",
                         statusFilter === status
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted hover:bg-muted/80'
-                      }`}
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                      )}
                     >
                       {status === 'all' ? 'Todas' : 
                        status === 'pending' ? 'Pendientes' :
