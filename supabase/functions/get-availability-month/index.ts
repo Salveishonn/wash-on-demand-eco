@@ -232,6 +232,12 @@ serve(async (req) => {
       const { slots, closed, override } = getAvailabilityForDate(date, rules, overrides, slotOverrides);
       const bookedTimes = bookingsPerDate[date] || new Set();
       const bookedCount = slots.filter(s => bookedTimes.has(s)).length;
+      const geoCount = geoBookingsPerDate[date] || 0;
+
+      // Determine cluster emoji based on geo bookings count
+      let clusterEmoji = "";
+      if (geoCount >= 4) clusterEmoji = "🔥";
+      else if (geoCount >= 2) clusterEmoji = "⭐";
 
       return {
         date,
@@ -242,6 +248,8 @@ serve(async (req) => {
         surchargeAmount: override?.surcharge_amount || null,
         surchargePercent: override?.surcharge_percent || null,
         note: override?.note || null,
+        clusterCount: geoCount,
+        clusterEmoji,
       };
     });
 
