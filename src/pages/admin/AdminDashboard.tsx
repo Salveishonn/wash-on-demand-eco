@@ -1349,27 +1349,29 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* Finanzas Tab */}
         {activeTab === 'finanzas' && (
-          <FinanzasTab 
-            bookings={bookings} 
-            isLoading={isLoading} 
-            onRefresh={fetchData} 
-          />
+          <ErrorBoundaryCalendar>
+            <FinanzasTab 
+              bookings={bookings} 
+              isLoading={isLoading} 
+              onRefresh={fetchData} 
+            />
+          </ErrorBoundaryCalendar>
         )}
 
         {/* Facturas Tab */}
-        {activeTab === 'facturas' && <FacturasTab />}
+        {activeTab === 'facturas' && <ErrorBoundaryCalendar><FacturasTab /></ErrorBoundaryCalendar>}
 
         {/* Mensajes Tab */}
-        {activeTab === 'mensajes' && <MessagesTab />}
+        {activeTab === 'mensajes' && <ErrorBoundaryCalendar><MessagesTab /></ErrorBoundaryCalendar>}
 
         {/* Disponibilidad Tab */}
-        {activeTab === 'disponibilidad' && <DisponibilidadTab />}
+        {activeTab === 'disponibilidad' && <ErrorBoundaryCalendar><DisponibilidadTab /></ErrorBoundaryCalendar>}
 
         {/* Pricing Tab */}
-        {activeTab === 'pricing' && <PricingTab />}
+        {activeTab === 'pricing' && <ErrorBoundaryCalendar><PricingTab /></ErrorBoundaryCalendar>}
 
         {/* WhatsApp Config Tab */}
-        {activeTab === 'whatsapp-config' && <WhatsAppSettingsTab />}
+        {activeTab === 'whatsapp-config' && <ErrorBoundaryCalendar><WhatsAppSettingsTab /></ErrorBoundaryCalendar>}
       </div>
 
       {/* Booking Detail Dialog */}
