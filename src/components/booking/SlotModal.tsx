@@ -362,6 +362,8 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
             bookingTime: selectedTime,
             address: formData.address.trim(),
             barrio: formData.barrio.trim() || undefined,
+            latitude: addressCoords?.lat,
+            longitude: addressCoords?.lng,
             notes: formData.notes.trim(),
             _hp: honeypot,
             _ts: formTimestamp.current,
