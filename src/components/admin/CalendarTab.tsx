@@ -102,7 +102,8 @@ interface CalendarBooking {
 
 type ViewMode = 'day' | 'week' | 'month';
 
-const formatPrice = (cents: number) => {
+const formatPrice = (cents: number | null | undefined) => {
+  if (cents == null) return '$0';
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
