@@ -361,9 +361,9 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
                     </span>
                   )}
 
-                  {/* Availability indicator */}
+                  {/* Availability + Cluster indicators */}
                   {!isPast && !isClosed && !preLaunch && dayInfo && (
-                    <div className="mt-0.5 sm:mt-1 flex gap-0.5">
+                    <div className="mt-0.5 sm:mt-1 flex gap-0.5 items-center">
                       {hasAvailability ? (
                         <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-accent" />
                       ) : (
@@ -371,6 +371,9 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
                       )}
                       {hasSurcharge && (
                         <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-yellow-500" />
+                      )}
+                      {clusterEmoji && (
+                        <span className="text-[8px] sm:text-[9px] leading-none">{clusterEmoji}</span>
                       )}
                     </div>
                   )}
