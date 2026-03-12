@@ -137,6 +137,12 @@ serve(async (req) => {
     console.log("[create-booking] Creating booking for:", data.customerName);
     console.log("[create-booking] Payment method:", data.paymentMethod);
     console.log("[create-booking] Booking type:", data.bookingType);
+    console.log("[create-booking] Address:", data.address);
+    console.log("[create-booking] Coordinates:", data.latitude, data.longitude);
+    console.log("[create-booking] Barrio:", data.barrio);
+    console.log("[create-booking] Service:", data.serviceCode, data.serviceName);
+    console.log("[create-booking] Vehicle:", data.vehicleSize);
+    console.log("[create-booking] Price submitted - base:", data.basePriceArs, "vehicle:", data.vehicleExtraArs, "extras:", data.extrasTotalArs, "total:", data.totalPriceArs);
 
     // Validate required fields
     const validationErrors: string[] = [];
