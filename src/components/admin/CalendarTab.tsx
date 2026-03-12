@@ -222,26 +222,29 @@ export function CalendarTab() {
   }, [searchTerm]);
 
   // Real-time subscription to bookings table
+  // Optional realtime enhancement — never blocks rendering
   useEffect(() => {
-    const channel = supabase
-      .channel('admin-calendar-bookings')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bookings',
-        },
-        (payload) => {
-          console.log('Booking change detected:', payload);
-          // Refetch when any booking changes
-          fetchCalendarBookings(false);
-        }
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel('admin-calendar-bookings')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'bookings' },
+          () => fetchCalendarBookings(false)
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('[Calendar] Realtime unavailable, using polling only');
+            if (channel) supabase.removeChannel(channel);
+          }
+        });
+    } catch (e) {
+      console.warn('[Calendar] Realtime setup failed, using polling only:', e);
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [fetchCalendarBookings]);
 
