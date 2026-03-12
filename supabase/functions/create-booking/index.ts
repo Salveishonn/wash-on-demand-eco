@@ -33,6 +33,8 @@ interface CreateBookingRequest {
   bookingTime: string;
   address: string;
   barrio?: string;
+  latitude?: number;
+  longitude?: number;
   notes?: string;
   userId?: string;
   subscriptionId?: string;
