@@ -656,22 +656,17 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
   };
 
   const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      confirmed: 'bg-blue-100 text-blue-800',
-      completed: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
+    const config: Record<string, { bg: string; dot: string; label: string }> = {
+      pending: { bg: 'bg-yellow-50 text-yellow-700 ring-yellow-200', dot: 'bg-yellow-500', label: 'Pendiente' },
+      confirmed: { bg: 'bg-blue-50 text-blue-700 ring-blue-200', dot: 'bg-blue-500', label: 'Aceptada' },
+      completed: { bg: 'bg-green-50 text-green-700 ring-green-200', dot: 'bg-green-500', label: 'Completada' },
+      cancelled: { bg: 'bg-red-50 text-red-700 ring-red-200', dot: 'bg-red-500', label: 'Cancelada' },
     };
-    // Spanish labels: Aceptada for confirmed (operational meaning)
-    const labels: Record<string, string> = {
-      pending: 'Pendiente',
-      confirmed: 'Aceptada',
-      completed: 'Completada',
-      cancelled: 'Cancelada',
-    };
+    const s = config[status] || { bg: 'bg-muted text-muted-foreground ring-border', dot: 'bg-muted-foreground', label: status };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {labels[status] || status}
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 ring-inset ${s.bg}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+        {s.label}
       </span>
     );
   };
