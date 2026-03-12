@@ -384,7 +384,7 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
         </div>
 
         {/* Legend */}
-        <div className="flex items-center justify-center gap-4 px-3 py-2 sm:py-3 border-t border-border text-xs sm:text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 px-3 py-2 sm:py-3 border-t border-border text-xs sm:text-sm text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-accent" />
             <span>Disponible</span>
@@ -392,6 +392,14 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-destructive/50" />
             <span>Lleno</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span>⭐</span>
+            <span>Cluster</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span>🔥</span>
+            <span>+Descuento</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span>🚀</span>
