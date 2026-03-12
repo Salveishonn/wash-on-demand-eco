@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Calendar, 
