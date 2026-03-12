@@ -23,6 +23,7 @@ import {
   CheckCircle,
   CalendarX,
   AlertTriangle,
+  Mic,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
