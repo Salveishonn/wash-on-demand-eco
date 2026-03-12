@@ -799,10 +799,10 @@ export function CalendarTab() {
                     <span>{selectedBooking.service_name}</span>
                     <span>{formatPrice(selectedBooking.service_price_cents)}</span>
                   </div>
-                  {selectedBooking.car_type && (
+                   {selectedBooking.car_type && (
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Tipo: {selectedBooking.car_type}</span>
-                      {selectedBooking.car_type_extra_cents > 0 && (
+                      {(selectedBooking.car_type_extra_cents ?? 0) > 0 && (
                         <span>+{formatPrice(selectedBooking.car_type_extra_cents)}</span>
                       )}
                     </div>
