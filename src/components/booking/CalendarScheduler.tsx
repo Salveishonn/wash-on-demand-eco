@@ -311,6 +311,7 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
               const hasAvailability = dayInfo?.availableSlots && dayInfo.availableSlots > 0;
               const isFullyBooked = dayInfo && !dayInfo.closed && dayInfo.availableSlots === 0;
               const hasSurcharge = dayInfo?.surchargeAmount || dayInfo?.surchargePercent;
+              const clusterEmoji = dayInfo?.clusterEmoji || "";
               const preLaunch = isBeforeLaunch(dateKey) && !isPast;
               const isHighlight = isLaunchHighlight(dateKey);
               const isClickable = !isPast && !isClosed && !preLaunch;
