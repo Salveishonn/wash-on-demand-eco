@@ -180,7 +180,7 @@ export function DemandMapTab() {
 
     if (!geoBookings.length) return;
 
-    const bounds = new google.maps.LatLngBounds();
+    const bounds = new gmaps.LatLngBounds();
 
     geoBookings.forEach(booking => {
       const pos = { lat: booking.latitude!, lng: booking.longitude! };
