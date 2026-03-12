@@ -829,16 +829,51 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                       <span>+{formatPrice(getExtrasTotal())}</span>
                     </div>
                   )}
+                  {getClusterDiscount() > 0 && (
+                    <div className="flex justify-between text-accent">
+                      <span className="flex items-center gap-1">
+                        {clusterData?.emoji} Descuento por zona ({clusterData?.discountPercent}%)
+                      </span>
+                      <span>-{formatPrice(getClusterDiscount())}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between pt-2 border-t border-border font-bold text-lg">
                     <span>Total</span>
-                    <span className="text-primary">{formatPrice(getTotalPrice())}</span>
+                    <span className="text-primary">
+                      {getClusterDiscount() > 0 ? (
+                        <>
+                          <span className="line-through text-muted-foreground text-sm mr-2">{formatPrice(getTotalPrice())}</span>
+                          {formatPrice(getFinalPrice())}
+                        </>
+                      ) : (
+                        formatPrice(getTotalPrice())
+                      )}
+                    </span>
                   </div>
-                  {/* Discount notice */}
-                  <div className="mt-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
-                    <p className="text-xs text-primary font-medium text-center">
-                      🎉 Los primeros 30 lavados tienen 20% OFF automático.
-                      {formData.barrio.trim() && " Si tu zona suma 3+ reservas el mismo día: 30% OFF."}
-                      {" "}El descuento se aplica automáticamente al confirmar.
+                  {/* Cluster discount info */}
+                  {clusterData && clusterData.nearbyCount > 0 ? (
+                    <div className="mt-2 p-2 rounded-lg bg-accent/10 border border-accent/20">
+                      <p className="text-xs text-accent font-medium text-center">
+                        {clusterData.emoji} {clusterData.label}: {clusterData.nearbyCount} reserva{clusterData.nearbyCount > 1 ? 's' : ''} cerca de tu zona este día.
+                        {clusterData.discountPercent > 0 && ` ¡${clusterData.discountPercent}% OFF aplicado!`}
+                      </p>
+                    </div>
+                  ) : isClusterLoading ? (
+                    <div className="mt-2 p-2 rounded-lg bg-muted/30 border border-border">
+                      <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Calculando descuento por zona...
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
+                      <p className="text-xs text-primary font-medium text-center">
+                        🎉 Los primeros 30 lavados tienen 20% OFF automático.
+                        {" "}Más reservas cerca = más descuento (hasta 20% OFF).
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
                     </p>
                   </div>
                 </div>
