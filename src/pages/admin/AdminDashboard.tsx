@@ -247,6 +247,23 @@ export default function AdminDashboard() {
     });
   };
 
+  // Audit log helper
+  const logAdminAction = async (action: string, details: Record<string, unknown> = {}, affectedTable?: string) => {
+    try {
+      if (!user?.id) return;
+      await supabase.from('admin_logs').insert([{
+        admin_user_id: user.id,
+        action,
+        details: details as any,
+        affected_table: affectedTable || 'bookings',
+        affected_count: 1,
+      }]);
+
+    } catch (e) {
+      console.error('[Admin] Audit log error:', e);
+    }
+  };
+
   const handleUpdateBookingStatus = async (bookingId: string, newStatus: 'pending' | 'confirmed' | 'cancelled' | 'completed') => {
     try {
       const updateData: any = { status: newStatus };
@@ -262,6 +279,9 @@ export default function AdminDashboard() {
         .eq('id', bookingId);
 
       if (error) throw error;
+
+      // Audit log
+      await logAdminAction(`booking_status_${newStatus}`, { bookingId, newStatus });
 
       const statusLabels = {
         pending: 'pendiente',
@@ -294,6 +314,9 @@ export default function AdminDashboard() {
 
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Error desconocido');
+
+      // Audit log
+      await logAdminAction('booking_mark_paid', { bookingId });
 
       toast({
         title: data.duplicate ? 'Factura ya existente' : 'Pago registrado ✅',

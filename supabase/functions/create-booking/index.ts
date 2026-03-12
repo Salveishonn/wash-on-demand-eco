@@ -306,17 +306,93 @@ serve(async (req) => {
       paymentMethodValue = data.paymentMethod || "pay_later";
     }
 
-    // Prepare addons data - support both new and legacy format
-    const addonsData = data.addons || [];
-    const addonsTotalCents = data.addonsTotalCents || 
-      (data.extrasTotalArs ? data.extrasTotalArs * 100 : 
-        addonsData.reduce((sum, a) => sum + (a.price_ars ? a.price_ars * 100 : 0), 0));
+    // =============================================
+    // SERVER-SIDE PRICE VERIFICATION
+    // Fetch authoritative prices from pricing_items
+    // =============================================
+    let serverBasePriceCents = 0;
+    let serverVehicleExtraCents = 0;
+    let serverAddonsTotalCents = 0;
 
-    // Calculate pricing - support both new (ARS) and legacy (cents) formats
-    const basePriceCents = data.basePriceArs ? data.basePriceArs * 100 : (data.servicePriceCents || 0);
-    const vehicleExtraCents = data.vehicleExtraArs ? data.vehicleExtraArs * 100 : (data.carTypeExtraCents || 0);
-    const totalPriceCents = data.totalPriceArs ? data.totalPriceArs * 100 : 
-      (basePriceCents + vehicleExtraCents + addonsTotalCents);
+    // Get active pricing version
+    const { data: activePricingVersion } = await supabase
+      .from("pricing_versions")
+      .select("id")
+      .eq("is_active", true)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activePricingVersion) {
+      const { data: pricingItems } = await supabase
+        .from("pricing_items")
+        .select("item_code, item_type, price_ars")
+        .eq("pricing_version_id", activePricingVersion.id);
+
+      if (pricingItems && pricingItems.length > 0) {
+        // Find base service price
+        const serviceCode = data.serviceCode || data.serviceName?.toLowerCase().replace(/\s+/g, "_");
+        const serviceItem = pricingItems.find(
+          (i) => i.item_type === "service" && (i.item_code === serviceCode || i.item_code === data.serviceCode)
+        );
+        if (serviceItem) {
+          serverBasePriceCents = Math.round(serviceItem.price_ars * 100);
+        }
+
+        // Find vehicle size surcharge
+        if (data.vehicleSize || data.carType) {
+          const sizeCode = (data.vehicleSize || data.carType || "").toLowerCase().replace(/\s+/g, "_");
+          const sizeItem = pricingItems.find(
+            (i) => i.item_type === "vehicle_extra" && i.item_code === sizeCode
+          );
+          if (sizeItem) {
+            serverVehicleExtraCents = Math.round(sizeItem.price_ars * 100);
+          }
+        }
+
+        // Verify addon prices
+        if (data.addons && data.addons.length > 0) {
+          for (const addon of data.addons) {
+            const addonItem = pricingItems.find(
+              (i) => (i.item_type === "addon" || i.item_type === "extra") && i.item_code === addon.code
+            );
+            if (addonItem) {
+              serverAddonsTotalCents += Math.round(addonItem.price_ars * 100);
+            } else {
+              // Addon not in pricing table - use submitted price but log it
+              serverAddonsTotalCents += Math.round((addon.price_ars || 0) * 100);
+              console.warn("[create-booking] Addon not found in pricing_items:", addon.code);
+            }
+          }
+        }
+      }
+    }
+
+    // Prepare addons data
+    const addonsData = data.addons || [];
+
+    // Use server-verified prices when available, fall back to client prices
+    const basePriceCents = serverBasePriceCents > 0 ? serverBasePriceCents : (data.basePriceArs ? data.basePriceArs * 100 : (data.servicePriceCents || 0));
+    const vehicleExtraCents = serverVehicleExtraCents > 0 ? serverVehicleExtraCents : (data.vehicleExtraArs ? data.vehicleExtraArs * 100 : (data.carTypeExtraCents || 0));
+    const addonsTotalCents = serverAddonsTotalCents > 0 ? serverAddonsTotalCents : (data.addonsTotalCents || 
+      (data.extrasTotalArs ? data.extrasTotalArs * 100 : 
+        addonsData.reduce((sum: number, a: AddonItem) => sum + (a.price_ars ? a.price_ars * 100 : 0), 0)));
+
+    // Log if client-submitted price differs significantly from server price
+    const serverTotalCents = basePriceCents + vehicleExtraCents + addonsTotalCents;
+    const clientTotalCents = data.totalPriceArs ? data.totalPriceArs * 100 : (data.servicePriceCents || 0) + (data.carTypeExtraCents || 0) + (data.addonsTotalCents || 0);
+    if (serverBasePriceCents > 0 && Math.abs(serverTotalCents - clientTotalCents) > 100) {
+      console.warn("[create-booking] PRICE MISMATCH - Server:", serverTotalCents, "Client:", clientTotalCents);
+      await logError("create-booking", "price_mismatch", "Client price differs from server price", {
+        serverTotal: serverTotalCents,
+        clientTotal: clientTotalCents,
+        serviceCode: data.serviceCode,
+        vehicleSize: data.vehicleSize,
+      }, req);
+    }
+
+    // Calculate total using server-verified prices
+    const totalPriceCents = basePriceCents + vehicleExtraCents + addonsTotalCents;
 
     // Normalize phone to E.164 for Argentina
     let phoneE164 = data.customerPhone.trim().replace(/[^0-9+]/g, "");
