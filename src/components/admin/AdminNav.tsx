@@ -40,6 +40,7 @@ export const adminSections: AdminSection[] = [
   { key: 'mensajes', label: 'Mensajes', icon: MessageCircle, activeClass: 'bg-green-600 hover:bg-green-700 text-white' },
   { key: 'disponibilidad', label: 'Disponibilidad', icon: Clock, activeClass: 'bg-orange-600 hover:bg-orange-700 text-white' },
   { key: 'whatsapp-config', label: 'WhatsApp Config', icon: Settings, activeClass: 'bg-purple-600 hover:bg-purple-700 text-white' },
+  { key: 'demand-map', label: 'Mapa Demanda', icon: Map, activeClass: 'bg-teal-600 hover:bg-teal-700 text-white' },
 ];
 
 interface AdminNavProps {
