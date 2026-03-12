@@ -76,14 +76,24 @@ interface Booking {
   is_test: boolean;
   created_at: string;
   confirmed_at: string | null;
-  // Discount fields
+  // Discount & pricing debug fields
   total_price_ars: number | null;
   final_price_ars: number | null;
+  base_price_ars: number | null;
+  vehicle_extra_ars: number | null;
+  extras_total_ars: number | null;
   discount_type: string | null;
   discount_percent: number | null;
   discount_amount_ars: number | null;
   is_launch_founder_slot: boolean | null;
+  cluster_size: number | null;
+  cluster_discount_percent: number | null;
   barrio: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  pricing_version_id: string | null;
+  vehicle_size: string | null;
+  service_code: string | null;
 }
 
 interface NotificationLog {
