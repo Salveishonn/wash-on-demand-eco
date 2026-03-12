@@ -171,7 +171,7 @@ export function DemandMapTab() {
         streetViewControl: false,
         mapTypeControl: false,
       });
-      infoWindowRef.current = new google.maps.InfoWindow();
+      infoWindowRef.current = new gmaps.InfoWindow();
     }
 
     // Clear old markers
