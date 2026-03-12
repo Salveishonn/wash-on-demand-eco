@@ -674,7 +674,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                   onChange={(e) => handleInputChange("barrio", e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Beneficio por zona: si 3+ autos de tu zona reservan el mismo día, todos reciben 30% OFF automáticamente
+                  Se detecta automáticamente. Más reservas cerca = más descuento (hasta 20% OFF).
                 </p>
               </div>
 
