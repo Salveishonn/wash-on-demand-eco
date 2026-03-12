@@ -519,11 +519,11 @@ export function MessagesTab() {
     return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   }, [selectedConversation?.last_inbound_at]);
 
-  return (
+    return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex flex-col h-[calc(100vh-280px)] min-h-[500px]"
+      className="flex flex-col h-[calc(100vh-220px)] min-h-[400px]"
     >
       {/* Config Warning Banner */}
       {configWarning && (
@@ -534,18 +534,18 @@ export function MessagesTab() {
         </Alert>
       )}
       
-      <div className="flex flex-1 bg-background rounded-xl shadow-sm overflow-hidden border border-border">
+      <div className="flex flex-1 bg-background rounded-xl shadow-sm overflow-hidden border border-border/50">
       {/* Left: Conversations List */}
-      <div className="w-80 border-r border-border flex flex-col">
+      <div className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 border-r border-border flex-col`}>
         {/* Search */}
-        <div className="p-3 border-b border-border">
+        <div className="p-3 border-b border-border bg-muted/20">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar..."
+              placeholder="Buscar conversación..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 h-9 text-sm"
             />
           </div>
         </div>
@@ -553,24 +553,31 @@ export function MessagesTab() {
         {/* Conversations */}
         <ScrollArea className="flex-1">
           {isLoadingConversations ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : filteredConversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <MessageCircle className="w-12 h-12 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                {searchQuery ? 'No se encontraron conversaciones' : 'No hay conversaciones aún'}
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
+                <MessageCircle className="w-7 h-7 text-muted-foreground/40" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground mb-1">
+                {searchQuery ? 'Sin resultados' : 'No hay conversaciones'}
+              </p>
+              <p className="text-xs text-muted-foreground/60">
+                {searchQuery ? 'Intentá con otro término' : 'Las conversaciones aparecerán aquí'}
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div>
               {filteredConversations.map((conv) => (
                 <button
                   key={conv.id}
                   onClick={() => setSelectedConversation(conv)}
-                  className={`w-full p-3 text-left hover:bg-muted/50 transition-colors ${
-                    selectedConversation?.id === conv.id ? 'bg-muted' : ''
+                  className={`w-full p-3 text-left transition-colors border-b border-border/30 ${
+                    selectedConversation?.id === conv.id 
+                      ? 'bg-primary/5 border-l-2 border-l-primary' 
+                      : 'hover:bg-muted/40'
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -579,19 +586,19 @@ export function MessagesTab() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-sm truncate">
+                        <span className="font-semibold text-sm truncate">
                           {conv.customer_name || conv.customer_phone_e164}
                         </span>
-                        <span className="text-xs text-muted-foreground flex-shrink-0">
+                        <span className="text-[11px] text-muted-foreground flex-shrink-0">
                           {formatRelativeDate(conv.last_message_at)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-2 mt-0.5">
-                        <p className="text-xs text-muted-foreground truncate">
+                        <p className="text-xs text-muted-foreground truncate leading-relaxed">
                           {conv.last_message_preview || 'Sin mensajes'}
                         </p>
                         {conv.unread_count > 0 && (
-                          <Badge variant="default" className="h-5 min-w-5 flex items-center justify-center text-xs">
+                          <Badge variant="default" className="h-5 min-w-5 flex items-center justify-center text-[10px]">
                             {conv.unread_count}
                           </Badge>
                         )}
