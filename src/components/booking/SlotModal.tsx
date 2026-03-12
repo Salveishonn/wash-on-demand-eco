@@ -181,6 +181,12 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     if (!result.isInOperativeArea) {
       setShowOutOfAreaModal(true);
     }
+    // Store coordinates for cluster pricing
+    if (selection.lat != null && selection.lng != null) {
+      setAddressCoords({ lat: selection.lat, lng: selection.lng });
+      const dateKey = formatDateKey(date);
+      fetchClusterPricing(dateKey, selection.lat, selection.lng);
+    }
   };
 
   const handleAddressTextChange = (text: string) => {
