@@ -1390,8 +1390,8 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
           </ErrorBoundaryCalendar>
         )}
 
-        {/* Demand Map Tab */}
-        {activeTab === 'demand-map' && <ErrorBoundaryCalendar><DemandMapTab /></ErrorBoundaryCalendar>}
+        {/* Demand Map Tab – uses same filtered bookings as Reservas */}
+        {activeTab === 'demand-map' && <ErrorBoundaryCalendar><DemandMapTab bookings={filteredBookings} totalFiltered={filteredBookings.length} /></ErrorBoundaryCalendar>}
 
         {/* WhatsApp Config Tab */}
         {activeTab === 'whatsapp-config' && <ErrorBoundaryCalendar><WhatsAppSettingsTab /></ErrorBoundaryCalendar>}
