@@ -1312,10 +1312,10 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
       {/* Booking Detail Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display">Detalle de Reserva</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="font-display text-lg">Detalle de Reserva</DialogTitle>
+            <DialogDescription className="font-mono text-xs">
               ID: {selectedBooking?.id.substring(0, 8).toUpperCase()}
             </DialogDescription>
           </DialogHeader>
