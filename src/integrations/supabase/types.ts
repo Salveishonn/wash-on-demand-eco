@@ -1808,6 +1808,9 @@ export type Database = {
           direction: string
           error: string | null
           id: string
+          media_mime_type: string | null
+          media_url: string | null
+          message_type: string
           status: string
           twilio_message_sid: string | null
         }
@@ -1819,6 +1822,9 @@ export type Database = {
           direction: string
           error?: string | null
           id?: string
+          media_mime_type?: string | null
+          media_url?: string | null
+          message_type?: string
           status?: string
           twilio_message_sid?: string | null
         }
@@ -1830,6 +1836,9 @@ export type Database = {
           direction?: string
           error?: string | null
           id?: string
+          media_mime_type?: string | null
+          media_url?: string | null
+          message_type?: string
           status?: string
           twilio_message_sid?: string | null
         }
