@@ -1005,26 +1005,10 @@ export function CalendarTab() {
                           <span className="text-muted-foreground">{booking.address}</span>
                         </div>
                       )}
-                      {/* Cluster info */}
-                      {(booking.cluster_size != null && booking.cluster_size > 0) && (
-                        <div className="flex items-center gap-2 col-span-full">
-                          <Users className="w-4 h-4 text-primary" />
-                          <span className="text-muted-foreground text-sm">
-                            Cluster: {booking.cluster_size} cerca
-                            {booking.cluster_discount_percent ? ` · ${booking.cluster_discount_percent}% OFF` : ''}
-                          </span>
-                        </div>
-                      )}
-                      {booking.discount_type && (
-                        <div className="flex items-center gap-2 col-span-full">
-                          <Sparkles className="w-4 h-4 text-primary" />
-                          <span className="text-sm text-primary font-medium">
-                            {booking.discount_type === 'cluster' ? 'Descuento por zona' : 
-                             booking.discount_type === 'launch_founder' ? 'Descuento fundador' : 
-                             booking.discount_type}
-                            {booking.discount_percent ? ` (${booking.discount_percent}%)` : ''}
-                            {booking.discount_amount_ars ? ` · -$${booking.discount_amount_ars.toLocaleString('es-AR')}` : ''}
-                          </span>
+                      {/* Notes preview */}
+                      {booking.notes && (
+                        <div className="flex items-start gap-2 col-span-full">
+                          <span className="text-xs text-muted-foreground italic truncate">📝 {booking.notes}</span>
                         </div>
                       )}
                       {booking.car_type && (
