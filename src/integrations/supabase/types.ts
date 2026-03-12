@@ -218,6 +218,8 @@ export type Database = {
           booking_type: string | null
           car_type: string | null
           car_type_extra_cents: number | null
+          cluster_discount_percent: number | null
+          cluster_size: number | null
           confirmed_at: string | null
           created_at: string
           customer_email: string
@@ -234,6 +236,8 @@ export type Database = {
           is_launch_founder_slot: boolean | null
           is_subscription_booking: boolean | null
           is_test: boolean
+          latitude: number | null
+          longitude: number | null
           mercadopago_payment_id: string | null
           mercadopago_preference_id: string | null
           notes: string | null
@@ -274,6 +278,8 @@ export type Database = {
           booking_type?: string | null
           car_type?: string | null
           car_type_extra_cents?: number | null
+          cluster_discount_percent?: number | null
+          cluster_size?: number | null
           confirmed_at?: string | null
           created_at?: string
           customer_email: string
@@ -290,6 +296,8 @@ export type Database = {
           is_launch_founder_slot?: boolean | null
           is_subscription_booking?: boolean | null
           is_test?: boolean
+          latitude?: number | null
+          longitude?: number | null
           mercadopago_payment_id?: string | null
           mercadopago_preference_id?: string | null
           notes?: string | null
@@ -330,6 +338,8 @@ export type Database = {
           booking_type?: string | null
           car_type?: string | null
           car_type_extra_cents?: number | null
+          cluster_discount_percent?: number | null
+          cluster_size?: number | null
           confirmed_at?: string | null
           created_at?: string
           customer_email?: string
@@ -346,6 +356,8 @@ export type Database = {
           is_launch_founder_slot?: boolean | null
           is_subscription_booking?: boolean | null
           is_test?: boolean
+          latitude?: number | null
+          longitude?: number | null
           mercadopago_payment_id?: string | null
           mercadopago_preference_id?: string | null
           notes?: string | null
@@ -439,6 +451,48 @@ export type Database = {
           plate?: string | null
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      cluster_discount_tiers: {
+        Row: {
+          created_at: string
+          discount_percent: number
+          emoji: string | null
+          id: string
+          is_active: boolean
+          label: string
+          max_nearby: number | null
+          min_nearby: number
+          radius_km: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discount_percent?: number
+          emoji?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          max_nearby?: number | null
+          min_nearby: number
+          radius_km?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discount_percent?: number
+          emoji?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          max_nearby?: number | null
+          min_nearby?: number
+          radius_km?: number
+          sort_order?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2024,13 +2078,31 @@ export type Database = {
       }
     }
     Functions: {
+      count_nearby_bookings: {
+        Args: {
+          p_date: string
+          p_exclude_booking_id?: string
+          p_lat: number
+          p_lng: number
+          p_radius_km?: number
+        }
+        Returns: number
+      }
       generate_invoice_number: { Args: never; Returns: string }
+      get_cluster_discount: {
+        Args: { p_nearby_count: number }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      haversine_distance: {
+        Args: { lat1: number; lat2: number; lng1: number; lng2: number }
+        Returns: number
       }
       upsert_contact: {
         Args: {

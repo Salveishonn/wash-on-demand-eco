@@ -27,6 +27,8 @@ interface DayAvailability {
   surchargeAmount: number | null;
   surchargePercent: number | null;
   note: string | null;
+  clusterCount?: number;
+  clusterEmoji?: string;
 }
 
 interface SlotInfo {
@@ -309,6 +311,7 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
               const hasAvailability = dayInfo?.availableSlots && dayInfo.availableSlots > 0;
               const isFullyBooked = dayInfo && !dayInfo.closed && dayInfo.availableSlots === 0;
               const hasSurcharge = dayInfo?.surchargeAmount || dayInfo?.surchargePercent;
+              const clusterEmoji = dayInfo?.clusterEmoji || "";
               const preLaunch = isBeforeLaunch(dateKey) && !isPast;
               const isHighlight = isLaunchHighlight(dateKey);
               const isClickable = !isPast && !isClosed && !preLaunch;
@@ -358,9 +361,9 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
                     </span>
                   )}
 
-                  {/* Availability indicator */}
+                  {/* Availability + Cluster indicators */}
                   {!isPast && !isClosed && !preLaunch && dayInfo && (
-                    <div className="mt-0.5 sm:mt-1 flex gap-0.5">
+                    <div className="mt-0.5 sm:mt-1 flex gap-0.5 items-center">
                       {hasAvailability ? (
                         <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-accent" />
                       ) : (
@@ -368,6 +371,9 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
                       )}
                       {hasSurcharge && (
                         <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-yellow-500" />
+                      )}
+                      {clusterEmoji && (
+                        <span className="text-[8px] sm:text-[9px] leading-none">{clusterEmoji}</span>
                       )}
                     </div>
                   )}
@@ -378,7 +384,7 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
         </div>
 
         {/* Legend */}
-        <div className="flex items-center justify-center gap-4 px-3 py-2 sm:py-3 border-t border-border text-xs sm:text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 px-3 py-2 sm:py-3 border-t border-border text-xs sm:text-sm text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-accent" />
             <span>Disponible</span>
@@ -386,6 +392,14 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-destructive/50" />
             <span>Lleno</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span>⭐</span>
+            <span>Cluster</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span>🔥</span>
+            <span>+Descuento</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span>🚀</span>

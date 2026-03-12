@@ -90,6 +90,14 @@ interface CalendarBooking {
   created_at: string;
   confirmed_at: string | null;
   booking_source: string | null;
+  cluster_size?: number;
+  cluster_discount_percent?: number;
+  discount_type?: string | null;
+  discount_percent?: number | null;
+  discount_amount_ars?: number | null;
+  final_price_ars?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 type ViewMode = 'day' | 'week' | 'month';
@@ -995,6 +1003,28 @@ export function CalendarTab() {
                         <div className="flex items-start gap-2 col-span-full">
                           <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
                           <span className="text-muted-foreground">{booking.address}</span>
+                        </div>
+                      )}
+                      {/* Cluster info */}
+                      {(booking.cluster_size != null && booking.cluster_size > 0) && (
+                        <div className="flex items-center gap-2 col-span-full">
+                          <Users className="w-4 h-4 text-primary" />
+                          <span className="text-muted-foreground text-sm">
+                            Cluster: {booking.cluster_size} cerca
+                            {booking.cluster_discount_percent ? ` · ${booking.cluster_discount_percent}% OFF` : ''}
+                          </span>
+                        </div>
+                      )}
+                      {booking.discount_type && (
+                        <div className="flex items-center gap-2 col-span-full">
+                          <Sparkles className="w-4 h-4 text-primary" />
+                          <span className="text-sm text-primary font-medium">
+                            {booking.discount_type === 'cluster' ? 'Descuento por zona' : 
+                             booking.discount_type === 'launch_founder' ? 'Descuento fundador' : 
+                             booking.discount_type}
+                            {booking.discount_percent ? ` (${booking.discount_percent}%)` : ''}
+                            {booking.discount_amount_ars ? ` · -$${booking.discount_amount_ars.toLocaleString('es-AR')}` : ''}
+                          </span>
                         </div>
                       )}
                       {booking.car_type && (

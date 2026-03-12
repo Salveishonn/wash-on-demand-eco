@@ -15,6 +15,8 @@ interface DayAvailability {
   surchargeAmount: number | null;
   surchargePercent: number | null;
   note: string | null;
+  clusterCount: number;
+  clusterEmoji: string;
 }
 
 interface AvailabilityRule {
@@ -199,7 +201,7 @@ serve(async (req) => {
     // Query all bookings in the date range (excluding cancelled)
     const { data: bookings, error: bookingsError } = await supabase
       .from("bookings")
-      .select("booking_date, booking_time")
+      .select("booking_date, booking_time, latitude, longitude")
       .gte("booking_date", from)
       .lte("booking_date", to)
       .in("status", ["pending", "confirmed"]);
@@ -209,14 +211,19 @@ serve(async (req) => {
       throw bookingsError;
     }
 
-    // Count bookings per date
+    // Count bookings per date + count bookings with coordinates per date
     const bookingsPerDate: Record<string, Set<string>> = {};
+    const geoBookingsPerDate: Record<string, number> = {};
     for (const booking of bookings || []) {
       const date = booking.booking_date;
       if (!bookingsPerDate[date]) {
         bookingsPerDate[date] = new Set();
+        geoBookingsPerDate[date] = 0;
       }
       bookingsPerDate[date].add(booking.booking_time);
+      if (booking.latitude != null && booking.longitude != null) {
+        geoBookingsPerDate[date]++;
+      }
     }
 
     // Generate availability for each date in range
@@ -225,6 +232,12 @@ serve(async (req) => {
       const { slots, closed, override } = getAvailabilityForDate(date, rules, overrides, slotOverrides);
       const bookedTimes = bookingsPerDate[date] || new Set();
       const bookedCount = slots.filter(s => bookedTimes.has(s)).length;
+      const geoCount = geoBookingsPerDate[date] || 0;
+
+      // Determine cluster emoji based on geo bookings count
+      let clusterEmoji = "";
+      if (geoCount >= 4) clusterEmoji = "🔥";
+      else if (geoCount >= 2) clusterEmoji = "⭐";
 
       return {
         date,
@@ -235,6 +248,8 @@ serve(async (req) => {
         surchargeAmount: override?.surcharge_amount || null,
         surchargePercent: override?.surcharge_percent || null,
         note: override?.note || null,
+        clusterCount: geoCount,
+        clusterEmoji,
       };
     });
 

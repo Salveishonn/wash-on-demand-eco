@@ -14,6 +14,7 @@ import { formatDateKey } from "@/lib/dateUtils";
 import { usePricing, formatPrice, type PricingItem } from "@/hooks/usePricing";
 import { trackEvent } from "@/lib/gtag";
 import { detectZoneFromAddress, isValidEmail, isValidArgentinaPhone, type ZoneDetectionResult } from "@/config/operativeZones";
+import { useClusterPricing } from "@/hooks/useClusterPricing";
 
 interface SlotInfo {
   time: string;
@@ -95,6 +96,10 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
   const [zoneResult, setZoneResult] = useState<ZoneDetectionResult | null>(null);
   const [showOutOfAreaModal, setShowOutOfAreaModal] = useState(false);
 
+  // Cluster pricing
+  const { clusterData, isLoading: isClusterLoading, fetchClusterPricing, reset: resetCluster } = useClusterPricing();
+  const [addressCoords, setAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
+
   // Validation errors
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -175,6 +180,12 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     }
     if (!result.isInOperativeArea) {
       setShowOutOfAreaModal(true);
+    }
+    // Store coordinates for cluster pricing
+    if (selection.lat != null && selection.lng != null) {
+      setAddressCoords({ lat: selection.lat, lng: selection.lng });
+      const dateKey = formatDateKey(date);
+      fetchClusterPricing(dateKey, selection.lat, selection.lng);
     }
   };
 
@@ -281,6 +292,15 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     return service.price_ars + (vehicleSize?.price_ars || 0) + getExtrasTotal();
   };
 
+  const getClusterDiscount = () => {
+    if (!clusterData || clusterData.discountPercent <= 0) return 0;
+    return Math.round(getTotalPrice() * clusterData.discountPercent / 100);
+  };
+
+  const getFinalPrice = () => {
+    return getTotalPrice() - getClusterDiscount();
+  };
+
   const canSubmit = () => {
     return (
       formData.service &&
@@ -342,6 +362,8 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
             bookingTime: selectedTime,
             address: formData.address.trim(),
             barrio: formData.barrio.trim() || undefined,
+            latitude: addressCoords?.lat,
+            longitude: addressCoords?.lng,
             notes: formData.notes.trim(),
             _hp: honeypot,
             _ts: formTimestamp.current,
@@ -652,7 +674,7 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                   onChange={(e) => handleInputChange("barrio", e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Beneficio por zona: si 3+ autos de tu zona reservan el mismo día, todos reciben 30% OFF automáticamente
+                  Se detecta automáticamente. Más reservas cerca = más descuento (hasta 20% OFF).
                 </p>
               </div>
 
@@ -807,18 +829,49 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
                       <span>+{formatPrice(getExtrasTotal())}</span>
                     </div>
                   )}
+                  {getClusterDiscount() > 0 && (
+                    <div className="flex justify-between text-accent">
+                      <span className="flex items-center gap-1">
+                        {clusterData?.emoji} Descuento por zona ({clusterData?.discountPercent}%)
+                      </span>
+                      <span>-{formatPrice(getClusterDiscount())}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between pt-2 border-t border-border font-bold text-lg">
                     <span>Total</span>
-                    <span className="text-primary">{formatPrice(getTotalPrice())}</span>
+                    <span className="text-primary">
+                      {getClusterDiscount() > 0 ? (
+                        <>
+                          <span className="line-through text-muted-foreground text-sm mr-2">{formatPrice(getTotalPrice())}</span>
+                          {formatPrice(getFinalPrice())}
+                        </>
+                      ) : (
+                        formatPrice(getTotalPrice())
+                      )}
+                    </span>
                   </div>
-                  {/* Discount notice */}
-                  <div className="mt-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
-                    <p className="text-xs text-primary font-medium text-center">
-                      🎉 Los primeros 30 lavados tienen 20% OFF automático.
-                      {formData.barrio.trim() && " Si tu zona suma 3+ reservas el mismo día: 30% OFF."}
-                      {" "}El descuento se aplica automáticamente al confirmar.
-                    </p>
-                  </div>
+                  {/* Cluster discount info */}
+                  {clusterData && clusterData.nearbyCount > 0 ? (
+                    <div className="mt-2 p-2 rounded-lg bg-accent/10 border border-accent/20">
+                      <p className="text-xs text-accent font-medium text-center">
+                        {clusterData.emoji} {clusterData.label}: {clusterData.nearbyCount} reserva{clusterData.nearbyCount > 1 ? 's' : ''} cerca de tu zona este día.
+                        {clusterData.discountPercent > 0 && ` ¡${clusterData.discountPercent}% OFF aplicado!`}
+                      </p>
+                    </div>
+                  ) : isClusterLoading ? (
+                    <div className="mt-2 p-2 rounded-lg bg-muted/30 border border-border">
+                      <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Calculando descuento por zona...
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
+                      <p className="text-xs text-primary font-medium text-center">
+                        🎉 Los primeros 30 lavados tienen 20% OFF automático.
+                        {" "}Más reservas cerca = más descuento (hasta 20% OFF).
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
