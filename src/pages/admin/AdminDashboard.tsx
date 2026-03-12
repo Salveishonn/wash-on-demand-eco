@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Calendar, 
@@ -125,6 +125,36 @@ const formatDateTime = (date: string) => {
     minute: '2-digit',
   });
 };
+
+class ErrorBoundaryCalendar extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('[CalendarTab] Render crash:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-8 text-center">
+          <p className="text-lg font-semibold text-destructive mb-2">Error cargando el calendario</p>
+          <p className="text-sm text-muted-foreground mb-4">{this.state.error?.message}</p>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
+          >
+            Reintentar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function AdminDashboard() {
   const { user, signOut } = useAuth();
@@ -1311,7 +1341,11 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
         {activeTab === 'subscriptions' && <SubscriptionsTab />}
 
         {/* Calendario Tab */}
-        {activeTab === 'calendario' && <CalendarTab />}
+        {activeTab === 'calendario' && (
+          <ErrorBoundaryCalendar>
+            <CalendarTab />
+          </ErrorBoundaryCalendar>
+        )}
 
         {/* Finanzas Tab */}
         {activeTab === 'finanzas' && (

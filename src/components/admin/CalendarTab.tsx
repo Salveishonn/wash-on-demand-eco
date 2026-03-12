@@ -76,11 +76,11 @@ interface CalendarBooking {
   address: string | null;
   service_name: string;
   car_type: string | null;
-  service_price_cents: number;
-  car_type_extra_cents: number;
+  service_price_cents: number | null;
+  car_type_extra_cents: number | null;
   addons: AddonItem[] | null;
   addons_total_cents: number | null;
-  total_cents: number;
+  total_cents: number | null;
   booking_status: string;
   payment_status: string;
   payment_method: string | null;
@@ -90,19 +90,12 @@ interface CalendarBooking {
   created_at: string;
   confirmed_at: string | null;
   booking_source: string | null;
-  cluster_size?: number;
-  cluster_discount_percent?: number;
-  discount_type?: string | null;
-  discount_percent?: number | null;
-  discount_amount_ars?: number | null;
-  final_price_ars?: number | null;
-  latitude?: number | null;
-  longitude?: number | null;
 }
 
 type ViewMode = 'day' | 'week' | 'month';
 
-const formatPrice = (cents: number) => {
+const formatPrice = (cents: number | null | undefined) => {
+  if (cents == null) return '$0';
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
@@ -304,7 +297,7 @@ export function CalendarTab() {
     });
     // Sort bookings within each date by time
     Object.keys(grouped).forEach((date) => {
-      grouped[date].sort((a, b) => a.booking_time.localeCompare(b.booking_time));
+      grouped[date].sort((a, b) => (a.booking_time || '').localeCompare(b.booking_time || ''));
     });
     return grouped;
   }, [bookings]);
@@ -400,7 +393,7 @@ export function CalendarTab() {
   const selectedDayBookings = useMemo(() => {
     if (!selectedDay) return [];
     const dateStr = format(selectedDay, 'yyyy-MM-dd');
-    return (bookingsByDate[dateStr] || []).sort((a, b) => a.booking_time.localeCompare(b.booking_time));
+    return (bookingsByDate[dateStr] || []).sort((a, b) => (a.booking_time || '').localeCompare(b.booking_time || ''));
   }, [selectedDay, bookingsByDate]);
 
   // Calculate day stats
@@ -806,10 +799,10 @@ export function CalendarTab() {
                     <span>{selectedBooking.service_name}</span>
                     <span>{formatPrice(selectedBooking.service_price_cents)}</span>
                   </div>
-                  {selectedBooking.car_type && (
+                   {selectedBooking.car_type && (
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Tipo: {selectedBooking.car_type}</span>
-                      {selectedBooking.car_type_extra_cents > 0 && (
+                      {(selectedBooking.car_type_extra_cents ?? 0) > 0 && (
                         <span>+{formatPrice(selectedBooking.car_type_extra_cents)}</span>
                       )}
                     </div>
