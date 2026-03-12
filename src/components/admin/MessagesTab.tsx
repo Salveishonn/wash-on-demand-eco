@@ -23,6 +23,7 @@ import {
   CheckCircle,
   CalendarX,
   AlertTriangle,
+  Mic,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -45,6 +46,9 @@ interface Message {
   status: string;
   created_at: string;
   error: string | null;
+  message_type?: string;
+  media_url?: string | null;
+  media_mime_type?: string | null;
 }
 
 // Quick actions mapped to smart-send action types
@@ -602,7 +606,25 @@ export function MessagesTab() {
                               : 'bg-muted'
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
+                          {/* Audio player for voice notes */}
+                          {(msg.message_type === 'audio' || msg.message_type === 'voice') ? (
+                            <div className="flex flex-col gap-1.5 min-w-[200px]">
+                              <div className="flex items-center gap-2">
+                                <Mic className="w-4 h-4 flex-shrink-0" />
+                                <span className="text-xs font-medium">Audio</span>
+                              </div>
+                              {msg.media_url ? (
+                                <audio controls preload="metadata" className="w-full max-w-[260px] h-8" style={{ minWidth: '200px' }}>
+                                  <source src={msg.media_url} type={msg.media_mime_type || 'audio/ogg'} />
+                                  Tu navegador no soporta audio.
+                                </audio>
+                              ) : (
+                                <p className="text-xs italic opacity-70">Audio recibido — no disponible para reproducir</p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
+                          )}
                           <div className={`flex items-center justify-end gap-1 mt-1 ${
                             msg.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground'
                           }`}>
