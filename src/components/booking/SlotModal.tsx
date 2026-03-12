@@ -292,6 +292,15 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
     return service.price_ars + (vehicleSize?.price_ars || 0) + getExtrasTotal();
   };
 
+  const getClusterDiscount = () => {
+    if (!clusterData || clusterData.discountPercent <= 0) return 0;
+    return Math.round(getTotalPrice() * clusterData.discountPercent / 100);
+  };
+
+  const getFinalPrice = () => {
+    return getTotalPrice() - getClusterDiscount();
+  };
+
   const canSubmit = () => {
     return (
       formData.service &&
