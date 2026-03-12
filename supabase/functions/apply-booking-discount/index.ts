@@ -9,8 +9,6 @@ const corsHeaders = {
 const LAUNCH_DATE = "2026-04-15";
 const FOUNDING_SLOTS_TOTAL = 30;
 const FOUNDER_DISCOUNT_PERCENT = 20;
-const BARRIO_DISCOUNT_PERCENT = 30;
-const BARRIO_THRESHOLD = 3;
 
 // Valid statuses that count as real reservations
 const VALID_STATUSES = ["pending", "confirmed", "completed"];
@@ -65,80 +63,122 @@ serve(async (req) => {
 
     const basePrice = booking.total_price_ars || 0;
 
-    // ---- CHECK BARRIO DISCOUNT (priority 1: 30% OFF) ----
-    let barrioApplied = false;
-    if (booking.barrio && booking.barrio.trim() !== "") {
-      const normalizedBarrio = booking.barrio.trim().toLowerCase();
-      const groupKey = `${normalizedBarrio}::${booking.booking_date}`;
+    // ---- CHECK CLUSTER DISCOUNT (priority 1: GPS-based) ----
+    let clusterApplied = false;
+    if (booking.latitude != null && booking.longitude != null) {
+      // Get cluster tiers
+      const { data: tiers } = await supabase
+        .from("cluster_discount_tiers")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order");
 
-      // Count valid bookings in same barrio + same date
-      const { count: barrioCount } = await supabase
-        .from("bookings")
-        .select("*", { count: "exact", head: true })
-        .eq("booking_date", booking.booking_date)
-        .ilike("barrio", normalizedBarrio)
-        .in("status", VALID_STATUSES)
-        .eq("is_test", false);
+      const radius = tiers?.[0]?.radius_km || 5;
 
-      const totalInGroup = barrioCount ?? 0;
-      console.log("[apply-booking-discount] Barrio group count:", totalInGroup, "for", groupKey);
+      // Count nearby bookings using haversine
+      const { data: nearbyCount } = await supabase
+        .rpc("count_nearby_bookings", {
+          p_date: booking.booking_date,
+          p_lat: booking.latitude,
+          p_lng: booking.longitude,
+          p_radius_km: radius,
+          p_exclude_booking_id: bookingId,
+        });
 
-      if (totalInGroup >= BARRIO_THRESHOLD) {
-        const discountAmount = Math.round(basePrice * BARRIO_DISCOUNT_PERCENT / 100);
+      const count = nearbyCount ?? 0;
+
+      // Find matching tier
+      const matchingTier = (tiers || [])
+        .sort((a: any, b: any) => b.min_nearby - a.min_nearby)
+        .find((t: any) => count >= t.min_nearby && (t.max_nearby === null || count <= t.max_nearby));
+
+      const clusterDiscountPercent = matchingTier?.discount_percent || 0;
+
+      console.log("[apply-booking-discount] Cluster nearby:", count, "discount:", clusterDiscountPercent + "%");
+
+      if (clusterDiscountPercent > 0) {
+        const discountAmount = Math.round(basePrice * clusterDiscountPercent / 100);
         const finalPrice = basePrice - discountAmount;
 
-        // Update THIS booking
         await supabase
           .from("bookings")
           .update({
-            discount_type: "barrio",
-            discount_percent: BARRIO_DISCOUNT_PERCENT,
+            discount_type: "cluster",
+            discount_percent: clusterDiscountPercent,
             discount_amount_ars: discountAmount,
             final_price_ars: finalPrice,
-            barrio_discount_qualified_at: new Date().toISOString(),
-            barrio_group_key: groupKey,
+            cluster_size: count,
+            cluster_discount_percent: clusterDiscountPercent,
             discount_locked: true,
           })
           .eq("id", bookingId);
 
-        // Also update OTHER bookings in the same group that don't have barrio discount yet
-        const { data: groupBookings } = await supabase
+        // Also update nearby bookings that don't have cluster discount yet
+        // (they might now qualify for a higher tier)
+        const { data: nearbyBookings } = await supabase
           .from("bookings")
-          .select("id, total_price_ars")
+          .select("id, total_price_ars, latitude, longitude")
           .eq("booking_date", booking.booking_date)
-          .ilike("barrio", normalizedBarrio)
           .in("status", VALID_STATUSES)
           .eq("is_test", false)
           .neq("id", bookingId)
-          .or("discount_type.is.null,discount_type.neq.barrio");
+          .not("latitude", "is", null)
+          .not("longitude", "is", null)
+          .eq("discount_locked", false);
 
-        if (groupBookings && groupBookings.length > 0) {
-          for (const gb of groupBookings) {
-            const gbBase = gb.total_price_ars || 0;
-            const gbDiscount = Math.round(gbBase * BARRIO_DISCOUNT_PERCENT / 100);
-            await supabase
-              .from("bookings")
-              .update({
-                discount_type: "barrio",
-                discount_percent: BARRIO_DISCOUNT_PERCENT,
-                discount_amount_ars: gbDiscount,
-                final_price_ars: gbBase - gbDiscount,
-                barrio_discount_qualified_at: new Date().toISOString(),
-                barrio_group_key: groupKey,
-                discount_locked: true,
-              })
-              .eq("id", gb.id)
-              .eq("discount_locked", false);
+        if (nearbyBookings) {
+          for (const nb of nearbyBookings) {
+            // Check if this booking is within radius
+            const { data: dist } = await supabase.rpc("haversine_distance", {
+              lat1: booking.latitude,
+              lng1: booking.longitude,
+              lat2: nb.latitude,
+              lng2: nb.longitude,
+            });
+
+            if ((dist ?? 999) <= radius) {
+              // Recalculate discount for this nearby booking
+              const { data: nbCount } = await supabase.rpc("count_nearby_bookings", {
+                p_date: booking.booking_date,
+                p_lat: nb.latitude,
+                p_lng: nb.longitude,
+                p_radius_km: radius,
+                p_exclude_booking_id: nb.id,
+              });
+
+              const nbCountVal = nbCount ?? 0;
+              const nbTier = (tiers || [])
+                .sort((a: any, b: any) => b.min_nearby - a.min_nearby)
+                .find((t: any) => nbCountVal >= t.min_nearby && (t.max_nearby === null || nbCountVal <= t.max_nearby));
+
+              const nbDiscountPercent = nbTier?.discount_percent || 0;
+              if (nbDiscountPercent > 0) {
+                const nbBase = nb.total_price_ars || 0;
+                const nbDiscountAmount = Math.round(nbBase * nbDiscountPercent / 100);
+                await supabase
+                  .from("bookings")
+                  .update({
+                    discount_type: "cluster",
+                    discount_percent: nbDiscountPercent,
+                    discount_amount_ars: nbDiscountAmount,
+                    final_price_ars: nbBase - nbDiscountAmount,
+                    cluster_size: nbCountVal,
+                    cluster_discount_percent: nbDiscountPercent,
+                    discount_locked: true,
+                  })
+                  .eq("id", nb.id)
+                  .eq("discount_locked", false);
+              }
+            }
           }
-          console.log("[apply-booking-discount] Updated", groupBookings.length, "other barrio bookings");
         }
 
-        barrioApplied = true;
+        clusterApplied = true;
       }
     }
 
     // ---- CHECK FOUNDER DISCOUNT (priority 2: 20% OFF) ----
-    if (!barrioApplied) {
+    if (!clusterApplied) {
       // Count existing founder slots
       const { count: founderCount } = await supabase
         .from("bookings")
@@ -186,7 +226,7 @@ serve(async (req) => {
     // Get updated booking for response
     const { data: updated } = await supabase
       .from("bookings")
-      .select("id, discount_type, discount_percent, discount_amount_ars, final_price_ars, is_launch_founder_slot")
+      .select("id, discount_type, discount_percent, discount_amount_ars, final_price_ars, is_launch_founder_slot, cluster_size, cluster_discount_percent")
       .eq("id", bookingId)
       .single();
 
