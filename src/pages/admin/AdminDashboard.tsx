@@ -1008,9 +1008,7 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
                               onCheckedChange={(checked) => handleToggleBookingTest(booking.id, !!checked)}
                             />
                           </td>
-                            />
-                          </td>
-                          <td className="px-4 py-4">
+                          <td>
                             <div className="flex gap-1">
                               <Button
                                 size="sm"
