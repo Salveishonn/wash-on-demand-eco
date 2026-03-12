@@ -96,6 +96,10 @@ export function SlotModal({ date, preselectedTime, onClose, onBookingSuccess, bo
   const [zoneResult, setZoneResult] = useState<ZoneDetectionResult | null>(null);
   const [showOutOfAreaModal, setShowOutOfAreaModal] = useState(false);
 
+  // Cluster pricing
+  const { clusterData, isLoading: isClusterLoading, fetchClusterPricing, reset: resetCluster } = useClusterPricing();
+  const [addressCoords, setAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
+
   // Validation errors
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
