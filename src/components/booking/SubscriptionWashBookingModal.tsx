@@ -29,11 +29,14 @@ interface UserAddress {
 
 interface SubscriptionInfo {
   id: string;
-  plan_id: string; // Can be plan_code (e.g., 'basic') or UUID
+  plan_id: string;
   plan_code?: string;
   status: string;
   washes_remaining: number | null;
   washes_used_this_month: number | null;
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
 }
 
 interface SubscriptionWashBookingModalProps {
