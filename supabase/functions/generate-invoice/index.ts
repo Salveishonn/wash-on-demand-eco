@@ -152,10 +152,12 @@ serve(async (req) => {
     if (uploadError) {
       console.error("[generate-invoice] Upload error:", uploadError);
     } else {
-      const { data: urlData } = supabase.storage.from("invoices").getPublicUrl(pdfPath);
-      if (urlData?.publicUrl) {
-        await supabase.from("invoices").update({ pdf_url: urlData.publicUrl }).eq("id", invoice.id);
-        invoice.pdf_url = urlData.publicUrl;
+      const { data: signedData, error: signedErr } = await supabase.storage
+        .from("invoices")
+        .createSignedUrl(pdfPath, 3600);
+      if (!signedErr && signedData?.signedUrl) {
+        await supabase.from("invoices").update({ pdf_url: signedData.signedUrl }).eq("id", invoice.id);
+        invoice.pdf_url = signedData.signedUrl;
       }
     }
 

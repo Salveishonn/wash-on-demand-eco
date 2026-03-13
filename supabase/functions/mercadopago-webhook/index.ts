@@ -298,10 +298,12 @@ async function handleBookingPayment(
 
         let pdfUrl: string | null = null;
         if (!uploadErr) {
-          const { data: urlData } = supabase.storage.from("invoices").getPublicUrl(pdfPath);
-          pdfUrl = urlData?.publicUrl || null;
+          const { data: signedData, error: signedErr } = await supabase.storage
+            .from("invoices")
+            .createSignedUrl(pdfPath, 3600);
+          pdfUrl = signedErr ? null : signedData?.signedUrl || null;
           await supabase.from("invoices").update({ pdf_url: pdfUrl }).eq("id", invoice.id);
-          console.log("[mercadopago-webhook] PDF uploaded:", pdfUrl);
+          console.log("[mercadopago-webhook] PDF uploaded with signed URL");
         } else {
           console.error("[mercadopago-webhook] PDF upload error:", uploadErr);
         }
