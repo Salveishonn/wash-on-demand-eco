@@ -23,6 +23,10 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
+    // Verify admin authentication
+    const authResult = await requireAdmin(req);
+    if ("error" in authResult) return authResult.error;
+
     const { subscription_id, delta, reason }: AdjustCreditsRequest = await req.json();
 
     console.log("[admin-adjust-subscription-credits] Request:", { subscription_id, delta, reason });

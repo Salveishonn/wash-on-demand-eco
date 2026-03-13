@@ -18,22 +18,9 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    // Verify admin
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) {
-        const { data: roleData } = await supabase
-          .from("user_roles").select("role")
-          .eq("user_id", user.id).eq("role", "admin").maybeSingle();
-        if (!roleData) {
-          return new Response(JSON.stringify({ success: false, error: "No autorizado" }), {
-            status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-      }
-    }
+    // Verify admin authentication (mandatory)
+    const authResult = await requireAdmin(req);
+    if ("error" in authResult) return authResult.error;
 
     const { bookingId } = await req.json();
     if (!bookingId) {

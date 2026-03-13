@@ -22,6 +22,10 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
+    // Verify admin authentication
+    const authResult = await requireAdmin(req);
+    if ("error" in authResult) return authResult.error;
+
     const { invoice_id, status }: UpdateInvoiceRequest = await req.json();
 
     console.log("[admin-update-invoice-status] Request:", { invoice_id, status });

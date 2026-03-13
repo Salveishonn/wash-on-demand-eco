@@ -22,6 +22,10 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
+    // Verify admin authentication
+    const authResult = await requireAdmin(req);
+    if ("error" in authResult) return authResult.error;
+
     const { subscription_id, cycle_month }: GenerateCycleRequest = await req.json();
 
     console.log("[admin-generate-cycle] Request:", { subscription_id, cycle_month });
