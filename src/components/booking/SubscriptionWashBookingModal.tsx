@@ -453,7 +453,7 @@ export function SubscriptionWashBookingModal({
 
       toast({
         title: "¡Lavado agendado!",
-        description: `Tu lavado de ${planName} fue programado para el ${format(scheduledDate, "EEEE d 'de' MMMM", { locale: es })} a las ${scheduledTime} hs.`,
+        description: `Este lavado está cubierto por tu plan. ${format(scheduledDate, "EEEE d 'de' MMMM", { locale: es })} a las ${scheduledTime} hs.`,
       });
 
       onBookingSuccess();
