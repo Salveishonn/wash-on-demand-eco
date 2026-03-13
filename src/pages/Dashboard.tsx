@@ -814,9 +814,13 @@ export default function Dashboard() {
                   subscription={{
                     id: subscription.id,
                     plan_id: subscription.plan_code || subscription.plan_id,
+                    plan_code: subscription.plan_code || undefined,
                     status: subscription.status,
                     washes_remaining: subscription.washes_remaining,
                     washes_used_this_month: subscription.washes_used_in_cycle,
+                    customer_name: subscription.customer_name || undefined,
+                    customer_email: subscription.customer_email || undefined,
+                    customer_phone: subscription.customer_phone || undefined,
                   }}
                   cars={cars}
                   addresses={addresses}
