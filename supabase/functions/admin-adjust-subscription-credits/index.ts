@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAdmin } from "../_shared/adminAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +23,10 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
+    // Verify admin authentication
+    const authResult = await requireAdmin(req);
+    if ("error" in authResult) return authResult.error;
+
     const { subscription_id, delta, reason }: AdjustCreditsRequest = await req.json();
 
     console.log("[admin-adjust-subscription-credits] Request:", { subscription_id, delta, reason });
