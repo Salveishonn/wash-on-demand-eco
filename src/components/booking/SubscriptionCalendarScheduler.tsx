@@ -53,6 +53,9 @@ interface SubscriptionInfo {
   status: string;
   washes_remaining: number | null;
   washes_used_this_month: number | null;
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
 }
 
 interface SubscriptionCalendarSchedulerProps {

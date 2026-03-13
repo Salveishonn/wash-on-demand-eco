@@ -29,11 +29,14 @@ interface UserAddress {
 
 interface SubscriptionInfo {
   id: string;
-  plan_id: string; // Can be plan_code (e.g., 'basic') or UUID
+  plan_id: string;
   plan_code?: string;
   status: string;
   washes_remaining: number | null;
   washes_used_this_month: number | null;
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
 }
 
 interface SubscriptionWashBookingModalProps {
@@ -393,10 +396,24 @@ export function SubscriptionWashBookingModal({
       const vehicleSizeName = includedVehicleSize?.display_name || "Auto chico";
 
       // Use the create-booking edge function for atomic credit decrement
+      const customerName = profile?.full_name || subscription.customer_name || "Suscriptor";
+      const customerEmail = profile?.email || subscription.customer_email || "";
+      const customerPhone = profile?.phone || subscription.customer_phone || "";
+
+      if (!customerPhone) {
+        toast({
+          variant: "destructive",
+          title: "Teléfono requerido",
+          description: "Completá tu teléfono en tu perfil para poder agendar lavados.",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
       const payload = {
-        customerName: profile?.full_name || "Suscriptor",
-        customerEmail: profile?.email || "",
-        customerPhone: profile?.phone || "",
+        customerName,
+        customerEmail,
+        customerPhone,
         serviceName: baseServiceName,
         serviceCode: plan?.metadata.included_service || "basic",
         vehicleSize: plan?.metadata.included_vehicle_size || "small",
@@ -436,7 +453,7 @@ export function SubscriptionWashBookingModal({
 
       toast({
         title: "¡Lavado agendado!",
-        description: `Tu lavado de ${planName} fue programado para el ${format(scheduledDate, "EEEE d 'de' MMMM", { locale: es })} a las ${scheduledTime} hs.`,
+        description: `Este lavado está cubierto por tu plan. ${format(scheduledDate, "EEEE d 'de' MMMM", { locale: es })} a las ${scheduledTime} hs.`,
       });
 
       onBookingSuccess();
