@@ -260,8 +260,9 @@ serve(async (req) => {
         throw new Error("Suscripción no encontrada");
       }
 
-      if (subscription.status !== "active" && subscription.status !== "pending") {
-        throw new Error("Tu suscripción no está activa");
+      if (subscription.status !== "active") {
+        console.error("[create-booking] Subscription not active. Status:", subscription.status, "ID:", data.subscriptionId);
+        throw new Error("Tu suscripción no está activa. Estado actual: " + subscription.status);
       }
 
       if (subscription.washes_remaining <= 0) {
