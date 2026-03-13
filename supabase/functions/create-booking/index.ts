@@ -100,6 +100,7 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  let data: CreateBookingRequest & { _hp?: string; _ts?: number } | undefined;
   try {
     // Rate limiting: max 5 booking attempts per IP per 5 minutes
     const rateLimited = await isRateLimited("create-booking", 5, 5, req);
@@ -111,7 +112,7 @@ serve(async (req) => {
       );
     }
 
-    const data: CreateBookingRequest & { _hp?: string; _ts?: number } = await req.json();
+    data = await req.json();
 
     // Anti-bot: Honeypot check
     if (isHoneypotTriggered(data._hp)) {
@@ -317,6 +318,7 @@ serve(async (req) => {
     // =============================================
     // SERVER-SIDE PRICE VERIFICATION
     // Fetch authoritative prices from pricing_items
+    // For subscription bookings, base service + vehicle are covered by the plan (price = 0)
     // =============================================
     let serverBasePriceCents = 0;
     let serverVehicleExtraCents = 0;
@@ -338,27 +340,33 @@ serve(async (req) => {
         .eq("pricing_version_id", activePricingVersion.id);
 
       if (pricingItems && pricingItems.length > 0) {
-        // Find base service price
-        const serviceCode = data.serviceCode || data.serviceName?.toLowerCase().replace(/\s+/g, "_");
-        const serviceItem = pricingItems.find(
-          (i) => i.item_type === "service" && (i.item_code === serviceCode || i.item_code === data.serviceCode)
-        );
-        if (serviceItem) {
-          serverBasePriceCents = Math.round(serviceItem.price_ars * 100);
-        }
-
-        // Find vehicle size surcharge
-        if (data.vehicleSize || data.carType) {
-          const sizeCode = (data.vehicleSize || data.carType || "").toLowerCase().replace(/\s+/g, "_");
-          const sizeItem = pricingItems.find(
-            (i) => i.item_type === "vehicle_extra" && i.item_code === sizeCode
+        // For subscription bookings, skip base service and vehicle price verification
+        // Those are covered by the plan at $0
+        if (!isSubscription) {
+          // Find base service price
+          const serviceCode = data.serviceCode || data.serviceName?.toLowerCase().replace(/\s+/g, "_");
+          const serviceItem = pricingItems.find(
+            (i) => i.item_type === "service" && (i.item_code === serviceCode || i.item_code === data.serviceCode)
           );
-          if (sizeItem) {
-            serverVehicleExtraCents = Math.round(sizeItem.price_ars * 100);
+          if (serviceItem) {
+            serverBasePriceCents = Math.round(serviceItem.price_ars * 100);
           }
+
+          // Find vehicle size surcharge
+          if (data.vehicleSize || data.carType) {
+            const sizeCode = (data.vehicleSize || data.carType || "").toLowerCase().replace(/\s+/g, "_");
+            const sizeItem = pricingItems.find(
+              (i) => i.item_type === "vehicle_extra" && i.item_code === sizeCode
+            );
+            if (sizeItem) {
+              serverVehicleExtraCents = Math.round(sizeItem.price_ars * 100);
+            }
+          }
+        } else {
+          console.log("[create-booking] Subscription booking — skipping base/vehicle price verification (covered by plan)");
         }
 
-        // Verify addon prices
+        // Verify addon prices (addons cost extra even for subscriptions)
         if (data.addons && data.addons.length > 0) {
           for (const addon of data.addons) {
             const addonItem = pricingItems.find(
@@ -380,26 +388,30 @@ serve(async (req) => {
     const addonsData = data.addons || [];
 
     // Use server-verified prices when available, fall back to client prices
-    const basePriceCents = serverBasePriceCents > 0 ? serverBasePriceCents : (data.basePriceArs ? data.basePriceArs * 100 : (data.servicePriceCents || 0));
-    const vehicleExtraCents = serverVehicleExtraCents > 0 ? serverVehicleExtraCents : (data.vehicleExtraArs ? data.vehicleExtraArs * 100 : (data.carTypeExtraCents || 0));
+    // For subscription bookings, base + vehicle stay at 0
+    const basePriceCents = isSubscription ? 0 : (serverBasePriceCents > 0 ? serverBasePriceCents : (data.basePriceArs ? data.basePriceArs * 100 : (data.servicePriceCents || 0)));
+    const vehicleExtraCents = isSubscription ? 0 : (serverVehicleExtraCents > 0 ? serverVehicleExtraCents : (data.vehicleExtraArs ? data.vehicleExtraArs * 100 : (data.carTypeExtraCents || 0)));
     const addonsTotalCents = serverAddonsTotalCents > 0 ? serverAddonsTotalCents : (data.addonsTotalCents || 
       (data.extrasTotalArs ? data.extrasTotalArs * 100 : 
         addonsData.reduce((sum: number, a: AddonItem) => sum + (a.price_ars ? a.price_ars * 100 : 0), 0)));
 
-    // Log if client-submitted price differs significantly from server price
-    const serverTotalCents = basePriceCents + vehicleExtraCents + addonsTotalCents;
-    const clientTotalCents = data.totalPriceArs ? data.totalPriceArs * 100 : (data.servicePriceCents || 0) + (data.carTypeExtraCents || 0) + (data.addonsTotalCents || 0);
-    if (serverBasePriceCents > 0 && Math.abs(serverTotalCents - clientTotalCents) > 100) {
-      console.warn("[create-booking] PRICE MISMATCH - Server:", serverTotalCents, "Client:", clientTotalCents);
-      await logError("create-booking", "price_mismatch", "Client price differs from server price", {
-        serverTotal: serverTotalCents,
-        clientTotal: clientTotalCents,
-        serviceCode: data.serviceCode,
-        vehicleSize: data.vehicleSize,
-      }, req);
+    // Log if client-submitted price differs significantly from server price (only for non-subscription)
+    if (!isSubscription) {
+      const serverTotalCents = basePriceCents + vehicleExtraCents + addonsTotalCents;
+      const clientTotalCents = data.totalPriceArs ? data.totalPriceArs * 100 : (data.servicePriceCents || 0) + (data.carTypeExtraCents || 0) + (data.addonsTotalCents || 0);
+      if (serverBasePriceCents > 0 && Math.abs(serverTotalCents - clientTotalCents) > 100) {
+        console.warn("[create-booking] PRICE MISMATCH - Server:", serverTotalCents, "Client:", clientTotalCents);
+        await logError("create-booking", "price_mismatch", "Client price differs from server price", {
+          serverTotal: serverTotalCents,
+          clientTotal: clientTotalCents,
+          serviceCode: data.serviceCode,
+          vehicleSize: data.vehicleSize,
+        }, req);
+      }
     }
 
     // Calculate total using server-verified prices
+    // For subscriptions: total = only addons (base + vehicle = 0)
     const totalPriceCents = basePriceCents + vehicleExtraCents + addonsTotalCents;
 
     // Normalize phone to E.164 for Argentina
@@ -483,10 +495,10 @@ serve(async (req) => {
       confirmed_at: isSubscription ? new Date().toISOString() : null,
       addons: addonsData,
       addons_total_cents: addonsTotalCents,
-      base_price_ars: data.basePriceArs || Math.round(basePriceCents / 100),
-      vehicle_extra_ars: data.vehicleExtraArs || Math.round(vehicleExtraCents / 100),
-      extras_total_ars: data.extrasTotalArs || Math.round(addonsTotalCents / 100),
-      total_price_ars: data.totalPriceArs || Math.round(totalPriceCents / 100),
+      base_price_ars: isSubscription ? 0 : (data.basePriceArs ?? Math.round(basePriceCents / 100)),
+      vehicle_extra_ars: isSubscription ? 0 : (data.vehicleExtraArs ?? Math.round(vehicleExtraCents / 100)),
+      extras_total_ars: data.extrasTotalArs ?? Math.round(addonsTotalCents / 100),
+      total_price_ars: isSubscription ? Math.round(addonsTotalCents / 100) : (data.totalPriceArs ?? Math.round(totalPriceCents / 100)),
       booking_source: data.bookingSource || "direct",
       whatsapp_opt_in: whatsappOptIn,
       barrio: barrio,
@@ -774,7 +786,18 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("[create-booking] Error:", error);
-    await logError("create-booking", "unhandled", error.message, { stack: error.stack }, req);
+    console.error("[create-booking] Context:", JSON.stringify({
+      subscriptionId: data?.subscriptionId,
+      bookingType: data?.bookingType,
+      isSubscriptionBooking: data?.isSubscriptionBooking,
+      basePriceArs: data?.basePriceArs,
+      totalPriceArs: data?.totalPriceArs,
+    }));
+    await logError("create-booking", "unhandled", error.message, { 
+      stack: error.stack,
+      subscriptionId: data?.subscriptionId,
+      bookingType: data?.bookingType,
+    }, req);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }

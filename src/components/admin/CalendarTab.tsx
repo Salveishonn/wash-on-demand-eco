@@ -473,8 +473,46 @@ export function CalendarTab() {
   const handleCancel = async (bookingId: string) => {
     setIsUpdating(true);
     try {
+      // Check if this is a subscription booking that needs credit restoration
+      const { data: bookingData } = await supabase
+        .from('bookings')
+        .select('is_subscription_booking, subscription_id, booking_date, booking_time')
+        .eq('id', bookingId)
+        .single();
+
       const { error } = await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId);
       if (error) throw error;
+
+      // Restore subscription credit if cancelled before service time
+      if (bookingData?.is_subscription_booking && bookingData?.subscription_id) {
+        const now = new Date();
+        const serviceTime = new Date(`${bookingData.booking_date}T${bookingData.booking_time}:00`);
+        if (now < serviceTime) {
+          const { error: creditError } = await supabase.rpc('restore_subscription_credit' as any, {
+            p_subscription_id: bookingData.subscription_id,
+          });
+          // Fallback: direct update if RPC doesn't exist
+          if (creditError) {
+            console.warn('RPC restore_subscription_credit not found, using direct update');
+            const { data: sub } = await supabase
+              .from('subscriptions')
+              .select('washes_remaining, washes_used_in_cycle')
+              .eq('id', bookingData.subscription_id)
+              .single();
+            if (sub) {
+              await supabase
+                .from('subscriptions')
+                .update({
+                  washes_remaining: (sub.washes_remaining || 0) + 1,
+                  washes_used_in_cycle: Math.max(0, (sub.washes_used_in_cycle || 0) - 1),
+                })
+                .eq('id', bookingData.subscription_id);
+            }
+          }
+          console.log('[CalendarTab] Restored subscription credit for cancelled booking');
+        }
+      }
+
       toast({ title: 'Cancelada' });
       fetchCalendarBookings();
       setIsDetailOpen(false);
