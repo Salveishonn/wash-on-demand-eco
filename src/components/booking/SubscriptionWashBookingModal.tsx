@@ -397,7 +397,7 @@ export function SubscriptionWashBookingModal({
 
       // Use the create-booking edge function for atomic credit decrement
       const customerName = profile?.full_name || subscription.customer_name || "Suscriptor";
-      const customerEmail = profile?.email || subscription.customer_email || user?.email || "";
+      const customerEmail = profile?.email || subscription.customer_email || "";
       const customerPhone = profile?.phone || subscription.customer_phone || "";
 
       if (!customerPhone) {
