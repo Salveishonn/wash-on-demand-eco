@@ -317,6 +317,37 @@ export default function AdminDashboard() {
         updateData.confirmed_at = new Date().toISOString();
       }
 
+      // If cancelling a subscription booking, restore the credit
+      if (newStatus === 'cancelled') {
+        const { data: bookingData } = await supabase
+          .from('bookings')
+          .select('is_subscription_booking, subscription_id, booking_date, booking_time')
+          .eq('id', bookingId)
+          .single();
+
+        if (bookingData?.is_subscription_booking && bookingData?.subscription_id) {
+          const now = new Date();
+          const serviceTime = new Date(`${bookingData.booking_date}T${bookingData.booking_time}:00`);
+          if (now < serviceTime) {
+            const { data: sub } = await supabase
+              .from('subscriptions')
+              .select('washes_remaining, washes_used_in_cycle')
+              .eq('id', bookingData.subscription_id)
+              .single();
+            if (sub) {
+              await supabase
+                .from('subscriptions')
+                .update({
+                  washes_remaining: (sub.washes_remaining || 0) + 1,
+                  washes_used_in_cycle: Math.max(0, (sub.washes_used_in_cycle || 0) - 1),
+                })
+                .eq('id', bookingData.subscription_id);
+              console.log('[AdminDashboard] Restored subscription credit for cancelled booking');
+            }
+          }
+        }
+      }
+
       const { error } = await supabase
         .from('bookings')
         .update(updateData)
