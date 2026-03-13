@@ -123,8 +123,10 @@ serve(async (req) => {
     if (uploadErr) {
       console.error("[mark-booking-paid] Upload error:", uploadErr);
     } else {
-      const { data: urlData } = supabase.storage.from("invoices").getPublicUrl(pdfPath);
-      pdfUrl = urlData?.publicUrl || null;
+      const { data: signedData, error: signedErr } = await supabase.storage
+        .from("invoices")
+        .createSignedUrl(pdfPath, 3600);
+      pdfUrl = signedErr ? null : signedData?.signedUrl || null;
       await supabase.from("invoices").update({ pdf_url: pdfUrl }).eq("id", invoice.id);
     }
 
