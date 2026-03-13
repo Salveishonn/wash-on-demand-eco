@@ -396,10 +396,24 @@ export function SubscriptionWashBookingModal({
       const vehicleSizeName = includedVehicleSize?.display_name || "Auto chico";
 
       // Use the create-booking edge function for atomic credit decrement
+      const customerName = profile?.full_name || subscription.customer_name || "Suscriptor";
+      const customerEmail = profile?.email || subscription.customer_email || user?.email || "";
+      const customerPhone = profile?.phone || subscription.customer_phone || "";
+
+      if (!customerPhone) {
+        toast({
+          variant: "destructive",
+          title: "Teléfono requerido",
+          description: "Completá tu teléfono en tu perfil para poder agendar lavados.",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
       const payload = {
-        customerName: profile?.full_name || "Suscriptor",
-        customerEmail: profile?.email || "",
-        customerPhone: profile?.phone || "",
+        customerName,
+        customerEmail,
+        customerPhone,
         serviceName: baseServiceName,
         serviceCode: plan?.metadata.included_service || "basic",
         vehicleSize: plan?.metadata.included_vehicle_size || "small",
