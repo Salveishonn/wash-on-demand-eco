@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +36,9 @@ import {
   AlertCircle,
   Download,
   X,
+  ChevronRight,
+  ArrowRight,
+  MessageCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -114,6 +116,48 @@ const PLAN_INFO: Record<string, { name: string; washes: number; price: string; s
   premium: { name: "Plan Premium", washes: 4, price: "$125.000", serviceIncluded: "Detailing Completo" },
 };
 
+/* ─────────── Expandable section helper ─────────── */
+function Section({ title, icon: Icon, children, defaultOpen = true, action }: {
+  title: string;
+  icon: any;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  action?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-4 md:p-5 text-left"
+      >
+        <span className="font-display text-base md:text-lg font-bold flex items-center gap-2 text-foreground">
+          <Icon className="w-5 h-5 text-primary" />
+          {title}
+        </span>
+        <span className="flex items-center gap-2">
+          {action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}
+          <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
+        </span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 md:px-5 md:pb-5">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -127,42 +171,23 @@ export default function Dashboard() {
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [pastBookings, setPastBookings] = useState<Booking[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [activeTab, setActiveTab] = useState("overview");
 
   // Modal states
   const [isCarModalOpen, setIsCarModalOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isSubscriptionSchedulerOpen, setIsSubscriptionSchedulerOpen] = useState(false);
   const [editingCar, setEditingCar] = useState<UserCar | null>(null);
   const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Form states
-  const [carForm, setCarForm] = useState({
-    nickname: "",
-    brand: "",
-    model: "",
-    plate: "",
-    color: "",
-  });
-  const [addressForm, setAddressForm] = useState({
-    label: "Casa",
-    line1: "",
-    neighborhood: "",
-    city: "",
-  });
+  const [carForm, setCarForm] = useState({ nickname: "", brand: "", model: "", plate: "", color: "" });
+  const [addressForm, setAddressForm] = useState({ label: "Casa", line1: "", neighborhood: "", city: "" });
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  useEffect(() => { checkAuth(); }, []);
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      navigate("/auth?redirect=/dashboard");
-      return;
-    }
+    if (!session) { navigate("/auth?redirect=/dashboard"); return; }
     setUser(session.user);
     await fetchUserData(session.user.id);
   };
@@ -170,25 +195,12 @@ export default function Dashboard() {
   const fetchUserData = async (userId: string) => {
     setIsLoading(true);
     try {
-      // Fetch profile
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("full_name, email, phone")
-        .eq("user_id", userId)
-        .single();
+      const { data: profileData } = await supabase.from("profiles").select("full_name, email, phone").eq("user_id", userId).single();
       setProfile(profileData);
 
-      // Fetch subscription from canonical `subscriptions` table
       const { data: subData } = await supabase
         .from("subscriptions")
-        .select(`
-          *,
-          subscription_plans (
-            name,
-            washes_per_month,
-            price_cents
-          )
-        `)
+        .select(`*, subscription_plans (name, washes_per_month, price_cents)`)
         .eq("user_id", userId)
         .in("status", ["active", "paused", "pending"])
         .order("created_at", { ascending: false })
@@ -196,51 +208,20 @@ export default function Dashboard() {
         .single();
       setSubscription(subData);
 
-      // Fetch cars
-      const { data: carsData } = await supabase
-        .from("cars")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+      const { data: carsData } = await supabase.from("cars").select("*").eq("user_id", userId).order("created_at", { ascending: false });
       setCars(carsData || []);
 
-      // Fetch addresses
-      const { data: addressesData } = await supabase
-        .from("addresses")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+      const { data: addressesData } = await supabase.from("addresses").select("*").eq("user_id", userId).order("created_at", { ascending: false });
       setAddresses(addressesData || []);
 
-      // Fetch upcoming bookings
       const today = new Date().toISOString().split("T")[0];
-      const { data: upcomingData } = await supabase
-        .from("bookings")
-        .select("id, booking_date, booking_time, service_name, status, address, total_cents, is_subscription_booking")
-        .eq("user_id", userId)
-        .gte("booking_date", today)
-        .neq("status", "cancelled")
-        .order("booking_date", { ascending: true })
-        .limit(10);
+      const { data: upcomingData } = await supabase.from("bookings").select("id, booking_date, booking_time, service_name, status, address, total_cents, is_subscription_booking").eq("user_id", userId).gte("booking_date", today).neq("status", "cancelled").order("booking_date", { ascending: true }).limit(10);
       setUpcomingBookings(upcomingData || []);
 
-      // Fetch past bookings
-      const { data: pastData } = await supabase
-        .from("bookings")
-        .select("id, booking_date, booking_time, service_name, status, address, total_cents, is_subscription_booking")
-        .eq("user_id", userId)
-        .lt("booking_date", today)
-        .order("booking_date", { ascending: false })
-        .limit(20);
+      const { data: pastData } = await supabase.from("bookings").select("id, booking_date, booking_time, service_name, status, address, total_cents, is_subscription_booking").eq("user_id", userId).lt("booking_date", today).order("booking_date", { ascending: false }).limit(20);
       setPastBookings(pastData || []);
 
-      // Fetch invoices
-      const { data: invoicesData } = await supabase
-        .from("invoices")
-        .select("id, invoice_number, status, amount_ars, issued_at, paid_at, pdf_url")
-        .eq("user_id", userId)
-        .order("issued_at", { ascending: false })
-        .limit(50);
+      const { data: invoicesData } = await supabase.from("invoices").select("id, invoice_number, status, amount_ars, issued_at, paid_at, pdf_url").eq("user_id", userId).order("issued_at", { ascending: false }).limit(50);
       setInvoices((invoicesData as Invoice[]) || []);
     } catch (error) {
       console.error("Error fetching user data:", error);
@@ -249,41 +230,23 @@ export default function Dashboard() {
     }
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate("/");
-  };
+  const handleSignOut = async () => { await supabase.auth.signOut(); navigate("/"); };
 
   const toggleSubscriptionPause = async () => {
     if (!subscription) return;
-
     const newStatus = subscription.status === "paused" ? "active" : "paused";
-
     try {
-      // Use edge function to update status properly
       const { data, error } = await supabase.functions.invoke("admin-set-subscription-status", {
-        body: {
-          subscription_id: subscription.id,
-          status: newStatus,
-        },
+        body: { subscription_id: subscription.id, status: newStatus },
       });
       if (error || !data?.success) throw error || new Error(data?.error);
-
-      if (error) throw error;
-
       setSubscription({ ...subscription, status: newStatus });
       toast({
-        title: newStatus === "paused" ? "Suscripción pausada" : "Suscripción reactivada",
-        description: newStatus === "paused"
-          ? "No se programarán nuevos lavados hasta que la reactives."
-          : "Podés volver a agendar tus lavados.",
+        title: newStatus === "paused" ? "Plan pausado" : "Plan reactivado",
+        description: newStatus === "paused" ? "No se agendarán nuevos lavados hasta que lo reactives." : "Ya podés volver a agendar tus lavados.",
       });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo actualizar la suscripción.",
-      });
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar la suscripción." });
     }
   };
 
@@ -291,13 +254,7 @@ export default function Dashboard() {
   const openCarModal = (car?: UserCar) => {
     if (car) {
       setEditingCar(car);
-      setCarForm({
-        nickname: car.nickname || "",
-        brand: car.brand || "",
-        model: car.model || "",
-        plate: car.plate || "",
-        color: car.color || "",
-      });
+      setCarForm({ nickname: car.nickname || "", brand: car.brand || "", model: car.model || "", plate: car.plate || "", color: car.color || "" });
     } else {
       setEditingCar(null);
       setCarForm({ nickname: "", brand: "", model: "", plate: "", color: "" });
@@ -308,30 +265,19 @@ export default function Dashboard() {
   const handleSaveCar = async () => {
     if (!user) return;
     setIsSubmitting(true);
-
     try {
       if (editingCar) {
-        const { error } = await supabase
-          .from("cars")
-          .update(carForm)
-          .eq("id", editingCar.id);
+        const { error } = await supabase.from("cars").update(carForm).eq("id", editingCar.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("cars")
-          .insert({ ...carForm, user_id: user.id });
+        const { error } = await supabase.from("cars").insert({ ...carForm, user_id: user.id });
         if (error) throw error;
       }
-
       toast({ title: editingCar ? "Auto actualizado" : "Auto agregado" });
       setIsCarModalOpen(false);
       fetchUserData(user.id);
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || "No se pudo guardar el auto.",
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo guardar el auto." });
     } finally {
       setIsSubmitting(false);
     }
@@ -339,31 +285,21 @@ export default function Dashboard() {
 
   const deleteCar = async (carId: string) => {
     if (!user) return;
-
     try {
       const { error } = await supabase.from("cars").delete().eq("id", carId);
       if (error) throw error;
       toast({ title: "Auto eliminado" });
       fetchUserData(user.id);
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo eliminar el auto.",
-      });
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el auto." });
     }
   };
 
-  // Address CRUD with Google Places
+  // Address CRUD
   const openAddressModal = (address?: UserAddress) => {
     if (address) {
       setEditingAddress(address);
-      setAddressForm({
-        label: address.label || "Casa",
-        line1: address.line1,
-        neighborhood: address.neighborhood || "",
-        city: address.city || "",
-      });
+      setAddressForm({ label: address.label || "Casa", line1: address.line1, neighborhood: address.neighborhood || "", city: address.city || "" });
     } else {
       setEditingAddress(null);
       setAddressForm({ label: "Casa", line1: "", neighborhood: "", city: "" });
@@ -372,39 +308,25 @@ export default function Dashboard() {
   };
 
   const handleAddressSelect = (selection: PlaceSelection) => {
-    setAddressForm(prev => ({
-      ...prev,
-      line1: selection.address,
-    }));
+    setAddressForm(prev => ({ ...prev, line1: selection.address }));
   };
 
   const handleSaveAddress = async () => {
     if (!user || !addressForm.line1) return;
     setIsSubmitting(true);
-
     try {
       if (editingAddress) {
-        const { error } = await supabase
-          .from("addresses")
-          .update(addressForm)
-          .eq("id", editingAddress.id);
+        const { error } = await supabase.from("addresses").update(addressForm).eq("id", editingAddress.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("addresses")
-          .insert({ ...addressForm, user_id: user.id });
+        const { error } = await supabase.from("addresses").insert({ ...addressForm, user_id: user.id });
         if (error) throw error;
       }
-
       toast({ title: editingAddress ? "Dirección actualizada" : "Dirección agregada" });
       setIsAddressModalOpen(false);
       fetchUserData(user.id);
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || "No se pudo guardar la dirección.",
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo guardar la dirección." });
     } finally {
       setIsSubmitting(false);
     }
@@ -412,22 +334,16 @@ export default function Dashboard() {
 
   const deleteAddress = async (addressId: string) => {
     if (!user) return;
-
     try {
       const { error } = await supabase.from("addresses").delete().eq("id", addressId);
       if (error) throw error;
       toast({ title: "Dirección eliminada" });
       fetchUserData(user.id);
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo eliminar la dirección.",
-      });
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar la dirección." });
     }
   };
 
-  // Get user display name
   const getDisplayName = () => {
     if (profile?.full_name) return profile.full_name.split(" ")[0];
     if (user?.user_metadata?.full_name) return user.user_metadata.full_name.split(" ")[0];
@@ -435,17 +351,17 @@ export default function Dashboard() {
     return "Usuario";
   };
 
-  // Use plan_code for lookup, or fall back to subscription_plans data
   const planCode = subscription?.plan_code || "";
   const planInfo = subscription ? (PLAN_INFO[planCode] || {
     name: subscription.subscription_plans?.name || "Plan",
     washes: subscription.subscription_plans?.washes_per_month || 0,
-    price: subscription.subscription_plans?.price_cents 
+    price: subscription.subscription_plans?.price_cents
       ? `$${Math.round(subscription.subscription_plans.price_cents / 100).toLocaleString("es-AR")}`
       : "N/A",
-    serviceIncluded: subscription.included_service === "complete" ? "Lavado Completo" : "Lavado Básico",
+    serviceIncluded: subscription.included_service === "complete" ? "Detailing Completo" : "Lavado Exterior + Interior",
   }) : null;
   const washesRemaining = subscription?.washes_remaining ?? planInfo?.washes ?? 0;
+  const totalWashes = planInfo?.washes ?? 0;
 
   if (isLoading) {
     return (
@@ -459,494 +375,338 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      {/* Header with personalized greeting */}
-      <section className="py-8 md:py-12 bg-washero-charcoal">
+      {/* Compact header */}
+      <section className="py-5 md:py-8 bg-washero-charcoal">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-              <h1 className="font-display text-2xl md:text-3xl font-black text-background">
+            <div className="min-w-0">
+              <h1 className="font-display text-xl md:text-2xl font-black text-background truncate">
                 Hola, <span className="text-primary">{getDisplayName()}</span>
               </h1>
-              <p className="text-background/70 text-sm mt-1">{user?.email}</p>
-            </motion.div>
-            <Button variant="heroDark" size="sm" onClick={handleSignOut}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Cerrar sesión
+              <p className="text-background/60 text-xs md:text-sm truncate">{user?.email}</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-background/70 hover:text-background shrink-0">
+              <LogOut className="w-4 h-4" />
+              <span className="hidden md:inline ml-1.5">Salir</span>
             </Button>
           </div>
         </div>
       </section>
 
-      <section className="py-8 md:py-12 bg-background">
-        <div className="container mx-auto px-4">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid grid-cols-3 md:grid-cols-6 w-full">
-              <TabsTrigger value="overview" className="text-xs md:text-sm">
-                <CreditCard className="w-4 h-4 mr-1 hidden md:inline" />
-                Mi Plan
-              </TabsTrigger>
-              <TabsTrigger value="upcoming" className="text-xs md:text-sm">
-                <Calendar className="w-4 h-4 mr-1 hidden md:inline" />
-                Próximos
-              </TabsTrigger>
-              <TabsTrigger value="history" className="text-xs md:text-sm">
-                <History className="w-4 h-4 mr-1 hidden md:inline" />
-                Historial
-              </TabsTrigger>
-              <TabsTrigger value="cars" className="text-xs md:text-sm">
-                <Car className="w-4 h-4 mr-1 hidden md:inline" />
-                Autos
-              </TabsTrigger>
-              <TabsTrigger value="addresses" className="text-xs md:text-sm">
-                <MapPin className="w-4 h-4 mr-1 hidden md:inline" />
-                Direcciones
-              </TabsTrigger>
-              <TabsTrigger value="invoices" className="text-xs md:text-sm">
-                <FileText className="w-4 h-4 mr-1 hidden md:inline" />
-                Facturas
-              </TabsTrigger>
-            </TabsList>
+      <section className="py-5 md:py-8 bg-background">
+        <div className="container mx-auto px-4 space-y-4 max-w-2xl">
 
-            {/* Overview / Subscription Tab */}
-            <TabsContent value="overview" className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-border rounded-2xl p-6"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-display text-xl font-bold flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-primary" />
-                    Mi Suscripción
-                  </h2>
-                  {subscription && subscription.status !== "pending" && (
-                    <Button variant="outline" size="sm" onClick={toggleSubscriptionPause}>
+          {/* ═══ SUBSCRIPTION CARD ═══ */}
+          {subscription ? (
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              {/* Status ribbon */}
+              <div className={`px-4 py-2 flex items-center justify-between text-xs font-semibold ${
+                subscription.status === "active" ? "bg-washero-eco/15 text-washero-eco" :
+                subscription.status === "paused" ? "bg-orange-50 text-orange-700" :
+                subscription.status === "pending" ? "bg-yellow-50 text-yellow-700" :
+                "bg-muted text-muted-foreground"
+              }`}>
+                <span className="flex items-center gap-1.5">
+                  {subscription.status === "active" ? <CheckCircle className="w-3.5 h-3.5" /> :
+                   subscription.status === "paused" ? <Pause className="w-3.5 h-3.5" /> :
+                   <Clock className="w-3.5 h-3.5" />}
+                  {subscription.status === "active" ? "Activo" :
+                   subscription.status === "paused" ? "Pausado" :
+                   subscription.status === "pending" ? "Pendiente de aprobación" :
+                   subscription.status}
+                </span>
+                <span className="font-display">{planInfo?.name}</span>
+              </div>
+
+              <div className="p-4 md:p-5">
+                {/* Stats row */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="text-center p-3 bg-muted/40 rounded-xl">
+                    <p className="text-2xl md:text-3xl font-black text-primary">{washesRemaining}</p>
+                    <p className="text-[11px] md:text-xs text-muted-foreground leading-tight mt-0.5">Restantes</p>
+                  </div>
+                  <div className="text-center p-3 bg-muted/40 rounded-xl">
+                    <p className="text-2xl md:text-3xl font-black text-foreground">{subscription.washes_used_in_cycle || 0}</p>
+                    <p className="text-[11px] md:text-xs text-muted-foreground leading-tight mt-0.5">Usados</p>
+                  </div>
+                  <div className="text-center p-3 bg-muted/40 rounded-xl">
+                    <p className="text-2xl md:text-3xl font-black text-foreground">{totalWashes}</p>
+                    <p className="text-[11px] md:text-xs text-muted-foreground leading-tight mt-0.5">Total/mes</p>
+                  </div>
+                </div>
+
+                {/* Plan details */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                  <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                  <span>Incluye: {planInfo?.serviceIncluded}</span>
+                  <span className="ml-auto font-display font-bold text-foreground">{planInfo?.price}/mes</span>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  {subscription.status === "active" && washesRemaining > 0 && (
+                    <Button className="flex-1" size="lg" onClick={() => setIsSubscriptionSchedulerOpen(true)}>
+                      <Calendar className="w-4 h-4 mr-2" />
+                      Agendar lavado
+                    </Button>
+                  )}
+                  {subscription.status !== "pending" && (
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={toggleSubscriptionPause}
+                      className={subscription.status === "paused" ? "flex-1" : ""}
+                    >
                       {subscription.status === "paused" ? (
-                        <>
-                          <Play className="w-4 h-4 mr-1" />
-                          Reanudar
-                        </>
+                        <><Play className="w-4 h-4 mr-1.5" /> Reanudar plan</>
                       ) : (
-                        <>
-                          <Pause className="w-4 h-4 mr-1" />
-                          Pausar
-                        </>
+                        <><Pause className="w-4 h-4 mr-1.5" /> Pausar</>
                       )}
                     </Button>
                   )}
                 </div>
 
-                {subscription ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-primary/5 rounded-xl">
+                {subscription.status === "pending" && (
+                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
+                    <div className="flex items-start gap-2 text-yellow-800">
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                       <div>
-                        <p className="font-display text-lg font-bold text-foreground">
-                          {planInfo?.name || subscription.plan_id}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {planInfo?.washes} lavados/mes • {planInfo?.price}/mes
-                        </p>
-                        {planInfo && (
-                          <p className="text-xs text-primary mt-1 flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" />
-                            Incluye: {planInfo.serviceIncluded}
-                          </p>
-                        )}
+                        <p className="text-sm font-medium">Tu suscripción está pendiente de activación.</p>
+                        <p className="text-xs mt-0.5 text-yellow-700">Te contactaremos para coordinar el pago.</p>
                       </div>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          subscription.status === "active"
-                            ? "bg-washero-eco/20 text-washero-eco"
-                            : subscription.status === "paused"
-                            ? "bg-orange-100 text-orange-800"
-                            : subscription.status === "pending"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : subscription.status === "cancelled"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {subscription.status === "active"
-                          ? "Activo"
-                          : subscription.status === "paused"
-                          ? "Pausado"
-                          : subscription.status === "pending"
-                          ? "Pendiente de aprobación"
-                          : subscription.status === "cancelled"
-                          ? "Cancelado"
-                          : subscription.status}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* No subscription CTA */
+            <div className="bg-card border-2 border-dashed border-primary/30 rounded-2xl p-6 text-center">
+              <Sparkles className="w-10 h-10 text-primary mx-auto mb-3" />
+              <h2 className="font-display text-lg font-bold text-foreground mb-1">¿Querés lavar más seguido?</h2>
+              <p className="text-sm text-muted-foreground mb-4">Suscribite a un plan mensual y ahorrá hasta un 35%.</p>
+              <Button onClick={() => navigate("/suscripciones")} size="lg">
+                Ver planes <ArrowRight className="w-4 h-4 ml-1.5" />
+              </Button>
+            </div>
+          )}
+
+          {/* ═══ UPCOMING BOOKINGS ═══ */}
+          <Section
+            title={`Próximos lavados${upcomingBookings.length > 0 ? ` (${upcomingBookings.length})` : ""}`}
+            icon={Calendar}
+            action={
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate("/reservar")}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Agendar
+              </Button>
+            }
+          >
+            {upcomingBookings.length > 0 ? (
+              <div className="space-y-2.5">
+                {upcomingBookings.map((b) => (
+                  <div key={b.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <Clock className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm text-foreground truncate">{b.service_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(`${b.booking_date}T${b.booking_time}`), "EEE d MMM, HH:mm", { locale: es })}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                        b.status === "confirmed" ? "bg-washero-eco/15 text-washero-eco" : "bg-yellow-100 text-yellow-800"
+                      }`}>
+                        {b.status === "confirmed" ? "Confirmado" : "Pendiente"}
                       </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-muted/50 rounded-xl text-center">
-                        <p className="text-2xl font-bold text-primary">{washesRemaining}</p>
-                        <p className="text-sm text-muted-foreground">Lavados restantes</p>
-                      </div>
-                      <div className="p-4 bg-muted/50 rounded-xl text-center">
-                        <p className="text-2xl font-bold text-foreground">
-                          {subscription.washes_used_in_cycle || 0}
+                      {b.is_subscription_booking && (
+                        <p className="text-[11px] text-primary mt-0.5 flex items-center justify-end gap-0.5">
+                          <Sparkles className="w-3 h-3" /> Plan
                         </p>
-                        <p className="text-sm text-muted-foreground">Usados este mes</p>
-                      </div>
+                      )}
                     </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6 text-muted-foreground">
+                <Calendar className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                <p className="text-sm">No tenés lavados programados</p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate("/reservar")}>
+                  Agendar un lavado
+                </Button>
+              </div>
+            )}
+          </Section>
 
-                    {subscription.status === "active" && washesRemaining > 0 && (
-                      <Button className="w-full" onClick={() => setIsSubscriptionSchedulerOpen(true)}>
-                        <Calendar className="w-4 h-4 mr-2" />
-                        Agendar un lavado de mi plan
+          {/* ═══ CARS ═══ */}
+          <Section
+            title={`Mis autos${cars.length > 0 ? ` (${cars.length})` : ""}`}
+            icon={Car}
+            defaultOpen={false}
+            action={
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openCarModal()}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Agregar
+              </Button>
+            }
+          >
+            {cars.length > 0 ? (
+              <div className="space-y-2">
+                {cars.map((car) => (
+                  <div key={car.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm text-foreground truncate">
+                        {car.nickname || `${car.brand || ""} ${car.model || ""}`.trim() || "Mi auto"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{[car.plate, car.color].filter(Boolean).join(" · ")}</p>
+                    </div>
+                    <div className="flex gap-1 shrink-0 ml-2">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openCarModal(car)}>
+                        <Edit className="w-3.5 h-3.5" />
                       </Button>
-                    )}
-
-                    {subscription.status === "pending" && (
-                      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                        <div className="flex items-center gap-2 text-yellow-800">
-                          <AlertCircle className="w-4 h-4" />
-                          <p className="text-sm font-medium">
-                            Tu suscripción está pendiente de activación.
-                          </p>
-                        </div>
-                        <p className="text-xs text-yellow-700 mt-1">
-                          Te contactaremos para coordinar el pago.
-                        </p>
-                      </div>
-                    )}
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteCar(car.id)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground mb-4">No tenés una suscripción activa</p>
-                    <Button onClick={() => navigate("/suscripciones")}>Ver planes</Button>
-                  </div>
-                )}
-              </motion.div>
-            </TabsContent>
-
-            {/* Upcoming Bookings Tab */}
-            <TabsContent value="upcoming" className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-border rounded-2xl p-6"
+                ))}
+              </div>
+            ) : (
+              <button
+                onClick={() => openCarModal()}
+                className="w-full py-6 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm"
               >
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-display text-xl font-bold flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-primary" />
-                    Próximos Lavados
-                  </h2>
-                  <Button variant="outline" size="sm" onClick={() => navigate("/reservar")}>
-                    <Plus className="w-4 h-4 mr-1" />
-                    Agendar
-                  </Button>
-                </div>
+                <Plus className="w-5 h-5 mx-auto mb-1" />
+                Agregar mi primer auto
+              </button>
+            )}
+          </Section>
 
-                {upcomingBookings.length > 0 ? (
-                  <div className="space-y-3">
-                    {upcomingBookings.map((booking) => (
-                      <div
-                        key={booking.id}
-                        className="flex items-center justify-between p-4 bg-muted/30 rounded-xl"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">{booking.service_name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {format(new Date(`${booking.booking_date}T${booking.booking_time}`), "EEEE d MMM, HH:mm", { locale: es })}
-                            </p>
-                            {booking.address && (
-                              <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                {booking.address}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span
-                            className={`px-2 py-1 rounded text-xs font-medium ${
-                              booking.status === "confirmed"
-                                ? "bg-washero-eco/20 text-washero-eco"
-                                : "bg-yellow-100 text-yellow-800"
-                            }`}
-                          >
-                            {booking.status === "confirmed" ? "Confirmado" : "Pendiente"}
-                          </span>
-                          {booking.is_subscription_booking && (
-                            <p className="text-xs text-primary mt-1 flex items-center justify-end gap-1">
-                              <Sparkles className="w-3 h-3" />
-                              De mi plan
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+          {/* ═══ ADDRESSES ═══ */}
+          <Section
+            title={`Direcciones${addresses.length > 0 ? ` (${addresses.length})` : ""}`}
+            icon={MapPin}
+            defaultOpen={false}
+            action={
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openAddressModal()}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Agregar
+              </Button>
+            }
+          >
+            {addresses.length > 0 ? (
+              <div className="space-y-2">
+                {addresses.map((addr) => (
+                  <div key={addr.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm text-foreground">{addr.label}</p>
+                      <p className="text-xs text-muted-foreground truncate">{addr.line1}</p>
+                    </div>
+                    <div className="flex gap-1 shrink-0 ml-2">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAddressModal(addr)}>
+                        <Edit className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteAddress(addr.id)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>No tenés lavados programados</p>
-                    <Button variant="outline" className="mt-4" onClick={() => navigate("/reservar")}>
-                      Agendar un lavado
-                    </Button>
-                  </div>
-                )}
-              </motion.div>
-            </TabsContent>
-
-            {/* History Tab */}
-            <TabsContent value="history" className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-border rounded-2xl p-6"
+                ))}
+              </div>
+            ) : (
+              <button
+                onClick={() => openAddressModal()}
+                className="w-full py-6 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm"
               >
-                <h2 className="font-display text-xl font-bold flex items-center gap-2 mb-4">
-                  <History className="w-5 h-5 text-primary" />
-                  Historial de Lavados
-                </h2>
+                <Plus className="w-5 h-5 mx-auto mb-1" />
+                Agregar mi primera dirección
+              </button>
+            )}
+          </Section>
 
-                {pastBookings.length > 0 ? (
-                  <div className="space-y-3">
-                    {pastBookings.map((booking) => (
-                      <div
-                        key={booking.id}
-                        className="flex items-center justify-between p-4 bg-muted/30 rounded-xl"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                            <CheckCircle className="w-5 h-5 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">{booking.service_name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {format(new Date(`${booking.booking_date}T${booking.booking_time}`), "d MMM yyyy, HH:mm", { locale: es })}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          {booking.total_cents && !booking.is_subscription_booking && (
-                            <p className="font-medium text-foreground">
-                              ${(booking.total_cents / 100).toLocaleString("es-AR")}
-                            </p>
-                          )}
-                          {booking.is_subscription_booking && (
-                            <p className="text-xs text-primary flex items-center justify-end gap-1">
-                              <Sparkles className="w-3 h-3" />
-                              Plan
-                            </p>
-                          )}
-                          <span
-                            className={`px-2 py-1 rounded text-xs font-medium ${
-                              booking.status === "completed"
-                                ? "bg-washero-eco/20 text-washero-eco"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {booking.status === "completed" ? "Completado" : booking.status}
-                          </span>
-                        </div>
+          {/* ═══ HISTORY ═══ */}
+          <Section title="Historial" icon={History} defaultOpen={false}>
+            {pastBookings.length > 0 ? (
+              <div className="space-y-2">
+                {pastBookings.slice(0, 10).map((b) => (
+                  <div key={b.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <CheckCircle className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm text-foreground truncate">{b.service_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(`${b.booking_date}T${b.booking_time}`), "d MMM yyyy", { locale: es })}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {b.is_subscription_booking ? (
+                        <span className="text-xs text-primary flex items-center gap-0.5"><Sparkles className="w-3 h-3" /> Plan</span>
+                      ) : b.total_cents ? (
+                        <span className="text-sm font-medium text-foreground">${(b.total_cents / 100).toLocaleString("es-AR")}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center py-4 text-sm text-muted-foreground">Sin lavados anteriores</p>
+            )}
+          </Section>
+
+          {/* ═══ INVOICES ═══ */}
+          <Section title="Facturas" icon={FileText} defaultOpen={false}>
+            {invoices.length > 0 ? (
+              <div className="space-y-2">
+                {invoices.slice(0, 10).map((inv) => (
+                  <div key={inv.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm text-foreground">{inv.invoice_number}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(inv.issued_at), "d MMM yyyy", { locale: es })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-foreground">${inv.amount_ars.toLocaleString("es-AR")}</p>
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                          inv.status === "paid" ? "bg-washero-eco/15 text-washero-eco" :
+                          inv.status === "void" ? "bg-destructive/15 text-destructive" :
+                          "bg-yellow-100 text-yellow-800"
+                        }`}>
+                          {inv.status === "paid" ? "Pagado" : inv.status === "void" ? "Anulado" : "Pendiente"}
+                        </span>
                       </div>
-                    ))}
+                      {inv.pdf_url && (
+                        <a href={inv.pdf_url} target="_blank" rel="noopener noreferrer" className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted">
+                          <Download className="w-4 h-4 text-primary" />
+                        </a>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <History className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>No tenés lavados anteriores</p>
-                  </div>
-                )}
-              </motion.div>
-            </TabsContent>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center py-4 text-sm text-muted-foreground">Sin facturas aún</p>
+            )}
+          </Section>
 
-            {/* Cars Tab */}
-            <TabsContent value="cars" className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-border rounded-2xl p-6"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-display text-xl font-bold flex items-center gap-2">
-                    <Car className="w-5 h-5 text-primary" />
-                    Mis Autos
-                  </h2>
-                  <Button variant="outline" size="sm" onClick={() => openCarModal()}>
-                    <Plus className="w-4 h-4 mr-1" />
-                    Agregar
-                  </Button>
-                </div>
+          {/* WhatsApp help */}
+          <a
+            href="https://wa.me/5491112345678?text=Hola,%20necesito%20ayuda"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 p-4 bg-washero-eco/10 border border-washero-eco/20 rounded-2xl hover:bg-washero-eco/15 transition-colors"
+          >
+            <MessageCircle className="w-5 h-5 text-washero-eco shrink-0" />
+            <span className="text-sm font-medium text-foreground">¿Necesitás ayuda? Escribinos por WhatsApp</span>
+            <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
+          </a>
 
-                {cars.length > 0 ? (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {cars.map((car) => (
-                      <div key={car.id} className="p-4 bg-muted/30 rounded-xl">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-foreground">
-                              {car.nickname || `${car.brand || ""} ${car.model || ""}`.trim() || "Mi auto"}
-                            </p>
-                            {car.plate && <p className="text-sm text-muted-foreground">{car.plate}</p>}
-                            {car.color && <p className="text-xs text-muted-foreground">{car.color}</p>}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openCarModal(car)}>
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive"
-                              onClick={() => deleteCar(car.id)}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => openCarModal()}
-                    className="w-full py-8 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-                  >
-                    <Plus className="w-6 h-6 mx-auto mb-2" />
-                    <span>Agregar mi primer auto</span>
-                  </button>
-                )}
-              </motion.div>
-            </TabsContent>
-
-            {/* Addresses Tab */}
-            <TabsContent value="addresses" className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-border rounded-2xl p-6"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-display text-xl font-bold flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-primary" />
-                    Mis Direcciones
-                  </h2>
-                  <Button variant="outline" size="sm" onClick={() => openAddressModal()}>
-                    <Plus className="w-4 h-4 mr-1" />
-                    Agregar
-                  </Button>
-                </div>
-
-                {addresses.length > 0 ? (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {addresses.map((address) => (
-                      <div key={address.id} className="p-4 bg-muted/30 rounded-xl">
-                        <div className="flex items-center justify-between">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-foreground">{address.label}</p>
-                            <p className="text-sm text-muted-foreground truncate">{address.line1}</p>
-                            {address.neighborhood && (
-                              <p className="text-xs text-muted-foreground">{address.neighborhood}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0 ml-2">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAddressModal(address)}>
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive"
-                              onClick={() => deleteAddress(address.id)}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => openAddressModal()}
-                    className="w-full py-8 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-                  >
-                    <Plus className="w-6 h-6 mx-auto mb-2" />
-                    <span>Agregar mi primera dirección</span>
-                  </button>
-                )}
-              </motion.div>
-            </TabsContent>
-
-            {/* Invoices Tab */}
-            <TabsContent value="invoices" className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-border rounded-2xl p-6"
-              >
-                <h2 className="font-display text-xl font-bold flex items-center gap-2 mb-4">
-                  <FileText className="w-5 h-5 text-primary" />
-                  Facturas
-                </h2>
-
-                {invoices.length > 0 ? (
-                  <div className="space-y-3">
-                    {invoices.map((invoice) => (
-                      <div
-                        key={invoice.id}
-                        className="flex items-center justify-between p-4 bg-muted/30 rounded-xl"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                            <FileText className="w-5 h-5 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">{invoice.invoice_number}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {format(new Date(invoice.issued_at), "d MMM yyyy", { locale: es })}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className="font-medium text-foreground">
-                              ${invoice.amount_ars.toLocaleString("es-AR")}
-                            </p>
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                              invoice.status === "paid" 
-                                ? "bg-green-100 text-green-800" 
-                                : invoice.status === "void"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-yellow-100 text-yellow-800"
-                            }`}>
-                              {invoice.status === "paid" ? "Pagado" : invoice.status === "void" ? "Anulado" : "Pendiente"}
-                            </span>
-                          </div>
-                          {invoice.pdf_url && (
-                            <a 
-                              href={invoice.pdf_url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
-                            >
-                              <Download className="w-4 h-4 text-primary" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>No tenés facturas disponibles</p>
-                    <p className="text-xs mt-1">Las facturas aparecerán después de completar servicios pagos</p>
-                  </div>
-                )}
-              </motion.div>
-            </TabsContent>
-          </Tabs>
         </div>
       </section>
+
+      {/* ═══ MODALS ═══ */}
 
       {/* Car Modal */}
       <Dialog open={isCarModalOpen} onOpenChange={setIsCarModalOpen}>
@@ -957,54 +717,17 @@ export default function Dashboard() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Apodo (opcional)</Label>
-                <Input
-                  placeholder="Mi auto"
-                  value={carForm.nickname}
-                  onChange={(e) => setCarForm({ ...carForm, nickname: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Patente</Label>
-                <Input
-                  placeholder="ABC 123"
-                  value={carForm.plate}
-                  onChange={(e) => setCarForm({ ...carForm, plate: e.target.value })}
-                />
-              </div>
+              <div><Label>Apodo</Label><Input placeholder="Mi auto" value={carForm.nickname} onChange={(e) => setCarForm({ ...carForm, nickname: e.target.value })} /></div>
+              <div><Label>Patente</Label><Input placeholder="ABC 123" value={carForm.plate} onChange={(e) => setCarForm({ ...carForm, plate: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Marca</Label>
-                <Input
-                  placeholder="Toyota"
-                  value={carForm.brand}
-                  onChange={(e) => setCarForm({ ...carForm, brand: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Modelo</Label>
-                <Input
-                  placeholder="Corolla"
-                  value={carForm.model}
-                  onChange={(e) => setCarForm({ ...carForm, model: e.target.value })}
-                />
-              </div>
+              <div><Label>Marca</Label><Input placeholder="Toyota" value={carForm.brand} onChange={(e) => setCarForm({ ...carForm, brand: e.target.value })} /></div>
+              <div><Label>Modelo</Label><Input placeholder="Corolla" value={carForm.model} onChange={(e) => setCarForm({ ...carForm, model: e.target.value })} /></div>
             </div>
-            <div>
-              <Label>Color</Label>
-              <Input
-                placeholder="Blanco"
-                value={carForm.color}
-                onChange={(e) => setCarForm({ ...carForm, color: e.target.value })}
-              />
-            </div>
+            <div><Label>Color</Label><Input placeholder="Blanco" value={carForm.color} onChange={(e) => setCarForm({ ...carForm, color: e.target.value })} /></div>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setIsCarModalOpen(false)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => setIsCarModalOpen(false)}>Cancelar</Button>
             <Button className="flex-1" onClick={handleSaveCar} disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
             </Button>
@@ -1012,7 +735,7 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Address Modal with Google Places */}
+      {/* Address Modal */}
       <Dialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -1020,14 +743,7 @@ export default function Dashboard() {
             <DialogDescription>Agregá una dirección para tus lavados</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div>
-              <Label>Etiqueta</Label>
-              <Input
-                placeholder="Casa, Oficina, etc."
-                value={addressForm.label}
-                onChange={(e) => setAddressForm({ ...addressForm, label: e.target.value })}
-              />
-            </div>
+            <div><Label>Etiqueta</Label><Input placeholder="Casa, Oficina..." value={addressForm.label} onChange={(e) => setAddressForm({ ...addressForm, label: e.target.value })} /></div>
             <div>
               <Label>Dirección</Label>
               <AddressAutocomplete
@@ -1038,19 +754,10 @@ export default function Dashboard() {
                 onSelect={handleAddressSelect}
               />
             </div>
-            <div>
-              <Label>Barrio (opcional)</Label>
-              <Input
-                placeholder="Palermo"
-                value={addressForm.neighborhood}
-                onChange={(e) => setAddressForm({ ...addressForm, neighborhood: e.target.value })}
-              />
-            </div>
+            <div><Label>Barrio (opcional)</Label><Input placeholder="Palermo" value={addressForm.neighborhood} onChange={(e) => setAddressForm({ ...addressForm, neighborhood: e.target.value })} /></div>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setIsAddressModalOpen(false)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => setIsAddressModalOpen(false)}>Cancelar</Button>
             <Button className="flex-1" onClick={handleSaveAddress} disabled={isSubmitting || !addressForm.line1}>
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
             </Button>
@@ -1058,53 +765,36 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Subscription Scheduler Modal */}
+      {/* Subscription Scheduler */}
       <AnimatePresence>
         {isSubscriptionSchedulerOpen && subscription && user && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-background/80 backdrop-blur-sm"
             onClick={(e) => e.target === e.currentTarget && setIsSubscriptionSchedulerOpen(false)}
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-background rounded-2xl shadow-xl border border-border"
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              className="w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-background rounded-t-2xl md:rounded-2xl shadow-xl border border-border"
             >
-              {/* Header */}
               <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center justify-between z-10">
                 <div>
-                  <h2 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
+                  <h2 className="font-display text-base md:text-lg font-bold text-foreground flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-primary" />
                     Agendar lavado de mi plan
                   </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Seleccioná una fecha y horario
+                  <p className="text-xs text-muted-foreground">
+                    {washesRemaining} lavado{washesRemaining !== 1 ? "s" : ""} restante{washesRemaining !== 1 ? "s" : ""} · {planInfo?.serviceIncluded}
                   </p>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setIsSubscriptionSchedulerOpen(false)}>
                   <X className="w-5 h-5" />
                 </Button>
               </div>
-
-              {/* Subscription Info */}
-              <div className="p-4 border-b border-border bg-primary/5">
-                <div className="flex items-center justify-between">
-                  <span className="font-display font-bold text-foreground">{planInfo?.name}</span>
-                  <span className="text-sm text-primary font-medium">
-                    {washesRemaining} lavado{washesRemaining !== 1 ? "s" : ""} restante{washesRemaining !== 1 ? "s" : ""}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                  <CheckCircle className="w-4 h-4 text-primary" />
-                  <span>Incluye: {planInfo?.serviceIncluded}</span>
-                </div>
-              </div>
-
-              {/* Calendar */}
               <div className="p-4">
                 <SubscriptionCalendarScheduler
                   subscription={{
@@ -1120,19 +810,10 @@ export default function Dashboard() {
                   onBookingComplete={() => {
                     setIsSubscriptionSchedulerOpen(false);
                     fetchUserData(user.id);
-                    toast({
-                      title: "¡Lavado agendado!",
-                      description: "Tu lavado fue programado correctamente.",
-                    });
+                    toast({ title: "¡Lavado agendado!", description: "Tu lavado fue programado correctamente." });
                   }}
-                  onNeedsCar={() => {
-                    setIsSubscriptionSchedulerOpen(false);
-                    openCarModal();
-                  }}
-                  onNeedsAddress={() => {
-                    setIsSubscriptionSchedulerOpen(false);
-                    openAddressModal();
-                  }}
+                  onNeedsCar={() => { setIsSubscriptionSchedulerOpen(false); openCarModal(); }}
+                  onNeedsAddress={() => { setIsSubscriptionSchedulerOpen(false); openAddressModal(); }}
                 />
               </div>
             </motion.div>
