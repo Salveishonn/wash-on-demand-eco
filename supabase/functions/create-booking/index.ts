@@ -785,7 +785,18 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("[create-booking] Error:", error);
-    await logError("create-booking", "unhandled", error.message, { stack: error.stack }, req);
+    console.error("[create-booking] Context:", JSON.stringify({
+      subscriptionId: data?.subscriptionId,
+      bookingType: data?.bookingType,
+      isSubscriptionBooking: data?.isSubscriptionBooking,
+      basePriceArs: data?.basePriceArs,
+      totalPriceArs: data?.totalPriceArs,
+    }));
+    await logError("create-booking", "unhandled", error.message, { 
+      stack: error.stack,
+      subscriptionId: data?.subscriptionId,
+      bookingType: data?.bookingType,
+    }, req);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
