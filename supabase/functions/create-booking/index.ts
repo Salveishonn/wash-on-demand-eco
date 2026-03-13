@@ -317,6 +317,7 @@ serve(async (req) => {
     // =============================================
     // SERVER-SIDE PRICE VERIFICATION
     // Fetch authoritative prices from pricing_items
+    // For subscription bookings, base service + vehicle are covered by the plan (price = 0)
     // =============================================
     let serverBasePriceCents = 0;
     let serverVehicleExtraCents = 0;
@@ -338,27 +339,33 @@ serve(async (req) => {
         .eq("pricing_version_id", activePricingVersion.id);
 
       if (pricingItems && pricingItems.length > 0) {
-        // Find base service price
-        const serviceCode = data.serviceCode || data.serviceName?.toLowerCase().replace(/\s+/g, "_");
-        const serviceItem = pricingItems.find(
-          (i) => i.item_type === "service" && (i.item_code === serviceCode || i.item_code === data.serviceCode)
-        );
-        if (serviceItem) {
-          serverBasePriceCents = Math.round(serviceItem.price_ars * 100);
-        }
-
-        // Find vehicle size surcharge
-        if (data.vehicleSize || data.carType) {
-          const sizeCode = (data.vehicleSize || data.carType || "").toLowerCase().replace(/\s+/g, "_");
-          const sizeItem = pricingItems.find(
-            (i) => i.item_type === "vehicle_extra" && i.item_code === sizeCode
+        // For subscription bookings, skip base service and vehicle price verification
+        // Those are covered by the plan at $0
+        if (!isSubscription) {
+          // Find base service price
+          const serviceCode = data.serviceCode || data.serviceName?.toLowerCase().replace(/\s+/g, "_");
+          const serviceItem = pricingItems.find(
+            (i) => i.item_type === "service" && (i.item_code === serviceCode || i.item_code === data.serviceCode)
           );
-          if (sizeItem) {
-            serverVehicleExtraCents = Math.round(sizeItem.price_ars * 100);
+          if (serviceItem) {
+            serverBasePriceCents = Math.round(serviceItem.price_ars * 100);
           }
+
+          // Find vehicle size surcharge
+          if (data.vehicleSize || data.carType) {
+            const sizeCode = (data.vehicleSize || data.carType || "").toLowerCase().replace(/\s+/g, "_");
+            const sizeItem = pricingItems.find(
+              (i) => i.item_type === "vehicle_extra" && i.item_code === sizeCode
+            );
+            if (sizeItem) {
+              serverVehicleExtraCents = Math.round(sizeItem.price_ars * 100);
+            }
+          }
+        } else {
+          console.log("[create-booking] Subscription booking — skipping base/vehicle price verification (covered by plan)");
         }
 
-        // Verify addon prices
+        // Verify addon prices (addons cost extra even for subscriptions)
         if (data.addons && data.addons.length > 0) {
           for (const addon of data.addons) {
             const addonItem = pricingItems.find(
@@ -380,26 +387,30 @@ serve(async (req) => {
     const addonsData = data.addons || [];
 
     // Use server-verified prices when available, fall back to client prices
-    const basePriceCents = serverBasePriceCents > 0 ? serverBasePriceCents : (data.basePriceArs ? data.basePriceArs * 100 : (data.servicePriceCents || 0));
-    const vehicleExtraCents = serverVehicleExtraCents > 0 ? serverVehicleExtraCents : (data.vehicleExtraArs ? data.vehicleExtraArs * 100 : (data.carTypeExtraCents || 0));
+    // For subscription bookings, base + vehicle stay at 0
+    const basePriceCents = isSubscription ? 0 : (serverBasePriceCents > 0 ? serverBasePriceCents : (data.basePriceArs ? data.basePriceArs * 100 : (data.servicePriceCents || 0)));
+    const vehicleExtraCents = isSubscription ? 0 : (serverVehicleExtraCents > 0 ? serverVehicleExtraCents : (data.vehicleExtraArs ? data.vehicleExtraArs * 100 : (data.carTypeExtraCents || 0)));
     const addonsTotalCents = serverAddonsTotalCents > 0 ? serverAddonsTotalCents : (data.addonsTotalCents || 
       (data.extrasTotalArs ? data.extrasTotalArs * 100 : 
         addonsData.reduce((sum: number, a: AddonItem) => sum + (a.price_ars ? a.price_ars * 100 : 0), 0)));
 
-    // Log if client-submitted price differs significantly from server price
-    const serverTotalCents = basePriceCents + vehicleExtraCents + addonsTotalCents;
-    const clientTotalCents = data.totalPriceArs ? data.totalPriceArs * 100 : (data.servicePriceCents || 0) + (data.carTypeExtraCents || 0) + (data.addonsTotalCents || 0);
-    if (serverBasePriceCents > 0 && Math.abs(serverTotalCents - clientTotalCents) > 100) {
-      console.warn("[create-booking] PRICE MISMATCH - Server:", serverTotalCents, "Client:", clientTotalCents);
-      await logError("create-booking", "price_mismatch", "Client price differs from server price", {
-        serverTotal: serverTotalCents,
-        clientTotal: clientTotalCents,
-        serviceCode: data.serviceCode,
-        vehicleSize: data.vehicleSize,
-      }, req);
+    // Log if client-submitted price differs significantly from server price (only for non-subscription)
+    if (!isSubscription) {
+      const serverTotalCents = basePriceCents + vehicleExtraCents + addonsTotalCents;
+      const clientTotalCents = data.totalPriceArs ? data.totalPriceArs * 100 : (data.servicePriceCents || 0) + (data.carTypeExtraCents || 0) + (data.addonsTotalCents || 0);
+      if (serverBasePriceCents > 0 && Math.abs(serverTotalCents - clientTotalCents) > 100) {
+        console.warn("[create-booking] PRICE MISMATCH - Server:", serverTotalCents, "Client:", clientTotalCents);
+        await logError("create-booking", "price_mismatch", "Client price differs from server price", {
+          serverTotal: serverTotalCents,
+          clientTotal: clientTotalCents,
+          serviceCode: data.serviceCode,
+          vehicleSize: data.vehicleSize,
+        }, req);
+      }
     }
 
     // Calculate total using server-verified prices
+    // For subscriptions: total = only addons (base + vehicle = 0)
     const totalPriceCents = basePriceCents + vehicleExtraCents + addonsTotalCents;
 
     // Normalize phone to E.164 for Argentina
