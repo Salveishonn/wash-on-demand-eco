@@ -28,6 +28,16 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  // Only allow internal callers (other edge functions using the service role key)
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || authHeader !== `Bearer ${supabaseServiceKey}`) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
   
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
