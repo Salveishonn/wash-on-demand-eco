@@ -25,6 +25,7 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  try {
     // Verify admin authentication
     const authResult = await requireAdmin(req);
     if ("error" in authResult) return authResult.error;
