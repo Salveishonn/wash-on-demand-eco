@@ -398,81 +398,95 @@ export default function Dashboard() {
 
           {/* ═══ SUBSCRIPTION CARD ═══ */}
           {subscription ? (
-            <div className="bg-card border border-border rounded-2xl overflow-hidden">
-              {/* Status ribbon */}
-              <div className={`px-4 py-2 flex items-center justify-between text-xs font-semibold ${
-                subscription.status === "active" ? "bg-washero-eco/15 text-washero-eco" :
-                subscription.status === "paused" ? "bg-orange-50 text-orange-700" :
-                subscription.status === "pending" ? "bg-yellow-50 text-yellow-700" :
-                "bg-muted text-muted-foreground"
+            <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+              {/* A) Top row — status badge + plan name */}
+              <div className={`px-5 py-3 flex items-center justify-between ${
+                subscription.status === "active" ? "bg-washero-eco/10" :
+                subscription.status === "paused" ? "bg-orange-50" :
+                subscription.status === "pending" ? "bg-yellow-50" :
+                "bg-muted"
               }`}>
-                <span className="flex items-center gap-1.5">
+                <span className={`inline-flex items-center gap-1.5 text-xs font-bold tracking-wide uppercase ${
+                  subscription.status === "active" ? "text-washero-eco" :
+                  subscription.status === "paused" ? "text-orange-700" :
+                  subscription.status === "pending" ? "text-yellow-700" :
+                  "text-muted-foreground"
+                }`}>
                   {subscription.status === "active" ? <CheckCircle className="w-3.5 h-3.5" /> :
                    subscription.status === "paused" ? <Pause className="w-3.5 h-3.5" /> :
                    <Clock className="w-3.5 h-3.5" />}
                   {subscription.status === "active" ? "Activo" :
                    subscription.status === "paused" ? "Pausado" :
-                   subscription.status === "pending" ? "Pendiente de aprobación" :
+                   subscription.status === "pending" ? "Pendiente" :
                    subscription.status}
                 </span>
-                <span className="font-display">{planInfo?.name}</span>
+                <span className="font-display text-sm font-bold text-foreground">{planInfo?.name}</span>
               </div>
 
-              <div className="p-4 md:p-5">
-                {/* Stats row */}
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="text-center p-3 bg-muted/40 rounded-xl">
-                    <p className="text-2xl md:text-3xl font-black text-primary">{washesRemaining}</p>
-                    <p className="text-[11px] md:text-xs text-muted-foreground leading-tight mt-0.5">Restantes</p>
+              <div className="p-5 space-y-5">
+                {/* B) Main metrics row */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center py-4 px-2 bg-primary/5 rounded-xl border border-primary/10">
+                    <p className="text-3xl font-black text-primary leading-none">{washesRemaining}</p>
+                    <p className="text-xs text-muted-foreground mt-1.5 font-medium">Restantes</p>
                   </div>
-                  <div className="text-center p-3 bg-muted/40 rounded-xl">
-                    <p className="text-2xl md:text-3xl font-black text-foreground">{subscription.washes_used_in_cycle || 0}</p>
-                    <p className="text-[11px] md:text-xs text-muted-foreground leading-tight mt-0.5">Usados</p>
+                  <div className="text-center py-4 px-2 bg-muted/40 rounded-xl">
+                    <p className="text-3xl font-black text-foreground leading-none">{subscription.washes_used_in_cycle || 0}</p>
+                    <p className="text-xs text-muted-foreground mt-1.5 font-medium">Usados</p>
                   </div>
-                  <div className="text-center p-3 bg-muted/40 rounded-xl">
-                    <p className="text-2xl md:text-3xl font-black text-foreground">{totalWashes}</p>
-                    <p className="text-[11px] md:text-xs text-muted-foreground leading-tight mt-0.5">Total/mes</p>
+                  <div className="text-center py-4 px-2 bg-muted/40 rounded-xl">
+                    <p className="text-3xl font-black text-foreground leading-none">{totalWashes}</p>
+                    <p className="text-xs text-muted-foreground mt-1.5 font-medium">Total/mes</p>
                   </div>
                 </div>
 
-                {/* Plan details */}
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                  <Sparkles className="w-4 h-4 text-primary shrink-0" />
-                  <span>Incluye: {planInfo?.serviceIncluded}</span>
-                  <span className="ml-auto font-display font-bold text-foreground">{planInfo?.price}/mes</span>
+                {/* C) Included service + price — stacked on mobile for breathing room */}
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between bg-muted/30 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                    <span className="text-sm text-foreground font-medium">{planInfo?.serviceIncluded}</span>
+                  </div>
+                  <span className="font-display text-base font-bold text-foreground sm:text-right pl-6 sm:pl-0">{planInfo?.price}<span className="text-xs font-normal text-muted-foreground">/mes</span></span>
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-2">
+                {/* D) Main action area — primary CTA full-width */}
+                <div className="space-y-2.5">
                   {subscription.status === "active" && washesRemaining > 0 && (
-                    <Button className="flex-1" size="lg" onClick={() => setIsSubscriptionSchedulerOpen(true)}>
-                      <Calendar className="w-4 h-4 mr-2" />
+                    <Button className="w-full" size="xl" onClick={() => setIsSubscriptionSchedulerOpen(true)}>
+                      <Calendar className="w-5 h-5 mr-2" />
                       Agendar lavado
                     </Button>
                   )}
+                  {subscription.status === "active" && washesRemaining === 0 && (
+                    <div className="text-center py-3 px-4 bg-muted/50 rounded-xl">
+                      <p className="text-sm text-muted-foreground font-medium">No te quedan lavados este mes</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Se renuevan al inicio del próximo ciclo</p>
+                    </div>
+                  )}
+                  {/* Secondary actions row */}
                   {subscription.status !== "pending" && (
                     <Button
-                      variant="outline"
-                      size="lg"
+                      variant="ghost"
+                      size="default"
                       onClick={toggleSubscriptionPause}
-                      className={subscription.status === "paused" ? "flex-1" : ""}
+                      className="w-full text-muted-foreground hover:text-foreground"
                     >
                       {subscription.status === "paused" ? (
                         <><Play className="w-4 h-4 mr-1.5" /> Reanudar plan</>
                       ) : (
-                        <><Pause className="w-4 h-4 mr-1.5" /> Pausar</>
+                        <><Pause className="w-4 h-4 mr-1.5" /> Pausar plan</>
                       )}
                     </Button>
                   )}
                 </div>
 
                 {subscription.status === "pending" && (
-                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
-                    <div className="flex items-start gap-2 text-yellow-800">
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                    <div className="flex items-start gap-2.5 text-yellow-800">
                       <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-sm font-medium">Tu suscripción está pendiente de activación.</p>
-                        <p className="text-xs mt-0.5 text-yellow-700">Te contactaremos para coordinar el pago.</p>
+                        <p className="text-sm font-semibold">Tu suscripción está pendiente de activación</p>
+                        <p className="text-xs mt-1 text-yellow-700 leading-relaxed">Te contactaremos para coordinar el pago y activar tu plan.</p>
                       </div>
                     </div>
                   </div>
