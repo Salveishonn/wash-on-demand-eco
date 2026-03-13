@@ -3,20 +3,23 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
-import { 
-  Check, 
-  Sparkles, 
-  Clock, 
-  CreditCard, 
+import {
+  Check,
+  Sparkles,
+  Clock,
+  CreditCard,
   Wallet,
   Loader2,
   Star,
-  ChevronRight
+  ChevronRight,
+  Shield,
+  CalendarCheck,
+  RefreshCw,
+  Pause,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PAYMENTS_ENABLED } from "@/config/payments";
-import { PRELAUNCH_MODE } from "@/config/prelaunch";
 import { KipperSubscriptionBanner } from "@/components/kipper/KipperSubscriptionBanner";
 import { usePricing, formatPrice, getPlanByCode } from "@/hooks/usePricing";
 import { trackEvent } from "@/lib/gtag";
@@ -28,12 +31,28 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+// Single-wash reference prices for savings calculation
+const SINGLE_WASH_PRICES: Record<string, number> = {
+  basic: 30000,
+  complete: 38000,
+};
+
+function getSavings(plan: any): { monthly: number; percent: number } {
+  const washes = plan.metadata?.washes_per_month || 0;
+  const serviceKey = plan.metadata?.included_service || "basic";
+  const singlePrice = SINGLE_WASH_PRICES[serviceKey] || 30000;
+  const withoutPlan = singlePrice * washes;
+  const monthly = withoutPlan - plan.price_ars;
+  const percent = withoutPlan > 0 ? Math.round((monthly / withoutPlan) * 100) : 0;
+  return { monthly: Math.max(0, monthly), percent: Math.max(0, percent) };
+}
+
 export default function Suscripciones() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { data: pricing, isLoading: isPricingLoading } = usePricing();
-  
+
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -43,14 +62,11 @@ export default function Suscripciones() {
     PAYMENTS_ENABLED ? "online" : "pay_later"
   );
 
-  // Check auth on mount
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
       setIsCheckingAuth(false);
-
-      // Auto-select plan from URL
       const planId = searchParams.get("plan");
       if (planId && session?.user) {
         setSelectedPlan(planId);
@@ -58,16 +74,13 @@ export default function Suscripciones() {
       }
     };
     checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
     });
-
     return () => subscription.unsubscribe();
   }, [searchParams]);
 
   const handleSelectPlan = (planCode: string) => {
-    // Subscriptions available regardless of launch date
     if (!user) {
       navigate(`/auth?redirect=/suscripciones&plan=${planCode}`);
       return;
@@ -78,24 +91,17 @@ export default function Suscripciones() {
 
   const handleSubscribe = async () => {
     if (!selectedPlan || !user || !pricing) return;
-
     const plan = getPlanByCode(pricing, selectedPlan);
     if (!plan) return;
-
     setIsSubmitting(true);
-
     try {
-      // Map pricing item_code to subscription_plans.name
       const planNameMap: Record<string, string> = {
         basic: "Plan Básico",
         basico: "Plan Básico",
         confort: "Plan Confort",
         premium: "Plan Premium",
       };
-      
       const planNameToSearch = planNameMap[selectedPlan.toLowerCase()] || `Plan ${selectedPlan}`;
-
-      // Get the subscription_plans row to use the proper plan_id FK
       const { data: planRow, error: planError } = await supabase
         .from("subscription_plans")
         .select("id, washes_per_month, name")
@@ -104,19 +110,12 @@ export default function Suscripciones() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-
       if (planError) throw planError;
-
-      // Use matching plan_id or fall back to first active plan
       const planIdToUse = planRow?.id;
       if (!planIdToUse) {
-        console.error("[Suscripciones] Plan not found:", { selectedPlan, planNameToSearch });
         throw new Error("No se encontró el plan seleccionado. Intenta nuevamente.");
       }
-
-      // Create subscription in canonical `subscriptions` table ONLY
-      // Start with pending status and 0 credits - admin approval grants credits
-      const { data: subscription, error } = await supabase
+      const { error } = await supabase
         .from("subscriptions")
         .insert({
           user_id: user.id,
@@ -124,9 +123,9 @@ export default function Suscripciones() {
           plan_code: plan.item_code,
           included_service: plan.metadata.included_service,
           included_vehicle_size: plan.metadata.included_vehicle_size,
-          washes_remaining: 0, // Credits granted on admin approval
+          washes_remaining: 0,
           washes_used_in_cycle: 0,
-          status: "pending", // Always start as pending - admin approves
+          status: "pending",
           pricing_version_id: pricing.versionId,
           customer_name: user.user_metadata?.full_name || user.email || null,
           customer_email: user.email || null,
@@ -134,15 +133,8 @@ export default function Suscripciones() {
         })
         .select()
         .single();
-
       if (error) throw error;
-
-      // All new subscriptions start as pending, awaiting admin approval
-      trackEvent("subscription_created", {
-        value: plan.price_ars,
-        currency: "ARS",
-      });
-
+      trackEvent("subscription_created", { value: plan.price_ars, currency: "ARS" });
       toast({
         title: "¡Solicitud enviada!",
         description: "Tu suscripción está pendiente de aprobación. Te contactaremos pronto.",
@@ -176,32 +168,32 @@ export default function Suscripciones() {
   return (
     <Layout>
       {/* Hero */}
-      <section className="py-12 md:py-16 bg-washero-charcoal">
+      <section className="py-10 md:py-16 bg-washero-charcoal">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-center max-w-3xl mx-auto"
           >
-            <h1 className="font-display text-4xl md:text-5xl font-black text-background mb-4">
-              Planes <span className="text-primary">Mensuales</span>
+            <h1 className="font-display text-3xl md:text-5xl font-black text-background mb-3">
+              Tu auto siempre <span className="text-primary">impecable</span>
             </h1>
-            <p className="text-lg text-background/80">
-              Mantené tu auto siempre impecable con un plan a tu medida
+            <p className="text-base md:text-lg text-background/80 max-w-xl mx-auto">
+              Elegí un plan mensual y ahorrá en cada lavado. Reprogramá cuando quieras, pausá si lo necesitás.
             </p>
           </motion.div>
         </div>
       </section>
 
-      {/* Plans Grid */}
-      <section className="py-12 md:py-16 bg-background">
+      {/* Plans */}
+      <section className="py-10 md:py-16 bg-background">
         <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          <div className="grid gap-5 md:grid-cols-3 max-w-5xl mx-auto">
             {pricing?.plans.map((plan, index) => {
               const isPopular = plan.item_code === "confort";
-              const washesPerMonth = plan.metadata.washes_per_month || 0;
-              const includedService = plan.metadata.included_service;
-              const includedVehicle = plan.metadata.included_vehicle_size;
+              const washes = plan.metadata.washes_per_month || 0;
+              const serviceLabel = plan.metadata.included_service === "basic" ? "Lavado Exterior + Interior" : "Detailing Completo";
+              const savings = getSavings(plan);
 
               return (
                 <motion.div
@@ -209,73 +201,81 @@ export default function Suscripciones() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className={`relative rounded-2xl border-2 p-6 md:p-8 ${
-                    isPopular 
-                      ? "border-primary bg-primary/5 shadow-gold md:scale-105 z-10" 
-                      : "border-border bg-background hover:border-primary/50"
+                  className={`relative rounded-2xl border-2 flex flex-col ${
+                    isPopular
+                      ? "border-primary bg-primary/5 shadow-gold md:scale-[1.03] z-10"
+                      : "border-border bg-card hover:border-primary/40"
                   }`}
                 >
                   {isPopular && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="px-4 py-1 bg-primary text-washero-charcoal text-sm font-bold rounded-full flex items-center gap-1 whitespace-nowrap">
+                      <span className="px-4 py-1 bg-primary text-washero-charcoal text-xs font-bold rounded-full flex items-center gap-1 whitespace-nowrap">
                         <Star className="w-3 h-3" /> Más elegido
                       </span>
                     </div>
                   )}
-                  
-                  <div className="text-center mb-6 mt-2">
-                    <h2 className="font-display text-xl md:text-2xl font-bold text-foreground mb-4">
-                      {plan.display_name}
-                    </h2>
-                    <div className="flex items-baseline justify-center gap-1">
-                      <span className="font-display text-3xl md:text-4xl font-black text-primary">
-                        {formatPrice(plan.price_ars)}
-                      </span>
-                      <span className="text-muted-foreground text-sm">/mes</span>
+
+                  <div className="p-5 md:p-7 flex-1 flex flex-col">
+                    {/* Plan name & price */}
+                    <div className="text-center mb-5 mt-1">
+                      <h2 className="font-display text-lg md:text-xl font-bold text-foreground mb-1">
+                        {plan.display_name}
+                      </h2>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        {washes} lavado{washes !== 1 ? "s" : ""} por mes
+                      </p>
+                      <div className="flex items-baseline justify-center gap-1">
+                        <span className="font-display text-3xl md:text-4xl font-black text-primary">
+                          {formatPrice(plan.price_ars)}
+                        </span>
+                        <span className="text-muted-foreground text-sm">/mes</span>
+                      </div>
+                      {savings.monthly > 0 && (
+                        <p className="text-xs text-washero-eco font-semibold mt-1.5">
+                          Ahorrás {formatPrice(savings.monthly)}/mes ({savings.percent}%)
+                        </p>
+                      )}
                     </div>
+
+                    {/* Features */}
+                    <ul className="space-y-2.5 mb-6 flex-1">
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-foreground">{serviceLabel}</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-foreground">
+                          Vehículo: {plan.metadata.included_vehicle_size === "small" ? "Auto" : plan.metadata.included_vehicle_size === "suv" ? "SUV" : "Pick Up"}
+                        </span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-foreground">Reprogramación flexible</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-foreground">Podés pausar tu plan</span>
+                      </li>
+                    </ul>
+
+                    <Button
+                      className="w-full"
+                      size="lg"
+                      variant={isPopular ? "hero" : "outline"}
+                      onClick={() => handleSelectPlan(plan.item_code)}
+                      disabled={isCheckingAuth}
+                    >
+                      {isCheckingAuth ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          Suscribirme
+                          <ChevronRight className="w-4 h-4 ml-1" />
+                        </>
+                      )}
+                    </Button>
                   </div>
-
-                  <ul className="space-y-3 mb-8">
-                    <li className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-foreground">
-                        {washesPerMonth} lavado{washesPerMonth !== 1 ? 's' : ''} por mes
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-foreground">
-                        Servicio: {includedService === 'basic' ? 'Lavado Básico' : 'Lavado Completo'}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-foreground">
-                        Vehículo: {includedVehicle === 'small' ? 'Auto chico' : includedVehicle === 'suv' ? 'SUV' : 'Pick Up'}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-foreground">Sin cargos extra</span>
-                    </li>
-                  </ul>
-
-                  <Button
-                    className="w-full"
-                    size="lg"
-                    variant={isPopular ? "hero" : "outline"}
-                    onClick={() => handleSelectPlan(plan.item_code)}
-                    disabled={isCheckingAuth}
-                  >
-                    {isCheckingAuth ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        Suscribirme
-                        <ChevronRight className="w-4 h-4 ml-1" />
-                      </>
-                    )}
-                  </Button>
                 </motion.div>
               );
             })}
@@ -287,56 +287,45 @@ export default function Suscripciones() {
             transition={{ delay: 0.4 }}
             className="text-center text-sm text-muted-foreground mt-8 flex items-center justify-center gap-2"
           >
-            <Check className="w-4 h-4 text-washero-eco" />
-            Los planes se abonan por adelantado
+            <Shield className="w-4 h-4 text-washero-eco" />
+            Sin compromiso. Cancelá cuando quieras.
           </motion.p>
 
-          <div className="mt-12 max-w-4xl mx-auto">
+          <div className="mt-10 max-w-4xl mx-auto">
             <KipperSubscriptionBanner />
           </div>
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="py-16 bg-muted/30">
+      {/* Benefits / How it works */}
+      <section className="py-12 md:py-16 bg-muted/30">
         <div className="container mx-auto px-4">
-          <h2 className="font-display text-2xl md:text-3xl font-bold text-center text-foreground mb-12">
+          <h2 className="font-display text-2xl md:text-3xl font-bold text-center text-foreground mb-10">
             ¿Cómo funciona?
           </h2>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <CreditCard className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="font-display text-lg font-bold text-foreground mb-2">
-                1. Elegí tu plan
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                Básico, Confort o Premium según tus necesidades
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Clock className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="font-display text-lg font-bold text-foreground mb-2">
-                2. Reservá tus lavados
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                Usá tus lavados cuando quieras durante el mes
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Sparkles className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="font-display text-lg font-bold text-foreground mb-2">
-                3. Disfrutá el ahorro
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                Tu cuota se renueva automáticamente cada mes
-              </p>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
+            {[
+              { icon: CreditCard, title: "Elegí tu plan", desc: "Básico, Confort o Premium" },
+              { icon: CalendarCheck, title: "Agendá tus lavados", desc: "Elegí el día y horario que prefieras" },
+              { icon: RefreshCw, title: "Reprogramá gratis", desc: "Cambio de fecha sin costo" },
+              { icon: Pause, title: "Pausá si querés", desc: "Retomá cuando estés listo" },
+            ].map((item, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 * i }}
+                className="text-center"
+              >
+                <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                  <item.icon className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-display text-sm md:text-base font-bold text-foreground mb-1">
+                  {item.title}
+                </h3>
+                <p className="text-muted-foreground text-xs md:text-sm">{item.desc}</p>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
@@ -349,24 +338,18 @@ export default function Suscripciones() {
               Confirmar {selectedPlanData?.display_name}
             </DialogTitle>
             <DialogDescription>
-              {selectedPlanData && formatPrice(selectedPlanData.price_ars)}/mes - {selectedPlanData?.metadata.washes_per_month} lavados
+              {selectedPlanData && formatPrice(selectedPlanData.price_ars)}/mes — {selectedPlanData?.metadata.washes_per_month} lavados incluidos
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="p-4 bg-muted/50 rounded-xl">
-              <p className="text-sm text-muted-foreground">
-                Suscribiéndote como:
-              </p>
-              <p className="font-medium text-foreground">
-                {user?.email}
-              </p>
+              <p className="text-sm text-muted-foreground">Suscribiéndote como:</p>
+              <p className="font-medium text-foreground">{user?.email}</p>
             </div>
 
             <div className="pt-4 border-t border-border">
-              <p className="text-base font-semibold mb-3 block">
-                Método de pago
-              </p>
+              <p className="text-base font-semibold mb-3">Método de pago</p>
               <div className="space-y-3">
                 {PAYMENTS_ENABLED && (
                   <button
@@ -385,7 +368,6 @@ export default function Suscripciones() {
                     </div>
                   </button>
                 )}
-                
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("pay_later")}
@@ -406,18 +388,10 @@ export default function Suscripciones() {
           </div>
 
           <div className="flex gap-3">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setIsCheckoutOpen(false)}
-            >
+            <Button variant="outline" className="flex-1" onClick={() => setIsCheckoutOpen(false)}>
               Cancelar
             </Button>
-            <Button
-              className="flex-1"
-              onClick={handleSubscribe}
-              disabled={isSubmitting}
-            >
+            <Button className="flex-1" onClick={handleSubscribe} disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
