@@ -100,6 +100,7 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  let data: CreateBookingRequest & { _hp?: string; _ts?: number } | undefined;
   try {
     // Rate limiting: max 5 booking attempts per IP per 5 minutes
     const rateLimited = await isRateLimited("create-booking", 5, 5, req);
@@ -111,7 +112,7 @@ serve(async (req) => {
       );
     }
 
-    const data: CreateBookingRequest & { _hp?: string; _ts?: number } = await req.json();
+    data = await req.json();
 
     // Anti-bot: Honeypot check
     if (isHoneypotTriggered(data._hp)) {
