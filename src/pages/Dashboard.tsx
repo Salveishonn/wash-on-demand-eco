@@ -426,23 +426,21 @@ export default function Dashboard() {
 
   /* ─────── Tab Navigation ─────── */
   const renderNavigation = () => (
-    <div className="overflow-x-auto scrollbar-hide -mx-4 px-4">
-      <div className="flex gap-1 min-w-max pb-1">
-        {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              activeTab === key
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            <span className="hidden sm:inline">{label}</span>
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-wrap gap-1.5 mb-1">
+      {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
+        <button
+          key={key}
+          onClick={() => setActiveTab(key)}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+            activeTab === key
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
+        >
+          <Icon className="w-4 h-4" />
+          <span>{label}</span>
+        </button>
+      ))}
     </div>
   );
 
