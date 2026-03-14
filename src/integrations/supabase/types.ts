@@ -427,6 +427,7 @@ export type Database = {
           plate: string | null
           updated_at: string | null
           user_id: string
+          year: number | null
         }
         Insert: {
           brand?: string | null
@@ -439,6 +440,7 @@ export type Database = {
           plate?: string | null
           updated_at?: string | null
           user_id: string
+          year?: number | null
         }
         Update: {
           brand?: string | null
@@ -451,6 +453,7 @@ export type Database = {
           plate?: string | null
           updated_at?: string | null
           user_id?: string
+          year?: number | null
         }
         Relationships: []
       }
@@ -1167,31 +1170,46 @@ export type Database = {
       }
       profiles: {
         Row: {
+          birth_date: string | null
           created_at: string
+          dni: string | null
           email: string | null
           full_name: string | null
+          gender: string | null
           id: string
+          last_name: string | null
           phone: string | null
           updated_at: string
           user_id: string
+          work_address: string | null
         }
         Insert: {
+          birth_date?: string | null
           created_at?: string
+          dni?: string | null
           email?: string | null
           full_name?: string | null
+          gender?: string | null
           id?: string
+          last_name?: string | null
           phone?: string | null
           updated_at?: string
           user_id: string
+          work_address?: string | null
         }
         Update: {
+          birth_date?: string | null
           created_at?: string
+          dni?: string | null
           email?: string | null
           full_name?: string | null
+          gender?: string | null
           id?: string
+          last_name?: string | null
           phone?: string | null
           updated_at?: string
           user_id?: string
+          work_address?: string | null
         }
         Relationships: []
       }
