@@ -108,6 +108,30 @@ serve(async (req) => {
       } else {
         console.log("[notify-event] Operator notification created for:", payload.event);
       }
+
+      // === TRIGGER REAL PUSH NOTIFICATIONS ===
+      try {
+        const pushResponse = await fetch(`${supabaseUrl}/functions/v1/send-ops-notification`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            event_type: payload.event.replace('.', '_'),
+            title: notifData.title,
+            body: notifData.body,
+            data: {
+              ...payload,
+              url: payload.booking_id ? "/ops" : "/ops",
+            },
+          }),
+        });
+        const pushResult = await pushResponse.json();
+        console.log("[notify-event] Push notification result:", JSON.stringify(pushResult));
+      } catch (pushErr: any) {
+        console.error("[notify-event] Push notification error:", pushErr.message);
+      }
     }
 
     // === TRIGGER WHATSAPP NOTIFICATIONS FOR KEY EVENTS ===

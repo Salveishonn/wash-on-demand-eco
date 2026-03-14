@@ -60,7 +60,7 @@ export default function OpsLayout() {
   // Auto-enable push — wrapped safely
   useEffect(() => {
     if (user && isAdmin && !pushEnabled) {
-      subscribeToPush(user.id).then(setPushEnabled).catch(() => {});
+      subscribeToPush(user.id).then((r) => setPushEnabled(r.success)).catch(() => {});
     }
   }, [user, isAdmin, pushEnabled]);
 
@@ -91,7 +91,7 @@ export default function OpsLayout() {
   };
 
   const handleEnablePush = () => {
-    subscribeToPush(user.id).then(setPushEnabled).catch(() => {});
+    subscribeToPush(user.id).then((r) => setPushEnabled(r.success)).catch(() => {});
   };
 
   const handleDismissOnboarding = () => {
