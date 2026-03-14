@@ -98,7 +98,7 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent 
             align="start" 
-            className="w-[calc(100vw-2rem)] max-w-sm bg-background border border-border z-50"
+            className="w-[calc(100vw-2rem)] max-w-sm max-h-[70vh] overflow-y-auto bg-background border border-border z-50"
           >
             {(['ops', 'crm', 'config'] as const).map((group) => (
               <div key={group}>
