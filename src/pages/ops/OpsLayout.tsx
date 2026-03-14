@@ -189,8 +189,9 @@ export default function OpsLayout() {
       )}
 
       <header className="bg-washero-charcoal text-primary px-4 py-3 flex items-center justify-between sticky top-0 z-40">
-        <h1 className="font-display font-bold text-lg tracking-tight">
-          Washero <span className="text-muted-foreground font-normal text-sm">Ops</span>
+        <h1 className="font-display font-bold text-lg tracking-tight flex items-center gap-2">
+          <img src="/icons/washero-driver-192.png" alt="" className="w-7 h-7 rounded-md" />
+          Washero <span className="text-muted-foreground font-normal text-sm">Driver</span>
         </h1>
         <div className="flex items-center gap-2">
           {!pushEnabled && (
