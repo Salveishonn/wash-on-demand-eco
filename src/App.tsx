@@ -31,6 +31,7 @@ import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import DebugPixel from "./pages/DebugPixel";
+import OpsLayout from "./pages/ops/OpsLayout";
 
 const queryClient = new QueryClient();
 
@@ -80,6 +81,9 @@ const App = () => (
                 </AdminRoute>
               }
             />
+            {/* Operator App */}
+            <Route path="/ops" element={<OpsLayout />} />
+            
             {/* Debug */}
             <Route path="/debug/pixel" element={<DebugPixel />} />
             

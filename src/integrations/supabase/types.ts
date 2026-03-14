@@ -896,6 +896,39 @@ export type Database = {
           },
         ]
       }
+      operator_notifications: {
+        Row: {
+          body: string
+          created_at: string
+          data: Json | null
+          event_type: string
+          id: string
+          read: boolean
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          data?: Json | null
+          event_type: string
+          id?: string
+          read?: boolean
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          data?: Json | null
+          event_type?: string
+          id?: string
+          read?: boolean
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       outgoing_messages: {
         Row: {
           booking_id: string
@@ -1210,6 +1243,36 @@ export type Database = {
           updated_at?: string
           user_id?: string
           work_address?: string | null
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
