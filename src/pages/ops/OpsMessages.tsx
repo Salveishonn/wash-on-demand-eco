@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, MessageCircle, Loader2, ArrowLeft, Send } from 'lucide-react';
+import { Search, MessageCircle, Loader2, ArrowLeft, Send, AlertTriangle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -31,6 +31,7 @@ interface ChatMessage {
 export default function OpsMessages() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -40,30 +41,53 @@ export default function OpsMessages() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setIsLoading(true);
-    supabase
-      .from('whatsapp_conversations')
-      .select('id, customer_phone_e164, customer_name, last_message_preview, last_message_at, last_inbound_at, last_admin_seen_at, is_open')
-      .order('last_message_at', { ascending: false })
-      .limit(100)
-      .then(({ data }) => {
-        setConversations((data || []) as Conversation[]);
-        setIsLoading(false);
-      });
+    const loadConversations = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const { data, error } = await supabase
+          .from('whatsapp_conversations')
+          .select('id, customer_phone_e164, customer_name, last_message_preview, last_message_at, last_inbound_at, last_admin_seen_at, is_open')
+          .order('last_message_at', { ascending: false })
+          .limit(100);
+
+        if (error) {
+          console.warn('[OpsMessages] Load error:', error);
+          setLoadError('No se pudieron cargar las conversaciones');
+          setConversations([]);
+        } else {
+          setConversations((data || []) as Conversation[]);
+        }
+      } catch (err) {
+        console.warn('[OpsMessages] Unexpected error:', err);
+        setLoadError('Error de conexión');
+        setConversations([]);
+      }
+      setIsLoading(false);
+    };
+    loadConversations();
   }, []);
 
   const loadChat = useCallback(async (conv: Conversation) => {
     setChatLoading(true);
     setSelectedConv(conv);
 
-    const { data } = await supabase
-      .from('whatsapp_messages')
-      .select('id, body, direction, status, created_at, message_type, media_mime_type')
-      .eq('conversation_id', conv.id)
-      .order('created_at', { ascending: true })
-      .limit(100);
+    try {
+      const { data, error } = await supabase
+        .from('whatsapp_messages')
+        .select('id, body, direction, status, created_at, message_type, media_mime_type')
+        .eq('conversation_id', conv.id)
+        .order('created_at', { ascending: true })
+        .limit(100);
 
-    setMessages((data || []) as ChatMessage[]);
+      if (error) {
+        console.warn('[OpsMessages] Chat load error:', error);
+      }
+      setMessages((data || []) as ChatMessage[]);
+    } catch (err) {
+      console.warn('[OpsMessages] Chat error:', err);
+      setMessages([]);
+    }
     setChatLoading(false);
 
     setTimeout(() => {
@@ -89,7 +113,7 @@ export default function OpsMessages() {
   const filtered = conversations.filter(c => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return c.customer_phone_e164.includes(q) || c.customer_name?.toLowerCase().includes(q) || c.last_message_preview?.toLowerCase().includes(q);
+    return (c.customer_phone_e164 || '').includes(q) || (c.customer_name || '').toLowerCase().includes(q) || (c.last_message_preview || '').toLowerCase().includes(q);
   });
 
   const isUnread = (c: Conversation) => {
@@ -105,6 +129,22 @@ export default function OpsMessages() {
     'Tu auto está listo ✨',
     '¡Gracias por confiar en Washero! 🙌',
   ];
+
+  const formatTime = (dateStr: string) => {
+    try {
+      return format(parseISO(dateStr), 'HH:mm');
+    } catch {
+      return '';
+    }
+  };
+
+  const formatDistance = (dateStr: string) => {
+    try {
+      return formatDistanceToNow(parseISO(dateStr), { addSuffix: false, locale: es });
+    } catch {
+      return '';
+    }
+  };
 
   // Chat view
   if (selectedConv) {
@@ -123,6 +163,8 @@ export default function OpsMessages() {
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
           {chatLoading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+          ) : messages.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">Sin mensajes</div>
           ) : messages.map(m => (
             <div key={m.id} className={cn("flex", m.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
               <div className={cn(
@@ -133,7 +175,7 @@ export default function OpsMessages() {
               )}>
                 <p className="whitespace-pre-wrap break-words">{m.body || '📎 Media'}</p>
                 <p className={cn("text-[10px] mt-1 text-right", m.direction === 'outbound' ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-                  {format(parseISO(m.created_at), 'HH:mm')}
+                  {formatTime(m.created_at)}
                 </p>
               </div>
             </div>
@@ -142,24 +184,14 @@ export default function OpsMessages() {
 
         <div className="px-3 py-1.5 overflow-x-auto flex gap-1.5 shrink-0">
           {quickReplies.map(qr => (
-            <button
-              key={qr}
-              onClick={() => setReplyText(qr)}
-              className="shrink-0 text-[11px] px-3 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 border border-border"
-            >
+            <button key={qr} onClick={() => setReplyText(qr)} className="shrink-0 text-[11px] px-3 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 border border-border">
               {qr}
             </button>
           ))}
         </div>
 
         <div className="bg-card border-t border-border px-3 py-2 flex items-center gap-2 shrink-0">
-          <Input
-            value={replyText}
-            onChange={e => setReplyText(e.target.value)}
-            placeholder="Escribir mensaje..."
-            className="flex-1 h-10"
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendReply()}
-          />
+          <Input value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Escribir mensaje..." className="flex-1 h-10" onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendReply()} />
           <Button size="icon" className="h-10 w-10 shrink-0" disabled={!replyText.trim() || sending} onClick={sendReply}>
             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </Button>
@@ -180,6 +212,12 @@ export default function OpsMessages() {
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+      ) : loadError ? (
+        <div className="text-center py-12">
+          <AlertTriangle className="w-10 h-10 mx-auto mb-2 text-yellow-500 opacity-60" />
+          <p className="text-sm text-muted-foreground">{loadError}</p>
+          <p className="text-xs text-muted-foreground mt-1">Las conversaciones de WhatsApp se mostrarán cuando estén disponibles.</p>
+        </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <MessageCircle className="w-10 h-10 mx-auto mb-2 opacity-40" />
@@ -197,7 +235,7 @@ export default function OpsMessages() {
               >
                 <div className="w-10 h-10 rounded-full bg-washero-charcoal flex items-center justify-center shrink-0">
                   <span className="text-primary text-sm font-bold">
-                    {(c.customer_name || c.customer_phone_e164).charAt(0).toUpperCase()}
+                    {(c.customer_name || c.customer_phone_e164 || '?').charAt(0).toUpperCase()}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -206,7 +244,7 @@ export default function OpsMessages() {
                       {c.customer_name || c.customer_phone_e164}
                     </p>
                     <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
-                      {formatDistanceToNow(parseISO(c.last_message_at), { addSuffix: false, locale: es })}
+                      {formatDistance(c.last_message_at)}
                     </span>
                   </div>
                   <p className={cn("text-xs truncate mt-0.5", unread ? "text-foreground font-medium" : "text-muted-foreground")}>

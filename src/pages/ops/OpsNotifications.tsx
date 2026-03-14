@@ -1,9 +1,8 @@
 import { useOperatorNotifications, OperatorNotification } from '@/hooks/useOperatorNotifications';
 import { Bell, CheckCheck, Loader2, Calendar, MessageCircle, CreditCard, XCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const EVENT_ICONS: Record<string, typeof Bell> = {
@@ -20,6 +19,14 @@ const EVENT_COLORS: Record<string, string> = {
   booking_rescheduled: 'bg-yellow-500/15 text-yellow-600',
   new_whatsapp: 'bg-accent/15 text-accent',
   payment_received: 'bg-accent/15 text-accent',
+};
+
+const formatTimeAgo = (dateStr: string) => {
+  try {
+    return formatDistanceToNow(parseISO(dateStr), { addSuffix: true, locale: es });
+  } catch {
+    return '';
+  }
 };
 
 export default function OpsNotifications() {
@@ -76,7 +83,7 @@ export default function OpsNotifications() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    {formatDistanceToNow(parseISO(n.created_at), { addSuffix: true, locale: es })}
+                    {formatTimeAgo(n.created_at)}
                   </p>
                 </div>
               </button>

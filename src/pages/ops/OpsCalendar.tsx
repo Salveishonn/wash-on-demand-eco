@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { format, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Loader2, MapPin, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -27,28 +27,34 @@ export default function OpsCalendar() {
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
   useEffect(() => {
-    setIsLoading(true);
-    supabase
-      .from('bookings')
-      .select('id, booking_date, booking_time, customer_name, service_name, address, barrio, status, payment_status')
-      .eq('booking_date', dateStr)
-      .eq('is_test', false)
-      .neq('status', 'cancelled')
-      .order('booking_time', { ascending: true })
-      .then(({ data }) => {
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('id, booking_date, booking_time, customer_name, service_name, address, barrio, status, payment_status')
+          .eq('booking_date', dateStr)
+          .eq('is_test', false)
+          .neq('status', 'cancelled')
+          .order('booking_time', { ascending: true });
+
+        if (error) console.warn('[OpsCalendar] Error:', error);
         setBookings((data || []) as CalBooking[]);
-        setIsLoading(false);
-      });
+      } catch (err) {
+        console.warn('[OpsCalendar] Unexpected error:', err);
+        setBookings([]);
+      }
+      setIsLoading(false);
+    };
+    load();
   }, [dateStr]);
 
-  // Generate 7-day strip centered on selected date
   const days = Array.from({ length: 7 }, (_, i) => addDays(subDays(selectedDate, 3), i));
 
   return (
     <div className="px-4 py-4 space-y-4">
       <h2 className="text-lg font-display font-bold text-foreground">Agenda</h2>
 
-      {/* Date strip */}
       <div className="flex items-center gap-1">
         <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => setSelectedDate(d => subDays(d, 1))}>
           <ChevronLeft className="w-4 h-4" />
@@ -78,12 +84,10 @@ export default function OpsCalendar() {
         </Button>
       </div>
 
-      {/* Title */}
       <p className="text-sm font-medium text-muted-foreground capitalize">
         {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
       </p>
 
-      {/* Bookings */}
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
       ) : bookings.length === 0 ? (
@@ -95,7 +99,7 @@ export default function OpsCalendar() {
           {bookings.map(b => (
             <div key={b.id} className="bg-card rounded-xl border border-border px-4 py-3 flex items-center gap-3">
               <div className="min-w-[44px] text-center">
-                <span className="text-sm font-bold font-display text-foreground">{b.booking_time.slice(0, 5)}</span>
+                <span className="text-sm font-bold font-display text-foreground">{(b.booking_time || '').slice(0, 5)}</span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">{b.customer_name}</p>
@@ -110,7 +114,7 @@ export default function OpsCalendar() {
                 variant="outline" 
                 className={cn("text-[10px] shrink-0",
                   b.status === 'completed' ? 'bg-accent/20 text-accent border-accent/30' :
-                  b.status === 'confirmed' ? 'bg-washero-water/20 text-washero-water border-washero-water/30' :
+                  b.status === 'confirmed' ? 'bg-primary/20 text-primary border-primary/30' :
                   'bg-yellow-500/20 text-yellow-700 border-yellow-300'
                 )}
               >
