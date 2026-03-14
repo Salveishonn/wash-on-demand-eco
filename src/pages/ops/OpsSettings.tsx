@@ -1,7 +1,16 @@
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Bell, BellOff, LogOut, Shield, Smartphone } from 'lucide-react';
+import { 
+  Bell, BellOff, BellRing, LogOut, Shield, Smartphone, 
+  Send, CheckCircle2, XCircle, AlertTriangle, Loader2 
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { 
+  getPushState, subscribeToPush, sendTestPush, 
+  type PushState 
+} from '@/lib/pushNotifications';
+import { toast } from 'sonner';
 
 interface OpsSettingsProps {
   pushEnabled: boolean;
@@ -11,10 +20,145 @@ interface OpsSettingsProps {
 export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsProps) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [pushState, setPushState] = useState<PushState>('not_requested');
+  const [isActivating, setIsActivating] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+
+  useEffect(() => {
+    getPushState().then(setPushState).catch(() => setPushState('unsupported'));
+  }, [pushEnabled]);
+
+  const handleActivate = useCallback(async () => {
+    if (!user) return;
+    setIsActivating(true);
+    setTestResult(null);
+    
+    const result = await subscribeToPush(user.id);
+    
+    if (result.success) {
+      setPushState('subscribed');
+      onEnablePush();
+      toast.success('Notificaciones push activadas');
+    } else if (result.error === 'denied') {
+      setPushState('denied');
+      toast.error('Permiso denegado. Habilitalo desde los ajustes del navegador.');
+    } else {
+      toast.error(result.error || 'Error al activar push');
+    }
+    
+    setIsActivating(false);
+  }, [user, onEnablePush]);
+
+  const handleTestPush = useCallback(async () => {
+    setIsTesting(true);
+    setTestResult(null);
+
+    const result = await sendTestPush();
+    
+    if (result.success) {
+      setTestResult('success');
+      toast.success('Notificación de prueba enviada. Revisá tu pantalla.');
+    } else {
+      setTestResult('error');
+      toast.error(result.error || 'Error al enviar prueba');
+    }
+    
+    setIsTesting(false);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/admin/login');
+  };
+
+  const renderPushStatus = () => {
+    switch (pushState) {
+      case 'unsupported':
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <BellOff className="w-4 h-4" />
+              <span>No compatible en este navegador</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Las notificaciones push requieren un navegador compatible (Chrome, Edge, Firefox) o instalar la app como PWA en iOS 16.4+.
+            </p>
+          </div>
+        );
+
+      case 'denied':
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <XCircle className="w-4 h-4" />
+              <span>Permiso denegado</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              El permiso fue denegado. Para habilitarlo, andá a la configuración del navegador → Sitios → Notificaciones y permití este sitio.
+            </p>
+          </div>
+        );
+
+      case 'subscribed':
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-accent">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Push activado ✓</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Vas a recibir notificaciones de nuevas reservas, mensajes y más, incluso con la app cerrada.
+            </p>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleTestPush} 
+              disabled={isTesting}
+              className="h-9 gap-1.5"
+            >
+              {isTesting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : testResult === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-accent" />
+              ) : testResult === 'error' ? (
+                <XCircle className="w-4 h-4 text-destructive" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              {isTesting ? 'Enviando...' : 'Enviar notificación de prueba'}
+            </Button>
+          </div>
+        );
+
+      case 'not_requested':
+      case 'unsubscribed':
+      default:
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <AlertTriangle className="w-4 h-4" />
+              <span>{pushState === 'unsubscribed' ? 'Push no suscripto' : 'Permiso no solicitado'}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Activá las notificaciones push para recibir alertas de nuevas reservas, mensajes y más, incluso con la app cerrada.
+            </p>
+            <Button 
+              size="sm" 
+              onClick={handleActivate} 
+              disabled={isActivating}
+              className="h-9 gap-1.5"
+            >
+              {isActivating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <BellRing className="w-4 h-4" />
+              )}
+              {isActivating ? 'Activando...' : 'Activar notificaciones'}
+            </Button>
+          </div>
+        );
+    }
   };
 
   return (
@@ -40,22 +184,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
           <Bell className="w-4 h-4" />
           Notificaciones Push
         </h3>
-        {pushEnabled ? (
-          <div className="flex items-center gap-2 text-sm text-accent">
-            <Bell className="w-4 h-4" />
-            <span>Activadas ✓</span>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Activá las notificaciones push para recibir alertas de nuevas reservas, mensajes y más.
-            </p>
-            <Button size="sm" onClick={onEnablePush} className="h-9">
-              <Bell className="w-4 h-4 mr-1.5" />
-              Activar notificaciones
-            </Button>
-          </div>
-        )}
+        {renderPushStatus()}
       </div>
 
       {/* Install PWA */}
@@ -65,7 +194,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
           Instalar App
         </h3>
         <p className="text-xs text-muted-foreground">
-          Podés instalar Washero Ops como una app en tu celular. Abrí este sitio en Chrome/Safari y tocá "Agregar a pantalla de inicio".
+          Podés instalar Washero Driver como una app en tu celular. Abrí este sitio en Chrome/Safari y tocá "Agregar a pantalla de inicio".
         </p>
       </div>
 

@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWebPush } from "../_shared/webPushCrypto.ts";
+import type { PushSubscription } from "../_shared/webPushCrypto.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +16,7 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  // Verify service role key (internal-only)
+  // Only internal callers (service role)
   const authHeader = req.headers.get("Authorization");
   if (!authHeader || authHeader !== `Bearer ${supabaseServiceKey}`) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -46,11 +48,11 @@ serve(async (req) => {
       console.error("[send-ops-notification] Insert error:", insertError);
     }
 
-    // 2. Send push notifications to all subscribed operators
-    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
+    // 2. Send real push notifications
     const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
+    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
 
-    if (!vapidPrivateKey || !vapidPublicKey) {
+    if (!vapidPublicKey || !vapidPrivateKey) {
       console.log("[send-ops-notification] VAPID keys not configured, skipping push");
       return new Response(
         JSON.stringify({ success: true, push: false, reason: "no_vapid_keys" }),
@@ -58,7 +60,7 @@ serve(async (req) => {
       );
     }
 
-    // Get all push subscriptions
+    // Get push subscriptions
     let query = supabase.from("push_subscriptions").select("*");
     if (user_id) {
       query = query.eq("user_id", user_id);
@@ -73,26 +75,63 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[send-ops-notification] Sending to ${subscriptions.length} subscribers`);
+    console.log(`[send-ops-notification] Sending push to ${subscriptions.length} subscribers`);
 
-    // Web Push requires crypto operations - use web-push compatible approach
-    // For now, log that we'd send push. Full web-push implementation requires 
-    // the web-push library which needs Node.js or a Deno-compatible version.
-    // The in-app notification + realtime subscription handles immediate delivery.
+    const pushPayload = {
+      title: title || "Washero Driver",
+      body: body || "Nueva notificación",
+      icon: "/icons/washero-driver-192.png",
+      badge: "/icons/washero-driver-192.png",
+      tag: event_type || "washero-ops",
+      url: data?.url || "/ops",
+      data: data || {},
+    };
+
+    const results = await Promise.allSettled(
+      subscriptions.map(async (sub: any) => {
+        const pushSub: PushSubscription = {
+          endpoint: sub.endpoint,
+          p256dh: sub.p256dh,
+          auth: sub.auth,
+        };
+        const result = await sendWebPush(pushSub, pushPayload, vapidPublicKey, vapidPrivateKey);
+        
+        // If subscription is expired/invalid (410 Gone), remove it
+        if (result.status === 410 || result.status === 404) {
+          console.log("[send-ops-notification] Removing expired subscription:", sub.endpoint.slice(0, 50));
+          await supabase.from("push_subscriptions").delete().eq("id", sub.id);
+        }
+        
+        return result;
+      })
+    );
+
+    const sent = results.filter(
+      (r) => r.status === "fulfilled" && r.value.success
+    ).length;
+    const failed = results.length - sent;
+
+    console.log(`[send-ops-notification] Push results: ${sent} sent, ${failed} failed`);
     
-    console.log("[send-ops-notification] In-app notification created, realtime will deliver instantly");
+    // Log failures for debugging
+    results.forEach((r) => {
+      if (r.status === "fulfilled" && !r.value.success) {
+        console.log(`[send-ops-notification] Push failed: ${r.value.status} ${r.value.error}`);
+      } else if (r.status === "rejected") {
+        console.log(`[send-ops-notification] Push rejected: ${r.reason}`);
+      }
+    });
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        push: false, 
-        in_app: true,
-        subscribers: subscriptions.length,
-        message: "In-app notification created with realtime delivery"
+      JSON.stringify({
+        success: true,
+        push: true,
+        sent,
+        failed,
+        total: subscriptions.length,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
   } catch (error: any) {
     console.error("[send-ops-notification] Error:", error);
     return new Response(
