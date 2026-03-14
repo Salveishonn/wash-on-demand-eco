@@ -16,6 +16,10 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { AddressAutocomplete, PlaceSelection } from "@/components/booking/AddressAutocomplete";
 import { SubscriptionCalendarScheduler } from "@/components/booking/SubscriptionCalendarScheduler";
+import { ProfileSection } from "@/components/dashboard/ProfileSection";
+import { SuggestedWashCard } from "@/components/dashboard/SuggestedWashCard";
+import { NeighborhoodAlertCard } from "@/components/dashboard/NeighborhoodAlertCard";
+import { AutoScheduleToggle } from "@/components/dashboard/AutoScheduleToggle";
 import {
   Loader2,
   Calendar,
@@ -39,6 +43,8 @@ import {
   ChevronRight,
   ArrowRight,
   MessageCircle,
+  User,
+  Settings,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -57,6 +63,9 @@ interface Subscription {
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
+  plan_type: string | null;
+  max_vehicles: number | null;
+  shared_usage: boolean | null;
   subscription_plans?: {
     name: string;
     washes_per_month: number;
@@ -71,6 +80,7 @@ interface UserCar {
   model: string | null;
   plate: string | null;
   color: string | null;
+  year: number | null;
   is_default: boolean | null;
 }
 
@@ -120,6 +130,8 @@ const PLAN_INFO: Record<string, { name: string; washes: number; price: string; s
   flota: { name: "Plan Flota", washes: 10, price: "$250.000", serviceIncluded: "Lavado Básico", shared: true, maxVehicles: 10 },
 };
 
+type DashboardTab = "dashboard" | "plan" | "upcoming" | "cars" | "history" | "billing" | "profile";
+
 /* ─────────── Expandable section helper ─────────── */
 function Section({ title, icon: Icon, children, defaultOpen = true, action }: {
   title: string;
@@ -162,10 +174,21 @@ function Section({ title, icon: Icon, children, defaultOpen = true, action }: {
   );
 }
 
+const NAV_ITEMS: { key: DashboardTab; label: string; icon: any }[] = [
+  { key: "dashboard", label: "Dashboard", icon: Sparkles },
+  { key: "plan", label: "Mi Plan", icon: CreditCard },
+  { key: "upcoming", label: "Próximos", icon: Calendar },
+  { key: "cars", label: "Mis autos", icon: Car },
+  { key: "history", label: "Historial", icon: History },
+  { key: "billing", label: "Facturación", icon: FileText },
+  { key: "profile", label: "Mi Perfil", icon: User },
+];
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const [activeTab, setActiveTab] = useState<DashboardTab>("dashboard");
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -175,6 +198,8 @@ export default function Dashboard() {
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [pastBookings, setPastBookings] = useState<Booking[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [autoScheduleEnabled, setAutoScheduleEnabled] = useState(false);
+  const [neighborhoodData, setNeighborhoodData] = useState<{ neighborhood: string; count: number } | null>(null);
 
   // Modal states
   const [isCarModalOpen, setIsCarModalOpen] = useState(false);
@@ -184,7 +209,7 @@ export default function Dashboard() {
   const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [carForm, setCarForm] = useState({ nickname: "", brand: "", model: "", plate: "", color: "" });
+  const [carForm, setCarForm] = useState({ nickname: "", brand: "", model: "", plate: "", color: "", year: "" });
   const [addressForm, setAddressForm] = useState({ label: "Casa", line1: "", neighborhood: "", city: "" });
 
   useEffect(() => { checkAuth(); }, []);
@@ -227,6 +252,23 @@ export default function Dashboard() {
 
       const { data: invoicesData } = await supabase.from("invoices").select("id, invoice_number, status, amount_ars, issued_at, paid_at, pdf_url").eq("user_id", userId).order("issued_at", { ascending: false }).limit(50);
       setInvoices((invoicesData as Invoice[]) || []);
+
+      // Check neighborhood clustering
+      if (addressesData && addressesData.length > 0) {
+        const primaryAddress = addressesData.find((a: any) => a.is_default) || addressesData[0];
+        if (primaryAddress.neighborhood) {
+          const { data: nearbyBookings } = await supabase
+            .from("bookings")
+            .select("id")
+            .eq("barrio", primaryAddress.neighborhood)
+            .gte("booking_date", today)
+            .neq("status", "cancelled")
+            .limit(5);
+          if (nearbyBookings && nearbyBookings.length >= 2) {
+            setNeighborhoodData({ neighborhood: primaryAddress.neighborhood, count: nearbyBookings.length });
+          }
+        }
+      }
     } catch (error) {
       console.error("Error fetching user data:", error);
     } finally {
@@ -258,10 +300,10 @@ export default function Dashboard() {
   const openCarModal = (car?: UserCar) => {
     if (car) {
       setEditingCar(car);
-      setCarForm({ nickname: car.nickname || "", brand: car.brand || "", model: car.model || "", plate: car.plate || "", color: car.color || "" });
+      setCarForm({ nickname: car.nickname || "", brand: car.brand || "", model: car.model || "", plate: car.plate || "", color: car.color || "", year: car.year?.toString() || "" });
     } else {
       setEditingCar(null);
-      setCarForm({ nickname: "", brand: "", model: "", plate: "", color: "" });
+      setCarForm({ nickname: "", brand: "", model: "", plate: "", color: "", year: "" });
     }
     setIsCarModalOpen(true);
   };
@@ -270,11 +312,12 @@ export default function Dashboard() {
     if (!user) return;
     setIsSubmitting(true);
     try {
+      const payload = { ...carForm, year: carForm.year ? parseInt(carForm.year) : null } as any;
       if (editingCar) {
-        const { error } = await supabase.from("cars").update(carForm).eq("id", editingCar.id);
+        const { error } = await supabase.from("cars").update(payload).eq("id", editingCar.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("cars").insert({ ...carForm, user_id: user.id });
+        const { error } = await supabase.from("cars").insert({ ...payload, user_id: user.id });
         if (error) throw error;
       }
       toast({ title: editingCar ? "Auto actualizado" : "Auto agregado" });
@@ -363,9 +406,13 @@ export default function Dashboard() {
       ? `$${Math.round(subscription.subscription_plans.price_cents / 100).toLocaleString("es-AR")}`
       : "N/A",
     serviceIncluded: subscription.included_service === "complete" ? "Detailing Completo" : "Lavado Exterior + Interior",
+    shared: subscription.shared_usage || false,
+    maxVehicles: subscription.max_vehicles || 1,
   }) : null;
   const washesRemaining = subscription?.washes_remaining ?? planInfo?.washes ?? 0;
   const totalWashes = planInfo?.washes ?? 0;
+  const isSharedPlan = planInfo?.shared || false;
+  const lastBookingDate = upcomingBookings.length > 0 ? upcomingBookings[upcomingBookings.length - 1]?.booking_date : (pastBookings.length > 0 ? pastBookings[0]?.booking_date : null);
 
   if (isLoading) {
     return (
@@ -377,286 +424,430 @@ export default function Dashboard() {
     );
   }
 
-  return (
-    <Layout>
-      {/* Compact header */}
-      <section className="py-5 md:py-8 bg-washero-charcoal">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <h1 className="font-display text-xl md:text-2xl font-black text-background truncate">
-                Hola, <span className="text-primary">{getDisplayName()}</span>
-              </h1>
-              <p className="text-background/60 text-xs md:text-sm truncate">{user?.email}</p>
-            </div>
-            <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-background/70 hover:text-background shrink-0">
-              <LogOut className="w-4 h-4" />
-              <span className="hidden md:inline ml-1.5">Salir</span>
-            </Button>
-          </div>
+  /* ─────── Tab Navigation ─────── */
+  const renderNavigation = () => (
+    <div className="overflow-x-auto scrollbar-hide -mx-4 px-4">
+      <div className="flex gap-1 min-w-max pb-1">
+        {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+              activeTab === key
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            <span className="hidden sm:inline">{label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  /* ─────── Subscription Plan Card ─────── */
+  const renderPlanCard = () => {
+    if (!subscription) {
+      return (
+        <div className="bg-card border-2 border-dashed border-primary/30 rounded-2xl p-6 text-center">
+          <Sparkles className="w-10 h-10 text-primary mx-auto mb-3" />
+          <h2 className="font-display text-lg font-bold text-foreground mb-1">¿Querés lavar más seguido?</h2>
+          <p className="text-sm text-muted-foreground mb-4">Suscribite a un plan mensual y ahorrá hasta un 35%.</p>
+          <Button onClick={() => navigate("/suscripciones")} size="lg">
+            Ver planes <ArrowRight className="w-4 h-4 ml-1.5" />
+          </Button>
         </div>
-      </section>
+      );
+    }
 
-      <section className="py-5 md:py-8 bg-background">
-        <div className="container mx-auto px-4 space-y-4 max-w-2xl">
+    return (
+      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+        {/* Status bar */}
+        <div className={`px-5 py-3 flex items-center justify-between ${
+          subscription.status === "active" ? "bg-washero-eco/10" :
+          subscription.status === "paused" ? "bg-orange-50" :
+          subscription.status === "pending" ? "bg-yellow-50" : "bg-muted"
+        }`}>
+          <span className={`inline-flex items-center gap-1.5 text-xs font-bold tracking-wide uppercase ${
+            subscription.status === "active" ? "text-washero-eco" :
+            subscription.status === "paused" ? "text-orange-700" :
+            subscription.status === "pending" ? "text-yellow-700" : "text-muted-foreground"
+          }`}>
+            {subscription.status === "active" ? <CheckCircle className="w-3.5 h-3.5" /> :
+             subscription.status === "paused" ? <Pause className="w-3.5 h-3.5" /> :
+             <Clock className="w-3.5 h-3.5" />}
+            {subscription.status === "active" ? "Activo" :
+             subscription.status === "paused" ? "Pausado" :
+             subscription.status === "pending" ? "Pendiente" : subscription.status}
+          </span>
+          <span className="font-display text-sm font-bold text-foreground">{planInfo?.name}</span>
+        </div>
 
-          {/* ═══ SUBSCRIPTION CARD ═══ */}
-          {subscription ? (
-            <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-              {/* A) Top row — status badge + plan name */}
-              <div className={`px-5 py-3 flex items-center justify-between ${
-                subscription.status === "active" ? "bg-washero-eco/10" :
-                subscription.status === "paused" ? "bg-orange-50" :
-                subscription.status === "pending" ? "bg-yellow-50" :
-                "bg-muted"
-              }`}>
-                <span className={`inline-flex items-center gap-1.5 text-xs font-bold tracking-wide uppercase ${
-                  subscription.status === "active" ? "text-washero-eco" :
-                  subscription.status === "paused" ? "text-orange-700" :
-                  subscription.status === "pending" ? "text-yellow-700" :
-                  "text-muted-foreground"
-                }`}>
-                  {subscription.status === "active" ? <CheckCircle className="w-3.5 h-3.5" /> :
-                   subscription.status === "paused" ? <Pause className="w-3.5 h-3.5" /> :
-                   <Clock className="w-3.5 h-3.5" />}
-                  {subscription.status === "active" ? "Activo" :
-                   subscription.status === "paused" ? "Pausado" :
-                   subscription.status === "pending" ? "Pendiente" :
-                   subscription.status}
+        <div className="p-5 space-y-5">
+          {/* Metrics */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center py-4 px-2 bg-primary/5 rounded-xl border border-primary/10">
+              <p className="text-3xl font-black text-primary leading-none">{washesRemaining}</p>
+              <p className="text-xs text-muted-foreground mt-1.5 font-medium">Restantes</p>
+            </div>
+            <div className="text-center py-4 px-2 bg-muted/40 rounded-xl">
+              <p className="text-3xl font-black text-foreground leading-none">{subscription.washes_used_in_cycle || 0}</p>
+              <p className="text-xs text-muted-foreground mt-1.5 font-medium">Usados</p>
+            </div>
+            <div className="text-center py-4 px-2 bg-muted/40 rounded-xl">
+              <p className="text-3xl font-black text-foreground leading-none">{totalWashes}</p>
+              <p className="text-xs text-muted-foreground mt-1.5 font-medium">Total/mes</p>
+            </div>
+          </div>
+
+          {/* Service + price */}
+          <div className="space-y-2">
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between bg-muted/30 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                <span className="text-sm text-foreground font-medium">{planInfo?.serviceIncluded}</span>
+              </div>
+              <span className="font-display text-base font-bold text-foreground sm:text-right pl-6 sm:pl-0">{planInfo?.price}<span className="text-xs font-normal text-muted-foreground">/mes</span></span>
+            </div>
+            {isSharedPlan && (
+              <div className="flex items-center gap-2 bg-primary/5 rounded-xl px-4 py-2.5 border border-primary/10">
+                <Car className="w-4 h-4 text-primary shrink-0" />
+                <span className="text-sm text-foreground">
+                  Hasta {planInfo?.maxVehicles} vehículos · lavados compartidos
                 </span>
-                <span className="font-display text-sm font-bold text-foreground">{planInfo?.name}</span>
               </div>
+            )}
+          </div>
 
-              <div className="p-5 space-y-5">
-                {/* B) Main metrics row */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center py-4 px-2 bg-primary/5 rounded-xl border border-primary/10">
-                    <p className="text-3xl font-black text-primary leading-none">{washesRemaining}</p>
-                    <p className="text-xs text-muted-foreground mt-1.5 font-medium">Restantes</p>
-                  </div>
-                  <div className="text-center py-4 px-2 bg-muted/40 rounded-xl">
-                    <p className="text-3xl font-black text-foreground leading-none">{subscription.washes_used_in_cycle || 0}</p>
-                    <p className="text-xs text-muted-foreground mt-1.5 font-medium">Usados</p>
-                  </div>
-                  <div className="text-center py-4 px-2 bg-muted/40 rounded-xl">
-                    <p className="text-3xl font-black text-foreground leading-none">{totalWashes}</p>
-                    <p className="text-xs text-muted-foreground mt-1.5 font-medium">Total/mes</p>
-                  </div>
-                </div>
-
-                {/* C) Included service + price + shared info */}
-                <div className="space-y-2">
-                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between bg-muted/30 rounded-xl px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-primary shrink-0" />
-                      <span className="text-sm text-foreground font-medium">{planInfo?.serviceIncluded}</span>
-                    </div>
-                    <span className="font-display text-base font-bold text-foreground sm:text-right pl-6 sm:pl-0">{planInfo?.price}<span className="text-xs font-normal text-muted-foreground">/mes</span></span>
-                  </div>
-                  {planInfo?.shared && (
-                    <div className="flex items-center gap-2 bg-primary/5 rounded-xl px-4 py-2.5 border border-primary/10">
-                      <Car className="w-4 h-4 text-primary shrink-0" />
-                      <span className="text-sm text-foreground">
-                        Hasta {planInfo.maxVehicles} vehículos · lavados compartidos
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* D) Main action area — primary CTA full-width */}
-                <div className="space-y-2.5">
-                  {subscription.status === "active" && washesRemaining > 0 && (
-                    <Button className="w-full" size="xl" onClick={() => setIsSubscriptionSchedulerOpen(true)}>
-                      <Calendar className="w-5 h-5 mr-2" />
-                      Agendar lavado
-                    </Button>
-                  )}
-                  {subscription.status === "active" && washesRemaining === 0 && (
-                    <div className="text-center py-3 px-4 bg-muted/50 rounded-xl">
-                      <p className="text-sm text-muted-foreground font-medium">No te quedan lavados este mes</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Se renuevan al inicio del próximo ciclo</p>
-                    </div>
-                  )}
-                  {/* Secondary actions row */}
-                  {subscription.status !== "pending" && (
-                    <Button
-                      variant="ghost"
-                      size="default"
-                      onClick={toggleSubscriptionPause}
-                      className="w-full text-muted-foreground hover:text-foreground"
-                    >
-                      {subscription.status === "paused" ? (
-                        <><Play className="w-4 h-4 mr-1.5" /> Reanudar plan</>
-                      ) : (
-                        <><Pause className="w-4 h-4 mr-1.5" /> Pausar plan</>
-                      )}
-                    </Button>
-                  )}
-                </div>
-
-                {subscription.status === "pending" && (
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                    <div className="flex items-start gap-2.5 text-yellow-800">
-                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="text-sm font-semibold">Tu suscripción está pendiente de activación</p>
-                        <p className="text-xs mt-1 text-yellow-700 leading-relaxed">Te contactaremos para coordinar el pago y activar tu plan.</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* No subscription CTA */
-            <div className="bg-card border-2 border-dashed border-primary/30 rounded-2xl p-6 text-center">
-              <Sparkles className="w-10 h-10 text-primary mx-auto mb-3" />
-              <h2 className="font-display text-lg font-bold text-foreground mb-1">¿Querés lavar más seguido?</h2>
-              <p className="text-sm text-muted-foreground mb-4">Suscribite a un plan mensual y ahorrá hasta un 35%.</p>
-              <Button onClick={() => navigate("/suscripciones")} size="lg">
-                Ver planes <ArrowRight className="w-4 h-4 ml-1.5" />
-              </Button>
-            </div>
+          {/* Auto-schedule toggle */}
+          {subscription.status === "active" && totalWashes >= 2 && (
+            <AutoScheduleToggle
+              washesPerMonth={totalWashes}
+              enabled={autoScheduleEnabled}
+              onToggle={setAutoScheduleEnabled}
+            />
           )}
 
-          {/* ═══ UPCOMING BOOKINGS ═══ */}
-          <Section
-            title={`Próximos lavados${upcomingBookings.length > 0 ? ` (${upcomingBookings.length})` : ""}`}
-            icon={Calendar}
-            action={
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate("/reservar")}>
-                <Plus className="w-3.5 h-3.5 mr-1" /> Agendar
+          {/* Main actions */}
+          <div className="space-y-2.5">
+            {subscription.status === "active" && washesRemaining > 0 && (
+              <Button className="w-full" size="xl" onClick={() => setIsSubscriptionSchedulerOpen(true)}>
+                <Calendar className="w-5 h-5 mr-2" />
+                Agendar lavado
               </Button>
-            }
-          >
-            {upcomingBookings.length > 0 ? (
-              <div className="space-y-3">
-                {upcomingBookings.map((b) => (
-                  <div key={b.id} className="p-4 bg-muted/30 rounded-xl">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-display font-bold text-sm text-foreground">{b.service_name}</p>
-                        <p className="text-sm text-muted-foreground mt-0.5">
-                          {format(new Date(`${b.booking_date}T${b.booking_time}`), "EEEE d 'de' MMMM, HH:mm'hs'", { locale: es })}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${
-                          b.status === "confirmed" ? "bg-washero-eco/15 text-washero-eco" : "bg-yellow-100 text-yellow-800"
-                        }`}>
-                          {b.status === "confirmed" ? "Confirmado" : "Pendiente"}
-                        </span>
-                        {b.is_subscription_booking && (
-                          <span className="text-xs text-primary flex items-center gap-0.5 font-medium">
-                            <Sparkles className="w-3 h-3" /> Plan
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            )}
+            {subscription.status === "active" && washesRemaining === 0 && (
+              <div className="text-center py-3 px-4 bg-muted/50 rounded-xl">
+                <p className="text-sm text-muted-foreground font-medium">No te quedan lavados este mes</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Se renuevan al inicio del próximo ciclo</p>
               </div>
-            ) : (
-              <div className="text-center py-8">
-                <Calendar className="w-12 h-12 mx-auto mb-3 text-muted-foreground/15" />
-                <p className="text-sm font-medium text-foreground">No tenés lavados programados</p>
-                <p className="text-xs text-muted-foreground mt-1 mb-4">Agendá tu próximo lavado ahora</p>
-                <Button variant="outline" size="default" onClick={() => navigate("/reservar")}>
-                  <Plus className="w-4 h-4 mr-1.5" /> Agendar un lavado
+            )}
+            {subscription.status !== "pending" && (
+              <Button
+                variant="ghost"
+                size="default"
+                onClick={toggleSubscriptionPause}
+                className="w-full text-muted-foreground hover:text-foreground"
+              >
+                {subscription.status === "paused" ? (
+                  <><Play className="w-4 h-4 mr-1.5" /> Reanudar plan</>
+                ) : (
+                  <><Pause className="w-4 h-4 mr-1.5" /> Pausar plan</>
+                )}
+              </Button>
+            )}
+          </div>
+
+          {subscription.status === "pending" && (
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+              <div className="flex items-start gap-2.5 text-yellow-800">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold">Tu suscripción está pendiente de activación</p>
+                  <p className="text-xs mt-1 text-yellow-700 leading-relaxed">Te contactaremos para coordinar el pago y activar tu plan.</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  /* ─────── Fleet vehicles section ─────── */
+  const renderFleetVehicles = () => {
+    if (!isSharedPlan || !subscription) return null;
+    return (
+      <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Car className="w-4 h-4 text-primary" />
+            <span className="text-sm font-bold text-foreground">Vehículos registrados</span>
+          </div>
+          <span className="text-xs text-muted-foreground">{cars.length}/{planInfo?.maxVehicles || 1}</span>
+        </div>
+        {cars.length > 0 ? (
+          <div className="space-y-2">
+            {cars.map((car) => (
+              <div key={car.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
+                <Car className="w-4 h-4 text-muted-foreground shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm text-foreground truncate">
+                    {car.brand || ""} {car.model || ""} {car.year ? `(${car.year})` : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{[car.plate, car.color].filter(Boolean).join(" · ")}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-2">Sin vehículos registrados</p>
+        )}
+        {cars.length < (planInfo?.maxVehicles || 1) && (
+          <Button variant="outline" size="sm" className="w-full" onClick={() => openCarModal()}>
+            <Plus className="w-3.5 h-3.5 mr-1" /> Agregar vehículo
+          </Button>
+        )}
+        {isSharedPlan && (
+          <p className="text-xs text-muted-foreground text-center">
+            Te quedan {washesRemaining} lavados este mes para usar entre tus {cars.length} vehículo{cars.length !== 1 ? "s" : ""}.
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  /* ─────── Tab Content ─────── */
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "dashboard":
+        return (
+          <div className="space-y-4">
+            {renderPlanCard()}
+            {/* Suggested wash */}
+            {subscription?.status === "active" && washesRemaining > 0 && (
+              <SuggestedWashCard
+                washesPerMonth={totalWashes}
+                washesRemaining={washesRemaining}
+                lastBookingDate={lastBookingDate}
+                onConfirm={() => setIsSubscriptionSchedulerOpen(true)}
+              />
+            )}
+            {/* Neighborhood alert */}
+            {neighborhoodData && (
+              <NeighborhoodAlertCard
+                neighborhood={neighborhoodData.neighborhood}
+                confirmedCount={neighborhoodData.count}
+                onBook={() => navigate("/reservar")}
+              />
+            )}
+            {/* Fleet vehicles */}
+            {renderFleetVehicles()}
+            {/* Upcoming bookings compact */}
+            <Section
+              title={`Próximos lavados${upcomingBookings.length > 0 ? ` (${upcomingBookings.length})` : ""}`}
+              icon={Calendar}
+              action={
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate("/reservar")}>
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Agendar
                 </Button>
-              </div>
-            )}
-          </Section>
+              }
+            >
+              {upcomingBookings.length > 0 ? (
+                <div className="space-y-3">
+                  {upcomingBookings.slice(0, 3).map((b) => (
+                    <div key={b.id} className="p-4 bg-muted/30 rounded-xl">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display font-bold text-sm text-foreground">{b.service_name}</p>
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            {format(new Date(`${b.booking_date}T${b.booking_time}`), "EEEE d 'de' MMMM, HH:mm'hs'", { locale: es })}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            b.status === "confirmed" || b.status === "accepted" ? "bg-washero-eco/15 text-washero-eco" : "bg-yellow-100 text-yellow-800"
+                          }`}>
+                            {b.status === "confirmed" || b.status === "accepted" ? "Confirmado" : "Pendiente"}
+                          </span>
+                          {b.is_subscription_booking ? (
+                            <span className="text-xs text-primary flex items-center gap-0.5 font-medium">
+                              <Sparkles className="w-3 h-3" /> Cubierto por plan
+                            </span>
+                          ) : b.total_cents && b.total_cents > 0 ? (
+                            <span className="text-xs text-foreground font-medium">${(b.total_cents / 100).toLocaleString("es-AR")}</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {upcomingBookings.length > 3 && (
+                    <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => setActiveTab("upcoming")}>
+                      Ver todos ({upcomingBookings.length})
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Calendar className="w-12 h-12 mx-auto mb-3 text-muted-foreground/15" />
+                  <p className="text-sm font-medium text-foreground">No tenés lavados programados</p>
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">Agendá tu próximo lavado ahora</p>
+                  <Button variant="outline" size="default" onClick={() => navigate("/reservar")}>
+                    <Plus className="w-4 h-4 mr-1.5" /> Agendar un lavado
+                  </Button>
+                </div>
+              )}
+            </Section>
+          </div>
+        );
 
-          {/* ═══ CARS ═══ */}
-          <Section
-            title={`Mis autos${cars.length > 0 ? ` (${cars.length})` : ""}`}
-            icon={Car}
-            defaultOpen={false}
-            action={
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openCarModal()}>
-                <Plus className="w-3.5 h-3.5 mr-1" /> Agregar
-              </Button>
-            }
-          >
-            {cars.length > 0 ? (
-              <div className="space-y-2">
-                {cars.map((car) => (
-                  <div key={car.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm text-foreground truncate">
-                        {car.nickname || `${car.brand || ""} ${car.model || ""}`.trim() || "Mi auto"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{[car.plate, car.color].filter(Boolean).join(" · ")}</p>
-                    </div>
-                    <div className="flex gap-1 shrink-0 ml-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openCarModal(car)}>
-                        <Edit className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteCar(car.id)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <button
-                onClick={() => openCarModal()}
-                className="w-full py-6 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm"
-              >
-                <Plus className="w-5 h-5 mx-auto mb-1" />
-                Agregar mi primer auto
-              </button>
-            )}
-          </Section>
+      case "plan":
+        return (
+          <div className="space-y-4">
+            {renderPlanCard()}
+            {renderFleetVehicles()}
+          </div>
+        );
 
-          {/* ═══ ADDRESSES ═══ */}
-          <Section
-            title={`Direcciones${addresses.length > 0 ? ` (${addresses.length})` : ""}`}
-            icon={MapPin}
-            defaultOpen={false}
-            action={
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openAddressModal()}>
-                <Plus className="w-3.5 h-3.5 mr-1" /> Agregar
-              </Button>
-            }
-          >
-            {addresses.length > 0 ? (
-              <div className="space-y-2">
-                {addresses.map((addr) => (
-                  <div key={addr.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm text-foreground">{addr.label}</p>
-                      <p className="text-xs text-muted-foreground truncate">{addr.line1}</p>
+      case "upcoming":
+        return (
+          <div className="space-y-4">
+            <Section title={`Próximos lavados (${upcomingBookings.length})`} icon={Calendar}>
+              {upcomingBookings.length > 0 ? (
+                <div className="space-y-3">
+                  {upcomingBookings.map((b) => (
+                    <div key={b.id} className="p-4 bg-muted/30 rounded-xl">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display font-bold text-sm text-foreground">{b.service_name}</p>
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            {format(new Date(`${b.booking_date}T${b.booking_time}`), "EEEE d 'de' MMMM, HH:mm'hs'", { locale: es })}
+                          </p>
+                          {b.address && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" />{b.address}</p>}
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            b.status === "confirmed" || b.status === "accepted" ? "bg-washero-eco/15 text-washero-eco" : "bg-yellow-100 text-yellow-800"
+                          }`}>
+                            {b.status === "confirmed" || b.status === "accepted" ? "Confirmado" : "Pendiente"}
+                          </span>
+                          {b.is_subscription_booking ? (
+                            <span className="text-xs text-primary flex items-center gap-0.5 font-medium">
+                              <Sparkles className="w-3 h-3" /> Cubierto por plan
+                            </span>
+                          ) : b.total_cents && b.total_cents > 0 ? (
+                            <span className="text-xs font-medium text-foreground">${(b.total_cents / 100).toLocaleString("es-AR")}</span>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex gap-1 shrink-0 ml-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAddressModal(addr)}>
-                        <Edit className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteAddress(addr.id)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <button
-                onClick={() => openAddressModal()}
-                className="w-full py-6 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm"
-              >
-                <Plus className="w-5 h-5 mx-auto mb-1" />
-                Agregar mi primera dirección
-              </button>
-            )}
-          </Section>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Calendar className="w-12 h-12 mx-auto mb-3 text-muted-foreground/15" />
+                  <p className="text-sm font-medium text-foreground">No tenés lavados programados</p>
+                  <Button variant="outline" className="mt-4" onClick={() => navigate("/reservar")}>
+                    <Plus className="w-4 h-4 mr-1.5" /> Agendar un lavado
+                  </Button>
+                </div>
+              )}
+            </Section>
+          </div>
+        );
 
-          {/* ═══ HISTORY ═══ */}
-          <Section title="Historial" icon={History} defaultOpen={false}>
+      case "cars":
+        return (
+          <div className="space-y-4">
+            <Section
+              title={`Mis autos (${cars.length})`}
+              icon={Car}
+              action={
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openCarModal()}>
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Agregar
+                </Button>
+              }
+            >
+              {cars.length > 0 ? (
+                <div className="space-y-2">
+                  {cars.map((car) => (
+                    <div key={car.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm text-foreground truncate">
+                          {car.nickname || `${car.brand || ""} ${car.model || ""}`.trim() || "Mi auto"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{[car.plate, car.color, car.year].filter(Boolean).join(" · ")}</p>
+                      </div>
+                      <div className="flex gap-1 shrink-0 ml-2">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openCarModal(car)}>
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteCar(car.id)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <button
+                  onClick={() => openCarModal()}
+                  className="w-full py-6 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm"
+                >
+                  <Plus className="w-5 h-5 mx-auto mb-1" />
+                  Agregar mi primer auto
+                </button>
+              )}
+            </Section>
+
+            <Section
+              title={`Direcciones (${addresses.length})`}
+              icon={MapPin}
+              action={
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openAddressModal()}>
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Agregar
+                </Button>
+              }
+            >
+              {addresses.length > 0 ? (
+                <div className="space-y-2">
+                  {addresses.map((addr) => (
+                    <div key={addr.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm text-foreground">{addr.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">{addr.line1}</p>
+                      </div>
+                      <div className="flex gap-1 shrink-0 ml-2">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openAddressModal(addr)}>
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteAddress(addr.id)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <button
+                  onClick={() => openAddressModal()}
+                  className="w-full py-6 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors text-sm"
+                >
+                  <Plus className="w-5 h-5 mx-auto mb-1" />
+                  Agregar mi primera dirección
+                </button>
+              )}
+            </Section>
+          </div>
+        );
+
+      case "history":
+        return (
+          <Section title="Historial" icon={History}>
             {pastBookings.length > 0 ? (
               <div className="space-y-2">
-                {pastBookings.slice(0, 10).map((b) => (
+                {pastBookings.map((b) => (
                   <div key={b.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
                     <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
                       <CheckCircle className="w-4 h-4 text-muted-foreground" />
@@ -681,12 +872,14 @@ export default function Dashboard() {
               <p className="text-center py-4 text-sm text-muted-foreground">Sin lavados anteriores</p>
             )}
           </Section>
+        );
 
-          {/* ═══ INVOICES ═══ */}
-          <Section title="Facturas" icon={FileText} defaultOpen={false}>
+      case "billing":
+        return (
+          <Section title="Facturas" icon={FileText}>
             {invoices.length > 0 ? (
               <div className="space-y-2">
-                {invoices.slice(0, 10).map((inv) => (
+                {invoices.map((inv) => (
                   <div key={inv.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm text-foreground">{inv.invoice_number}</p>
@@ -718,6 +911,47 @@ export default function Dashboard() {
               <p className="text-center py-4 text-sm text-muted-foreground">Sin facturas aún</p>
             )}
           </Section>
+        );
+
+      case "profile":
+        return (
+          <Section title="Mi Perfil" icon={User}>
+            <ProfileSection userId={user.id} userEmail={user?.email || ""} />
+          </Section>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Layout>
+      {/* Compact header */}
+      <section className="py-5 md:py-8 bg-washero-charcoal">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <h1 className="font-display text-xl md:text-2xl font-black text-background truncate">
+                Hola, <span className="text-primary">{getDisplayName()}</span>
+              </h1>
+              <p className="text-background/60 text-xs md:text-sm truncate">{user?.email}</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-background/70 hover:text-background shrink-0">
+              <LogOut className="w-4 h-4" />
+              <span className="hidden md:inline ml-1.5">Salir</span>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-5 md:py-8 bg-background">
+        <div className="container mx-auto px-4 max-w-2xl space-y-4">
+          {/* Navigation */}
+          {renderNavigation()}
+
+          {/* Tab content */}
+          {renderTabContent()}
 
           {/* WhatsApp help */}
           <a
@@ -730,7 +964,6 @@ export default function Dashboard() {
             <span className="text-sm font-medium text-foreground">¿Necesitás ayuda? Escribinos por WhatsApp</span>
             <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
           </a>
-
         </div>
       </section>
 
@@ -752,7 +985,10 @@ export default function Dashboard() {
               <div><Label>Marca</Label><Input placeholder="Toyota" value={carForm.brand} onChange={(e) => setCarForm({ ...carForm, brand: e.target.value })} /></div>
               <div><Label>Modelo</Label><Input placeholder="Corolla" value={carForm.model} onChange={(e) => setCarForm({ ...carForm, model: e.target.value })} /></div>
             </div>
-            <div><Label>Color</Label><Input placeholder="Blanco" value={carForm.color} onChange={(e) => setCarForm({ ...carForm, color: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Color</Label><Input placeholder="Blanco" value={carForm.color} onChange={(e) => setCarForm({ ...carForm, color: e.target.value })} /></div>
+              <div><Label>Año</Label><Input placeholder="2023" type="number" value={carForm.year} onChange={(e) => setCarForm({ ...carForm, year: e.target.value })} /></div>
+            </div>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => setIsCarModalOpen(false)}>Cancelar</Button>
