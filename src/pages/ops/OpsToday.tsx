@@ -53,7 +53,7 @@ export default function OpsToday({ onNavigate }: OpsProps) {
       .select('id, booking_date, booking_time, customer_name, customer_phone, customer_email, address, barrio, service_name, car_type, vehicle_size, status, payment_status, payment_method, is_subscription_booking, notes, final_price_ars, total_price_ars')
       .eq('booking_date', today)
       .eq('is_test', false)
-      .in('status', ['pending', 'confirmed', 'in_progress', 'completed'])
+      .in('status', ['pending', 'confirmed', 'completed'] as const)
       .order('booking_time', { ascending: true });
 
     if (!error && data) {
