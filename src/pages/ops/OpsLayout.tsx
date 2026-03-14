@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOperatorNotifications } from '@/hooks/useOperatorNotifications';
 import { subscribeToPush, isPushSubscribed } from '@/lib/pushNotifications';
 import { 
-  CalendarDays, MessageCircle, Bell, Home, Settings, Loader2, Download,
+  CalendarDays, MessageCircle, Bell, Home, Settings, Loader2, Download, Share, Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,16 @@ import OpsSettings from './OpsSettings';
 
 type OpsTab = 'today' | 'calendar' | 'messages' | 'notifications' | 'settings';
 
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || (navigator as any).standalone === true;
+}
+
+function isIOS() {
+  return /iP(hone|ad|od)/.test(navigator.userAgent) || 
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 export default function OpsLayout() {
   const { user, isAdmin, isLoading } = useAuth();
   const { unreadCount } = useOperatorNotifications();
@@ -23,6 +33,7 @@ export default function OpsLayout() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     isPushSubscribed().then(setPushEnabled).catch(() => setPushEnabled(false));
@@ -36,6 +47,14 @@ export default function OpsLayout() {
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  // Show onboarding if not installed and first visit
+  useEffect(() => {
+    if (!isStandalone()) {
+      const dismissed = sessionStorage.getItem('ops-onboarding-dismissed');
+      if (!dismissed) setShowOnboarding(true);
+    }
   }, []);
 
   // Auto-enable push — wrapped safely
@@ -62,7 +81,10 @@ export default function OpsLayout() {
       if (deferredPrompt) {
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') setShowInstallBanner(false);
+        if (outcome === 'accepted') {
+          setShowInstallBanner(false);
+          setShowOnboarding(false);
+        }
         setDeferredPrompt(null);
       }
     } catch {}
@@ -70,6 +92,11 @@ export default function OpsLayout() {
 
   const handleEnablePush = () => {
     subscribeToPush(user.id).then(setPushEnabled).catch(() => {});
+  };
+
+  const handleDismissOnboarding = () => {
+    setShowOnboarding(false);
+    sessionStorage.setItem('ops-onboarding-dismissed', '1');
   };
 
   const tabs: { key: OpsTab; label: string; icon: typeof Home; badge?: number }[] = [
@@ -99,6 +126,54 @@ export default function OpsLayout() {
       );
     }
   };
+
+  // Onboarding / install screen
+  if (showOnboarding) {
+    return (
+      <div className="min-h-screen bg-washero-charcoal flex flex-col items-center justify-center px-6 text-center">
+        <div className="w-20 h-20 rounded-2xl bg-primary/20 flex items-center justify-center mb-6">
+          <Home className="w-10 h-10 text-primary" />
+        </div>
+        <h1 className="font-display text-2xl font-black text-primary mb-2">Washero Ops</h1>
+        <p className="text-muted-foreground text-sm max-w-xs mb-8 leading-relaxed">
+          Usá esta app para gestionar reservas, mensajes y tareas del día desde el celular.
+        </p>
+
+        <div className="w-full max-w-xs space-y-3">
+          <Button variant="hero" size="lg" className="w-full" onClick={handleDismissOnboarding}>
+            Entrar a Ops
+          </Button>
+
+          {deferredPrompt && (
+            <Button variant="outline" size="lg" className="w-full gap-2 border-primary/30 text-primary" onClick={handleInstall}>
+              <Download className="w-4 h-4" />
+              Instalar app
+            </Button>
+          )}
+
+          {!deferredPrompt && isIOS() && !isStandalone() && (
+            <div className="bg-card/10 border border-primary/20 rounded-xl p-4 text-left space-y-2 mt-4">
+              <p className="text-xs font-semibold text-primary uppercase tracking-wider">Instalar en iPhone</p>
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <Share className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+                <span>Tocá el botón <strong className="text-foreground">Compartir</strong> en Safari</span>
+              </div>
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <Plus className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+                <span>Seleccioná <strong className="text-foreground">Agregar a pantalla de inicio</strong></span>
+              </div>
+            </div>
+          )}
+
+          {!deferredPrompt && !isIOS() && !isStandalone() && (
+            <p className="text-xs text-muted-foreground">
+              Podés instalar esta app desde el menú del navegador → "Agregar a inicio"
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted flex flex-col">
