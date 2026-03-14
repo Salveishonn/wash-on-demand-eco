@@ -92,7 +92,7 @@ export default function OpsToday({ onNavigate }: OpsProps) {
     return null;
   };
 
-  const updateStatus = async (id: string, newStatus: string) => {
+  const updateStatus = async (id: string, newStatus: 'pending' | 'confirmed' | 'completed' | 'cancelled') => {
     await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
     fetchToday();
   };

@@ -81,6 +81,9 @@ const App = () => (
                 </AdminRoute>
               }
             />
+            {/* Operator App */}
+            <Route path="/ops" element={<OpsLayout />} />
+            
             {/* Debug */}
             <Route path="/debug/pixel" element={<DebugPixel />} />
             
