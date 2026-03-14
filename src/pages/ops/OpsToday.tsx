@@ -78,9 +78,8 @@ export default function OpsToday({ onNavigate }: OpsProps) {
 
   const getStatusBadge = (status: string) => {
     const map: Record<string, { label: string; className: string }> = {
-      pending: { label: 'Pendiente', className: 'bg-yellow-500/20 text-yellow-700 border-yellow-300' },
+      pending: { label: 'Pendiente', className: 'bg-yellow-500/20 text-yellow-600 border-yellow-300' },
       confirmed: { label: 'Confirmado', className: 'bg-accent/20 text-accent border-accent/30' },
-      in_progress: { label: 'En curso', className: 'bg-washero-water/20 text-washero-water border-washero-water/30' },
       completed: { label: 'Completado', className: 'bg-accent/20 text-accent border-accent/30' },
     };
     const s = map[status] || { label: status, className: '' };
