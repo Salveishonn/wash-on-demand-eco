@@ -91,7 +91,7 @@ export default function OpsLayout() {
   };
 
   const handleEnablePush = () => {
-    subscribeToPush(user.id).then(setPushEnabled).catch(() => {});
+    subscribeToPush(user.id).then((r) => setPushEnabled(r.success)).catch(() => {});
   };
 
   const handleDismissOnboarding = () => {
