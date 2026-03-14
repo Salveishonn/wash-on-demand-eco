@@ -14,6 +14,9 @@ export interface PricingItem {
     washes_per_month?: number;
     included_service?: string;
     included_vehicle_size?: string;
+    plan_type?: string;
+    max_vehicles?: number;
+    shared_usage?: boolean;
   };
   sort_order: number;
 }
