@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Truck, MapPin, Play, CheckCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { sendCustomerNotification } from '@/lib/notifications/sendCustomerNotification';
+import { toast } from '@/hooks/use-toast';
 import { toast } from '@/hooks/use-toast';
 
 type JobState = 'assigned' | 'en_route' | 'arrived' | 'in_progress' | 'completed';
