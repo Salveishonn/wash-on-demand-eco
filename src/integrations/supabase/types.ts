@@ -1325,35 +1325,89 @@ export type Database = {
       subscription_plans: {
         Row: {
           created_at: string
+          customer_copy: string | null
           description: string | null
           id: string
+          ideal_for: string | null
+          included_service_type: string
           is_active: boolean | null
+          max_vehicles: number
           mercadopago_plan_id: string | null
           name: string
+          plan_type: string
           price_cents: number
+          shared_usage: boolean
           washes_per_month: number
         }
         Insert: {
           created_at?: string
+          customer_copy?: string | null
           description?: string | null
           id?: string
+          ideal_for?: string | null
+          included_service_type?: string
           is_active?: boolean | null
+          max_vehicles?: number
           mercadopago_plan_id?: string | null
           name: string
+          plan_type?: string
           price_cents: number
+          shared_usage?: boolean
           washes_per_month: number
         }
         Update: {
           created_at?: string
+          customer_copy?: string | null
           description?: string | null
           id?: string
+          ideal_for?: string | null
+          included_service_type?: string
           is_active?: boolean | null
+          max_vehicles?: number
           mercadopago_plan_id?: string | null
           name?: string
+          plan_type?: string
           price_cents?: number
+          shared_usage?: boolean
           washes_per_month?: number
         }
         Relationships: []
+      }
+      subscription_vehicles: {
+        Row: {
+          added_at: string
+          car_id: string
+          id: string
+          subscription_id: string
+        }
+        Insert: {
+          added_at?: string
+          car_id: string
+          id?: string
+          subscription_id: string
+        }
+        Update: {
+          added_at?: string
+          car_id?: string
+          id?: string
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_vehicles_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_vehicles_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscriptions: {
         Row: {
@@ -1370,10 +1424,13 @@ export type Database = {
           id: string
           included_service: string | null
           included_vehicle_size: string | null
+          max_vehicles: number | null
           mercadopago_subscription_id: string | null
           plan_code: string | null
           plan_id: string
+          plan_type: string | null
           pricing_version_id: string | null
+          shared_usage: boolean | null
           status: Database["public"]["Enums"]["subscription_status"]
           updated_at: string
           user_id: string | null
@@ -1397,10 +1454,13 @@ export type Database = {
           id?: string
           included_service?: string | null
           included_vehicle_size?: string | null
+          max_vehicles?: number | null
           mercadopago_subscription_id?: string | null
           plan_code?: string | null
           plan_id: string
+          plan_type?: string | null
           pricing_version_id?: string | null
+          shared_usage?: boolean | null
           status?: Database["public"]["Enums"]["subscription_status"]
           updated_at?: string
           user_id?: string | null
@@ -1424,10 +1484,13 @@ export type Database = {
           id?: string
           included_service?: string | null
           included_vehicle_size?: string | null
+          max_vehicles?: number | null
           mercadopago_subscription_id?: string | null
           plan_code?: string | null
           plan_id?: string
+          plan_type?: string | null
           pricing_version_id?: string | null
+          shared_usage?: boolean | null
           status?: Database["public"]["Enums"]["subscription_status"]
           updated_at?: string
           user_id?: string | null
