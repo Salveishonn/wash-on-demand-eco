@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { MapPin, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { loadGoogleMaps, isMapsReady, getMapsError } from "@/lib/googleMapsLoader";
+import { OPERATIVE_ZONES } from "@/config/operativeZones";
 
 export type PlaceSelection = {
   address: string;
@@ -19,9 +21,18 @@ interface AddressAutocompleteProps {
   className?: string;
 }
 
-type MapsScriptStatus = "idle" | "loading" | "ready" | "error";
-type PlacesStatus = "unknown" | "ready" | "missing";
-type AutocompleteStatus = "idle" | "ready" | "failed";
+type AutocompleteMode = "loading" | "places" | "manual";
+
+/**
+ * Curated list of common barrios for the manual dropdown fallback.
+ */
+const MANUAL_BARRIOS = [
+  "Palermo", "Belgrano", "Recoleta", "Núñez", "Colegiales",
+  "Villa Urquiza", "Caballito", "Villa Crespo", "Chacarita", "Saavedra",
+  "Olivos", "Vicente López", "San Isidro", "Martínez", "Acassuso",
+  "Beccar", "Boulogne", "Tigre", "Nordelta", "Don Torcuato",
+  "General Pacheco", "Benavídez", "Ingeniero Maschwitz", "Garín", "Escobar",
+];
 
 export function AddressAutocomplete({
   initialValue = "",
@@ -30,122 +41,60 @@ export function AddressAutocomplete({
   placeholder = "Ingresá la dirección...",
   className = "",
 }: AddressAutocompleteProps) {
-  // Single source of truth: local input value
-  const [inputValue, setInputValue] = useState<string>("");
-
-  // Diagnostics (visible + console)
-  const [mapsScriptStatus, setMapsScriptStatus] = useState<MapsScriptStatus>("idle");
-  const [placesStatus, setPlacesStatus] = useState<PlacesStatus>("unknown");
-  const [autocompleteStatus, setAutocompleteStatus] = useState<AutocompleteStatus>("idle");
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [inputValue, setInputValue] = useState<string>(initialValue || "");
+  const [mode, setMode] = useState<AutocompleteMode>("loading");
+  const [manualBarrio, setManualBarrio] = useState("");
 
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<any>(null);
   const initAttemptedRef = useRef(false);
   const didInitValueRef = useRef(false);
 
-  // Keep latest callbacks without re-initializing autocomplete
   const onSelectRef = useRef(onSelect);
   const onTextChangeRef = useRef(onTextChange);
-  useEffect(() => {
-    onSelectRef.current = onSelect;
-  }, [onSelect]);
-  useEffect(() => {
-    onTextChangeRef.current = onTextChange;
-  }, [onTextChange]);
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  useEffect(() => { onTextChangeRef.current = onTextChange; }, [onTextChange]);
 
-  // Initialize initialValue ONCE (never re-sync on every render/keystroke)
+  // Initialize initialValue ONCE
   useEffect(() => {
     if (didInitValueRef.current) return;
     didInitValueRef.current = true;
     setInputValue(typeof initialValue === "string" ? initialValue : "");
   }, []);
 
-  // Capture Google Maps JS API error messages (RefererNotAllowedMapError, etc.)
-  useEffect(() => {
-    const handleWindowError = (ev: ErrorEvent) => {
-      const msg = String(ev.message || "");
-      if (!msg.includes("Google Maps JavaScript API error")) return;
-
-      const cleaned = msg.replace("Google Maps JavaScript API error:", "").trim();
-
-      console.error("[Autocomplete] Maps JS error captured:", cleaned);
-      setErrorMsg(cleaned || msg);
-      setMapsScriptStatus("error");
-      setPlacesStatus("missing");
-      setAutocompleteStatus("failed");
-    };
-
-    // gm_authFailure is called for auth-related failures (e.g., invalid key)
-    const prevAuthFailure = (window as any).gm_authFailure;
-    (window as any).gm_authFailure = () => {
-      console.error("[Autocomplete] gm_authFailure called");
-      setErrorMsg((prev) => prev || "gm_authFailure (posible InvalidKey/Billing/Referer)");
-      setMapsScriptStatus("error");
-      setPlacesStatus("missing");
-      setAutocompleteStatus("failed");
-      if (typeof prevAuthFailure === "function") prevAuthFailure();
-    };
-
-    window.addEventListener("error", handleWindowError);
-    return () => {
-      window.removeEventListener("error", handleWindowError);
-      if ((window as any).gm_authFailure === prevAuthFailure) return;
-      (window as any).gm_authFailure = prevAuthFailure;
-    };
-  }, []);
-
-  // Init Google Maps + Places Autocomplete ONCE per mount
+  // Init Google Maps + Places Autocomplete
   useEffect(() => {
     if (initAttemptedRef.current) return;
     initAttemptedRef.current = true;
 
     const init = async () => {
       try {
-        setErrorMsg("");
-        setMapsScriptStatus("loading");
-        setPlacesStatus("unknown");
-        setAutocompleteStatus("idle");
-
         console.log("[Autocomplete] Starting initialization...");
-        console.log("[Autocomplete] Origin:", window.location.origin);
 
-        // 1) Fetch API key from backend function
-        console.log("[Autocomplete] Fetching API key...");
+        // 1) Fetch API key
         const { data, error: fetchErr } = await supabase.functions.invoke("get-maps-api-key");
-        if (fetchErr) throw new Error(`API key fetch failed: ${fetchErr.message}`);
+
+        if (fetchErr) {
+          console.error("[Autocomplete] API key fetch failed:", fetchErr.message);
+          throw new Error(`API key fetch: ${fetchErr.message}`);
+        }
 
         const apiKey = typeof data?.apiKey === "string" ? data.apiKey : "";
-        if (!apiKey) throw new Error("API key not configured (empty response)");
+        if (!apiKey) throw new Error("API key empty");
 
         console.log("[Autocomplete] API key obtained, loading Maps...");
 
-        // 2) Load Google Maps script (singleton)
+        // 2) Load Google Maps
         const loadResult = await loadGoogleMaps(apiKey);
+        if (!loadResult.success) throw new Error(loadResult.error || "Maps load failed");
 
-        if (!loadResult.success) {
-          throw new Error(loadResult.error || "Failed to load Google Maps");
-        }
+        console.log("[Autocomplete] Maps loaded");
 
-        console.log("[Autocomplete] Maps script: ready");
-        setMapsScriptStatus("ready");
+        // 3) Verify Places
+        if (!isMapsReady()) throw new Error(getMapsError() || "Places not available");
 
-        // 3) Verify Places is available
-        if (!isMapsReady()) {
-          const existingError = getMapsError();
-          setPlacesStatus("missing");
-          throw new Error(existingError || "Places API not available after load");
-        }
-
-        console.log("[Autocomplete] Places: ready");
-        setPlacesStatus("ready");
-
-        // 4) Attach Autocomplete only when input exists
-        if (!inputRef.current) {
-          throw new Error("Input element not available");
-        }
-
-        console.log("[Autocomplete] Attaching Autocomplete to input...");
+        // 4) Attach Autocomplete
+        if (!inputRef.current) throw new Error("Input ref missing");
 
         autocompleteRef.current = new (window as any).google.maps.places.Autocomplete(inputRef.current, {
           componentRestrictions: { country: "ar" },
@@ -155,45 +104,29 @@ export function AddressAutocomplete({
 
         autocompleteRef.current.addListener("place_changed", () => {
           const place = autocompleteRef.current?.getPlace();
-          if (!place) return;
+          if (!place?.formatted_address) return;
 
-          const address = place.formatted_address || "";
+          const address = place.formatted_address;
           const placeId = place.place_id;
           const lat = place.geometry?.location?.lat();
           const lng = place.geometry?.location?.lng();
 
-          if (!address) return;
-
           console.log("[Autocomplete] Place selected:", { address, placeId, lat, lng });
           setInputValue(address);
-          onSelectRef.current?.({
-            address,
-            placeId,
-            lat,
-            lng,
-          });
+          onSelectRef.current?.({ address, placeId, lat, lng });
         });
 
-        console.log("[Autocomplete] Autocomplete: ready");
-        setAutocompleteStatus("ready");
+        setMode("places");
+        console.log("[Autocomplete] Ready with Places");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
-        console.error("[Autocomplete] Init failed:", msg);
-
-        // Check if there's a stored error from the loader
-        const storedError = getMapsError();
-        const finalError = storedError || msg;
-
-        setErrorMsg(finalError);
-        if (mapsScriptStatus !== "ready") setMapsScriptStatus("error");
-        setPlacesStatus("missing");
-        setAutocompleteStatus("failed");
+        console.error("[Autocomplete] Falling back to manual mode:", msg);
+        setMode("manual");
       }
     };
 
     init();
 
-    // Cleanup: only remove listeners, NEVER remove the script tag
     return () => {
       if (autocompleteRef.current && window.google?.maps?.event) {
         window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
@@ -202,25 +135,17 @@ export function AddressAutocomplete({
     };
   }, []);
 
-  // Timeout check - show timeout message if still loading after 13s
+  // Timeout fallback
   useEffect(() => {
-    if (mapsScriptStatus !== "loading") return;
-
-    const timeoutId = setTimeout(() => {
-      if (mapsScriptStatus === "loading") {
-        const existingError = getMapsError();
-        setMapsScriptStatus("error");
-        setPlacesStatus("missing");
-        setAutocompleteStatus("failed");
-        setErrorMsg(
-          existingError ||
-            "TIMEOUT: Google Maps no cargó. Revisá: API key, billing, HTTP referrers, CSP, o bloqueo de red.",
-        );
+    if (mode !== "loading") return;
+    const t = setTimeout(() => {
+      if (mode === "loading") {
+        console.warn("[Autocomplete] Timeout, switching to manual");
+        setMode("manual");
       }
-    }, 13000);
-
-    return () => clearTimeout(timeoutId);
-  }, [mapsScriptStatus]);
+    }, 10000);
+    return () => clearTimeout(t);
+  }, [mode]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const next = String(e.target.value ?? "");
@@ -235,12 +160,21 @@ export function AddressAutocomplete({
     }
   }, []);
 
-  const isLoading = mapsScriptStatus === "loading";
-  const isReady = mapsScriptStatus === "ready" && placesStatus === "ready" && autocompleteStatus === "ready";
-  const isError = mapsScriptStatus === "error" || placesStatus === "missing" || autocompleteStatus === "failed";
+  const handleManualBarrioChange = useCallback((value: string) => {
+    setManualBarrio(value);
+    // Emit a selection so the parent can detect the zone
+    const fullAddress = inputValue ? `${inputValue}, ${value}` : value;
+    onSelectRef.current?.({ address: fullAddress });
+    onTextChangeRef.current?.(fullAddress);
+  }, [inputValue]);
+
+  const isLoading = mode === "loading";
+  const isManual = mode === "manual";
+  const isPlaces = mode === "places";
 
   return (
     <div className="space-y-2">
+      {/* Main address input */}
       <div className="relative">
         <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <Input
@@ -253,25 +187,33 @@ export function AddressAutocomplete({
           className={`pl-12 pr-12 h-14 text-lg ${className}`}
           autoComplete="off"
         />
-
         <div className="absolute right-4 top-1/2 -translate-y-1/2">
           {isLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-          {isReady && <CheckCircle2 className="w-4 h-4 text-primary" />}
-          {isError && <AlertCircle className="w-4 h-4 text-destructive" />}
+          {isPlaces && <CheckCircle2 className="w-4 h-4 text-primary" />}
         </div>
       </div>
 
-      {/* Mandatory diagnostics (visible) */}
-      <p className="text-xs text-muted-foreground">
-        Maps script: {mapsScriptStatus} · Places: {placesStatus} · Autocomplete: {autocompleteStatus}
-      </p>
+      {/* Manual fallback: friendly message + barrio selector */}
+      {isManual && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            No pudimos cargar las sugerencias automáticas. Escribí la dirección y seleccioná tu barrio.
+          </p>
 
-      {isError && (
-        <div className="flex items-start gap-2 text-xs text-destructive">
-          <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-          <span>
-            Google Maps no disponible (razón: {errorMsg || "desconocida"}). Podés escribir la dirección manualmente.
-          </span>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Barrio / Zona</Label>
+            <select
+              value={manualBarrio}
+              onChange={(e) => handleManualBarrioChange(e.target.value)}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <option value="">Seleccioná tu barrio...</option>
+              {MANUAL_BARRIOS.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
     </div>
