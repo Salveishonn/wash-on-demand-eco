@@ -175,13 +175,13 @@ function Section({ title, icon: Icon, children, defaultOpen = true, action }: {
 }
 
 const NAV_ITEMS: { key: DashboardTab; label: string; icon: any }[] = [
-  { key: "dashboard", label: "Dashboard", icon: Sparkles },
-  { key: "plan", label: "Mi Plan", icon: CreditCard },
+  { key: "dashboard", label: "Inicio", icon: Sparkles },
+  { key: "plan", label: "Plan", icon: CreditCard },
   { key: "upcoming", label: "Próximos", icon: Calendar },
-  { key: "cars", label: "Mis autos", icon: Car },
+  { key: "cars", label: "Autos", icon: Car },
   { key: "history", label: "Historial", icon: History },
-  { key: "billing", label: "Facturación", icon: FileText },
-  { key: "profile", label: "Mi Perfil", icon: User },
+  { key: "billing", label: "Facturas", icon: FileText },
+  { key: "profile", label: "Perfil", icon: User },
 ];
 
 export default function Dashboard() {
