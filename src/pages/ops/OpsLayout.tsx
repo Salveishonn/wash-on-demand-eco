@@ -54,7 +54,7 @@ export default function OpsLayout() {
   }
 
   if (!user || !isAdmin) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/admin/login" state={{ from: { pathname: '/ops' } }} replace />;
   }
 
   const handleInstall = async () => {
