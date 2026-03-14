@@ -110,10 +110,14 @@ interface Profile {
   phone: string | null;
 }
 
-const PLAN_INFO: Record<string, { name: string; washes: number; price: string; serviceIncluded: string }> = {
-  basic: { name: "Plan Básico", washes: 2, price: "$55.000", serviceIncluded: "Lavado Exterior + Interior" },
-  confort: { name: "Plan Confort", washes: 4, price: "$95.000", serviceIncluded: "Lavado Exterior + Interior" },
-  premium: { name: "Plan Premium", washes: 4, price: "$125.000", serviceIncluded: "Detailing Completo" },
+const PLAN_INFO: Record<string, { name: string; washes: number; price: string; serviceIncluded: string; shared?: boolean; maxVehicles?: number }> = {
+  esencial: { name: "Plan Esencial", washes: 2, price: "$55.000", serviceIncluded: "Lavado Básico" },
+  basic: { name: "Plan Esencial", washes: 2, price: "$55.000", serviceIncluded: "Lavado Básico" },
+  confort: { name: "Plan Confort", washes: 4, price: "$95.000", serviceIncluded: "Lavado Básico" },
+  pro: { name: "Plan Pro", washes: 4, price: "$125.000", serviceIncluded: "Lavado Completo" },
+  premium: { name: "Plan Pro", washes: 4, price: "$125.000", serviceIncluded: "Lavado Completo" },
+  familia: { name: "Plan Familia", washes: 6, price: "$145.000", serviceIncluded: "Lavado Básico", shared: true, maxVehicles: 3 },
+  flota: { name: "Plan Flota", washes: 10, price: "$250.000", serviceIncluded: "Lavado Básico", shared: true, maxVehicles: 10 },
 };
 
 /* ─────────── Expandable section helper ─────────── */
