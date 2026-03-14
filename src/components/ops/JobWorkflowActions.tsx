@@ -72,10 +72,23 @@ export default function JobWorkflowActions({ bookingId, currentStatus, customerN
 
     try {
       const nextState = config.next;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-      // Update booking status when relevant
+      // Trigger WhatsApp reminders for en_route and arrived
       if (nextState === 'en_route') {
-        await sendCustomerNotification(bookingId, 'ON_MY_WAY');
+        fetch(`${supabaseUrl}/functions/v1/whatsapp-booking-reminders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+          body: JSON.stringify({ type: 'en_camino', booking_id: bookingId }),
+        }).catch(() => {});
+      }
+
+      if (nextState === 'arrived') {
+        fetch(`${supabaseUrl}/functions/v1/whatsapp-booking-reminders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+          body: JSON.stringify({ type: 'llegamos', booking_id: bookingId }),
+        }).catch(() => {});
       }
 
       if (nextState === 'completed') {
