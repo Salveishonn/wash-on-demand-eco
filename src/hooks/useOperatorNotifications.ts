@@ -19,18 +19,25 @@ export function useOperatorNotifications() {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchNotifications = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
     
-    const { data, error } = await supabase
-      .from('operator_notifications')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(50);
+    try {
+      const { data, error } = await supabase
+        .from('operator_notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
 
-    if (!error && data) {
-      const typed = data as unknown as OperatorNotification[];
-      setNotifications(typed);
-      setUnreadCount(typed.filter(n => !n.read).length);
+      if (!error && data) {
+        const typed = data as unknown as OperatorNotification[];
+        setNotifications(typed);
+        setUnreadCount(typed.filter(n => !n.read).length);
+      }
+    } catch (err) {
+      console.warn('[OpsNotifications] Fetch failed:', err);
     }
     setIsLoading(false);
   }, [user]);
@@ -38,28 +45,42 @@ export function useOperatorNotifications() {
   useEffect(() => {
     fetchNotifications();
 
-    // Subscribe to realtime
-    const channel = supabase
-      .channel('operator-notifications')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'operator_notifications',
-      }, (payload) => {
-        const newNotif = payload.new as unknown as OperatorNotification;
-        setNotifications(prev => [newNotif, ...prev]);
-        setUnreadCount(prev => prev + 1);
-      })
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel('operator-notifications')
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'operator_notifications',
+        }, (payload) => {
+          try {
+            const newNotif = payload.new as unknown as OperatorNotification;
+            setNotifications(prev => [newNotif, ...prev]);
+            setUnreadCount(prev => prev + 1);
+          } catch (e) {
+            console.warn('[OpsNotifications] Realtime parse error:', e);
+          }
+        })
+        .subscribe();
+    } catch (err) {
+      console.warn('[OpsNotifications] Realtime subscription failed:', err);
+    }
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch {}
+      }
+    };
   }, [fetchNotifications]);
 
   const markAsRead = useCallback(async (id: string) => {
-    await supabase
-      .from('operator_notifications')
-      .update({ read: true })
-      .eq('id', id);
+    try {
+      await supabase
+        .from('operator_notifications')
+        .update({ read: true })
+        .eq('id', id);
+    } catch {}
     
     setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, read: true } : n)
@@ -68,10 +89,12 @@ export function useOperatorNotifications() {
   }, []);
 
   const markAllAsRead = useCallback(async () => {
-    await supabase
-      .from('operator_notifications')
-      .update({ read: true })
-      .eq('read', false);
+    try {
+      await supabase
+        .from('operator_notifications')
+        .update({ read: true })
+        .eq('read', false);
+    } catch {}
     
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     setUnreadCount(0);

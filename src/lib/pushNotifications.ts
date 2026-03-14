@@ -1,74 +1,68 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export async function registerServiceWorker() {
-  if (!('serviceWorker' in navigator)) {
-    console.warn('Service workers not supported');
-    return null;
-  }
+  if (!('serviceWorker' in navigator)) return null;
   
   try {
     const registration = await navigator.serviceWorker.register('/sw.js');
-    console.log('[SW] Registered:', registration.scope);
     return registration;
   } catch (err) {
-    console.error('[SW] Registration failed:', err);
+    console.warn('[SW] Registration failed:', err);
     return null;
   }
 }
 
 export async function subscribeToPush(userId: string): Promise<boolean> {
   try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      console.warn('[Push] Push not supported in this browser');
+      return false;
+    }
+
     const registration = await registerServiceWorker();
     if (!registration) return false;
 
-    // Check permission
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      console.warn('[Push] Permission denied');
-      return false;
-    }
+    if (permission !== 'granted') return false;
 
-    // Get VAPID public key from edge function
     const { data: vapidData, error: vapidError } = await supabase.functions.invoke('get-vapid-public-key');
     if (vapidError || !vapidData?.publicKey) {
-      console.error('[Push] Failed to get VAPID key:', vapidError);
+      console.warn('[Push] Failed to get VAPID key');
       return false;
     }
 
-    // Subscribe to push
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey) as BufferSource,
     });
 
-    const keys = subscription.toJSON().keys!;
+    const json = subscription.toJSON();
+    const keys = json?.keys;
+    if (!keys?.p256dh || !keys?.auth) return false;
 
-    // Store subscription in DB
     const { error } = await supabase.from('push_subscriptions').upsert({
       user_id: userId,
       endpoint: subscription.endpoint,
-      p256dh: keys.p256dh!,
-      auth: keys.auth!,
+      p256dh: keys.p256dh,
+      auth: keys.auth,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,endpoint' });
 
     if (error) {
-      console.error('[Push] Failed to store subscription:', error);
+      console.warn('[Push] Failed to store subscription:', error);
       return false;
     }
 
-    console.log('[Push] Subscribed successfully');
     return true;
   } catch (err) {
-    console.error('[Push] Subscribe error:', err);
+    console.warn('[Push] Subscribe error:', err);
     return false;
   }
 }
 
 export async function isPushSubscribed(): Promise<boolean> {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
-  
   try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
     return !!subscription;

@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
-  Loader2, MapPin, Clock, Phone, Car, Navigation, 
+  Loader2, MapPin, Clock, Car, Navigation, 
   CheckCircle, ChevronRight, MessageCircle, Send,
   AlertCircle, CreditCard, RefreshCw
 } from 'lucide-react';
@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useOperatorNotifications } from '@/hooks/useOperatorNotifications';
-import { WHATSAPP_BASE_URL } from '@/config/whatsapp';
 
 interface TodayBooking {
   id: string;
@@ -41,6 +40,7 @@ interface OpsProps {
 export default function OpsToday({ onNavigate }: OpsProps) {
   const [bookings, setBookings] = useState<TodayBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { unreadCount } = useOperatorNotifications();
 
@@ -48,16 +48,25 @@ export default function OpsToday({ onNavigate }: OpsProps) {
 
   const fetchToday = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('id, booking_date, booking_time, customer_name, customer_phone, customer_email, address, barrio, service_name, car_type, vehicle_size, status, payment_status, payment_method, is_subscription_booking, notes, final_price_ars, total_price_ars')
-      .eq('booking_date', today)
-      .eq('is_test', false)
-      .in('status', ['pending', 'confirmed', 'completed'] as const)
-      .order('booking_time', { ascending: true });
+    setError(null);
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('bookings')
+        .select('id, booking_date, booking_time, customer_name, customer_phone, customer_email, address, barrio, service_name, car_type, vehicle_size, status, payment_status, payment_method, is_subscription_booking, notes, final_price_ars, total_price_ars')
+        .eq('booking_date', today)
+        .eq('is_test', false)
+        .in('status', ['pending', 'confirmed', 'completed'])
+        .order('booking_time', { ascending: true });
 
-    if (!error && data) {
-      setBookings(data as TodayBooking[]);
+      if (fetchErr) {
+        console.warn('[OpsToday] Fetch error:', fetchErr);
+        setError('No se pudieron cargar los lavados');
+      }
+      setBookings((data as TodayBooking[]) || []);
+    } catch (err) {
+      console.warn('[OpsToday] Unexpected error:', err);
+      setError('Error de conexión');
+      setBookings([]);
     }
     setIsLoading(false);
   };
@@ -72,7 +81,6 @@ export default function OpsToday({ onNavigate }: OpsProps) {
     return { total: bookings.length, pending, confirmed, completed, unpaid };
   }, [bookings]);
 
-  // Find next upcoming booking
   const now = format(new Date(), 'HH:mm');
   const nextBooking = bookings.find(b => b.booking_time >= now && b.status !== 'completed');
 
@@ -93,8 +101,10 @@ export default function OpsToday({ onNavigate }: OpsProps) {
   };
 
   const updateStatus = async (id: string, newStatus: 'pending' | 'confirmed' | 'completed' | 'cancelled') => {
-    await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
-    fetchToday();
+    try {
+      await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
+      fetchToday();
+    } catch {}
   };
 
   const openMaps = (address: string) => {
@@ -102,9 +112,11 @@ export default function OpsToday({ onNavigate }: OpsProps) {
   };
 
   const sendQuickWhatsApp = (phone: string, message: string) => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    const fullPhone = cleanPhone.startsWith('54') ? cleanPhone : `54${cleanPhone}`;
-    window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(message)}`, '_blank');
+    try {
+      const cleanPhone = (phone || '').replace(/\D/g, '');
+      const fullPhone = cleanPhone.startsWith('54') ? cleanPhone : `54${cleanPhone}`;
+      window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(message)}`, '_blank');
+    } catch {}
   };
 
   if (isLoading) {
@@ -117,7 +129,6 @@ export default function OpsToday({ onNavigate }: OpsProps) {
 
   return (
     <div className="px-4 py-4 space-y-4">
-      {/* Date Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-display font-bold text-foreground capitalize">
@@ -132,7 +143,13 @@ export default function OpsToday({ onNavigate }: OpsProps) {
         </Button>
       </div>
 
-      {/* Quick Stats */}
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3 text-sm text-destructive">
+          {error}
+          <Button size="sm" variant="ghost" className="ml-2 h-7 text-xs" onClick={fetchToday}>Reintentar</Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-4 gap-2">
         {[
           { label: 'Total', value: stats.total, color: 'text-foreground' },
@@ -147,7 +164,6 @@ export default function OpsToday({ onNavigate }: OpsProps) {
         ))}
       </div>
 
-      {/* Alerts row */}
       {unreadCount > 0 && (
         <button 
           onClick={() => onNavigate('notifications')}
@@ -159,17 +175,15 @@ export default function OpsToday({ onNavigate }: OpsProps) {
         </button>
       )}
 
-      {/* Next up */}
       {nextBooking && (
         <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3">
           <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">Próximo</p>
-          <p className="text-sm font-bold text-foreground">{nextBooking.booking_time} — {nextBooking.customer_name}</p>
+          <p className="text-sm font-bold text-foreground">{nextBooking.booking_time?.slice(0, 5)} — {nextBooking.customer_name}</p>
           <p className="text-xs text-muted-foreground">{nextBooking.service_name} · {nextBooking.barrio || nextBooking.address || 'Sin dirección'}</p>
         </div>
       )}
 
-      {/* Bookings list */}
-      {bookings.length === 0 ? (
+      {bookings.length === 0 && !error ? (
         <div className="text-center py-12">
           <CheckCircle className="w-12 h-12 text-accent mx-auto mb-3 opacity-50" />
           <p className="text-muted-foreground font-medium">No hay lavados para hoy</p>
@@ -186,13 +200,12 @@ export default function OpsToday({ onNavigate }: OpsProps) {
                   b.status === 'completed' && "opacity-60"
                 )}
               >
-                {/* Card header - always visible */}
                 <button 
                   className="w-full px-4 py-3 flex items-start gap-3 text-left"
                   onClick={() => setExpandedId(isExpanded ? null : b.id)}
                 >
                   <div className="flex flex-col items-center min-w-[48px]">
-                    <span className="text-lg font-bold font-display text-foreground">{b.booking_time.slice(0, 5)}</span>
+                    <span className="text-lg font-bold font-display text-foreground">{(b.booking_time || '').slice(0, 5)}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -214,10 +227,8 @@ export default function OpsToday({ onNavigate }: OpsProps) {
                   </div>
                 </button>
 
-                {/* Expanded detail */}
                 {isExpanded && (
                   <div className="px-4 pb-4 border-t border-border pt-3 space-y-3">
-                    {/* Details */}
                     <div className="space-y-1.5 text-xs text-muted-foreground">
                       {b.address && (
                         <div className="flex items-start gap-2">
@@ -234,7 +245,7 @@ export default function OpsToday({ onNavigate }: OpsProps) {
                       {(b.final_price_ars || b.total_price_ars) && (
                         <div className="flex items-center gap-2">
                           <CreditCard className="w-3.5 h-3.5 shrink-0" />
-                          <span>${((b.final_price_ars || b.total_price_ars || 0)).toLocaleString('es-AR')}</span>
+                          <span>${(b.final_price_ars || b.total_price_ars || 0).toLocaleString('es-AR')}</span>
                         </div>
                       )}
                       {b.notes && (
@@ -245,7 +256,6 @@ export default function OpsToday({ onNavigate }: OpsProps) {
                       )}
                     </div>
 
-                    {/* Quick Actions */}
                     <div className="grid grid-cols-2 gap-2">
                       {b.address && (
                         <Button size="sm" variant="outline" className="h-10 text-xs" onClick={() => openMaps(b.address!)}>
@@ -253,21 +263,20 @@ export default function OpsToday({ onNavigate }: OpsProps) {
                           Navegar
                         </Button>
                       )}
-                      <Button size="sm" variant="outline" className="h-10 text-xs" onClick={() => sendQuickWhatsApp(b.customer_phone, `Hola ${b.customer_name.split(' ')[0]}, soy de Washero 🚗`)}>
+                      <Button size="sm" variant="outline" className="h-10 text-xs" onClick={() => sendQuickWhatsApp(b.customer_phone, `Hola ${(b.customer_name || '').split(' ')[0]}, soy de Washero 🚗`)}>
                         <MessageCircle className="w-3.5 h-3.5 mr-1.5" />
                         WhatsApp
                       </Button>
-                      <Button size="sm" variant="outline" className="h-10 text-xs" onClick={() => sendQuickWhatsApp(b.customer_phone, `Hola ${b.customer_name.split(' ')[0]}! Ya estamos en camino 🚗💨`)}>
+                      <Button size="sm" variant="outline" className="h-10 text-xs" onClick={() => sendQuickWhatsApp(b.customer_phone, `Hola ${(b.customer_name || '').split(' ')[0]}! Ya estamos en camino 🚗💨`)}>
                         <Send className="w-3.5 h-3.5 mr-1.5" />
                         En camino
                       </Button>
-                      <Button size="sm" variant="outline" className="h-10 text-xs" onClick={() => sendQuickWhatsApp(b.customer_phone, `Hola ${b.customer_name.split(' ')[0]}! Llegamos en 10 minutos ⏱️`)}>
+                      <Button size="sm" variant="outline" className="h-10 text-xs" onClick={() => sendQuickWhatsApp(b.customer_phone, `Hola ${(b.customer_name || '').split(' ')[0]}! Llegamos en 10 minutos ⏱️`)}>
                         <Clock className="w-3.5 h-3.5 mr-1.5" />
                         10 min
                       </Button>
                     </div>
 
-                    {/* Status Actions */}
                     <div className="flex gap-2">
                       {b.status === 'pending' && (
                         <Button size="sm" className="flex-1 h-10" onClick={() => updateStatus(b.id, 'confirmed')}>
