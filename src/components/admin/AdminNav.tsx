@@ -98,7 +98,7 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent 
             align="start" 
-            className="w-[calc(100vw-2rem)] max-w-sm bg-background border border-border z-50"
+            className="w-[calc(100vw-2rem)] max-w-sm max-h-[70vh] overflow-y-auto bg-background border border-border z-50"
           >
             {(['ops', 'crm', 'config'] as const).map((group) => (
               <div key={group}>
@@ -137,8 +137,8 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
               <Menu className="w-5 h-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-0">
-            <SheetHeader className="p-4 border-b bg-muted/30">
+          <SheetContent side="left" className="w-72 p-0 flex flex-col h-full">
+            <SheetHeader className="p-4 border-b bg-muted/30 shrink-0">
               <SheetTitle className="text-left flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Calendar className="w-4 h-4 text-primary" />
@@ -146,7 +146,7 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
                 <span className="font-display">Panel Admin</span>
               </SheetTitle>
             </SheetHeader>
-            <nav className="p-2 space-y-1">
+            <nav className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-1 -webkit-overflow-scrolling-touch">
               {(['ops', 'crm', 'config'] as const).map((group) => (
                 <div key={group} className="mb-3">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-3 py-2">
@@ -173,6 +173,8 @@ export function AdminNav({ activeTab, onTabChange }: AdminNavProps) {
                   })}
                 </div>
               ))}
+              {/* Bottom padding for safe area */}
+              <div className="h-8" />
             </nav>
           </SheetContent>
         </Sheet>

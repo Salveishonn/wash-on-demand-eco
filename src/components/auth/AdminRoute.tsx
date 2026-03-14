@@ -23,7 +23,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
   }
 
   if (!user) {
-    return <Navigate to="/admin/login" state={{ from: location }} replace />;
+    return <Navigate to="/admin/login" state={{ from: { pathname: location.pathname } }} replace />;
   }
 
   if (!isAdmin) {
