@@ -632,6 +632,43 @@ export function SubscriptionWashBookingModal({
           </div>
         </div>
 
+        {/* Pricing Summary */}
+        <div className="px-4 pb-2">
+          <div className="p-4 bg-washero-eco/5 border border-washero-eco/20 rounded-xl space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-foreground font-medium">{includedService?.display_name || "Lavado Básico"}</span>
+              <span className="text-sm font-bold text-washero-eco">Cubierto por tu plan</span>
+            </div>
+            {getAddonsTotal() > 0 && (
+              <>
+                <div className="border-t border-border pt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Extras</span>
+                    <span className="text-sm font-medium text-foreground">+{formatPrice(getAddonsTotal() / 100)}</span>
+                  </div>
+                </div>
+                <div className="border-t border-border pt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-foreground">Total a pagar</span>
+                    <span className="text-base font-bold text-primary">{formatPrice(getAddonsTotal() / 100)}</span>
+                  </div>
+                </div>
+              </>
+            )}
+            {getAddonsTotal() === 0 && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-primary" />
+                Este lavado está cubierto por tu plan. Sin costo adicional.
+              </p>
+            )}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+              <span className="font-medium text-foreground">{planName}</span>
+              <span>·</span>
+              <span>Créditos restantes: {washesRemaining - 1} lavado{(washesRemaining - 1) !== 1 ? "s" : ""}</span>
+            </div>
+          </div>
+        </div>
+
         {/* Footer */}
         <div className="sticky bottom-0 bg-background border-t border-border p-4 flex gap-3">
           <Button variant="outline" className="flex-1" onClick={onClose}>
