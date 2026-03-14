@@ -131,10 +131,8 @@ export default function OpsLayout() {
   if (showOnboarding) {
     return (
       <div className="min-h-screen bg-washero-charcoal flex flex-col items-center justify-center px-6 text-center">
-        <div className="w-20 h-20 rounded-2xl bg-primary/20 flex items-center justify-center mb-6">
-          <Home className="w-10 h-10 text-primary" />
-        </div>
-        <h1 className="font-display text-2xl font-black text-primary mb-2">Washero Ops</h1>
+        <img src="/icons/washero-driver-192.png" alt="Washero Driver" className="w-20 h-20 rounded-2xl mb-6" />
+        <h1 className="font-display text-2xl font-black text-primary mb-2">Washero Driver</h1>
         <p className="text-muted-foreground text-sm max-w-xs mb-8 leading-relaxed">
           Usá esta app para gestionar reservas, mensajes y tareas del día desde el celular.
         </p>
