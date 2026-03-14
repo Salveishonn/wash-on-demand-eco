@@ -110,10 +110,14 @@ interface Profile {
   phone: string | null;
 }
 
-const PLAN_INFO: Record<string, { name: string; washes: number; price: string; serviceIncluded: string }> = {
-  basic: { name: "Plan Básico", washes: 2, price: "$55.000", serviceIncluded: "Lavado Exterior + Interior" },
-  confort: { name: "Plan Confort", washes: 4, price: "$95.000", serviceIncluded: "Lavado Exterior + Interior" },
-  premium: { name: "Plan Premium", washes: 4, price: "$125.000", serviceIncluded: "Detailing Completo" },
+const PLAN_INFO: Record<string, { name: string; washes: number; price: string; serviceIncluded: string; shared?: boolean; maxVehicles?: number }> = {
+  esencial: { name: "Plan Esencial", washes: 2, price: "$55.000", serviceIncluded: "Lavado Básico" },
+  basic: { name: "Plan Esencial", washes: 2, price: "$55.000", serviceIncluded: "Lavado Básico" },
+  confort: { name: "Plan Confort", washes: 4, price: "$95.000", serviceIncluded: "Lavado Básico" },
+  pro: { name: "Plan Pro", washes: 4, price: "$125.000", serviceIncluded: "Lavado Completo" },
+  premium: { name: "Plan Pro", washes: 4, price: "$125.000", serviceIncluded: "Lavado Completo" },
+  familia: { name: "Plan Familia", washes: 6, price: "$145.000", serviceIncluded: "Lavado Básico", shared: true, maxVehicles: 3 },
+  flota: { name: "Plan Flota", washes: 10, price: "$250.000", serviceIncluded: "Lavado Básico", shared: true, maxVehicles: 10 },
 };
 
 /* ─────────── Expandable section helper ─────────── */
@@ -440,13 +444,23 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* C) Included service + price — stacked on mobile for breathing room */}
-                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between bg-muted/30 rounded-xl px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-primary shrink-0" />
-                    <span className="text-sm text-foreground font-medium">{planInfo?.serviceIncluded}</span>
+                {/* C) Included service + price + shared info */}
+                <div className="space-y-2">
+                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between bg-muted/30 rounded-xl px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                      <span className="text-sm text-foreground font-medium">{planInfo?.serviceIncluded}</span>
+                    </div>
+                    <span className="font-display text-base font-bold text-foreground sm:text-right pl-6 sm:pl-0">{planInfo?.price}<span className="text-xs font-normal text-muted-foreground">/mes</span></span>
                   </div>
-                  <span className="font-display text-base font-bold text-foreground sm:text-right pl-6 sm:pl-0">{planInfo?.price}<span className="text-xs font-normal text-muted-foreground">/mes</span></span>
+                  {planInfo?.shared && (
+                    <div className="flex items-center gap-2 bg-primary/5 rounded-xl px-4 py-2.5 border border-primary/10">
+                      <Car className="w-4 h-4 text-primary shrink-0" />
+                      <span className="text-sm text-foreground">
+                        Hasta {planInfo.maxVehicles} vehículos · lavados compartidos
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* D) Main action area — primary CTA full-width */}
