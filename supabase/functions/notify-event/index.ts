@@ -63,6 +63,53 @@ serve(async (req) => {
       console.error("[notify-event] Failed to log event:", insertError);
     }
 
+    // === CREATE OPERATOR NOTIFICATION ===
+    const notifMap: Record<string, { title: string; body: string }> = {
+      "booking.created": {
+        title: "Nueva reserva",
+        body: `${payload.customer_name || 'Cliente'} — ${payload.metadata?.service_name || 'Lavado'} — ${payload.metadata?.booking_date || ''} ${payload.metadata?.booking_time || ''}`,
+      },
+      "booking.cancelled": {
+        title: "Reserva cancelada",
+        body: `${payload.customer_name || 'Cliente'} canceló su reserva`,
+      },
+      "booking.rescheduled": {
+        title: "Reserva reprogramada",
+        body: `${payload.customer_name || 'Cliente'} reprogramó su lavado`,
+      },
+      "booking.paid": {
+        title: "Pago recibido",
+        body: `${payload.customer_name || 'Cliente'} — $${payload.amount_ars?.toLocaleString('es-AR') || '0'}`,
+      },
+      "subscription.created": {
+        title: "Nueva suscripción",
+        body: `${payload.customer_name || 'Cliente'} se suscribió`,
+      },
+      "subscription.approved": {
+        title: "Suscripción aprobada",
+        body: `Suscripción de ${payload.customer_name || 'Cliente'} aprobada`,
+      },
+    };
+
+    const notifData = notifMap[payload.event];
+    if (notifData) {
+      const { error: notifError } = await supabase
+        .from("operator_notifications")
+        .insert({
+          event_type: payload.event.replace('.', '_'),
+          title: notifData.title,
+          body: notifData.body,
+          data: payload as any,
+          user_id: null, // broadcast to all operators
+          read: false,
+        });
+      if (notifError) {
+        console.error("[notify-event] Failed to create operator notification:", notifError);
+      } else {
+        console.log("[notify-event] Operator notification created for:", payload.event);
+      }
+    }
+
     // === TRIGGER WHATSAPP NOTIFICATIONS FOR KEY EVENTS ===
     // Queue WhatsApp template messages for subscription.approved
     if (payload.event === "subscription.approved" && payload.customer_phone) {
