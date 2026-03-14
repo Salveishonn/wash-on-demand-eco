@@ -4,13 +4,16 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Loader2, MapPin, Clock, Car, Navigation, 
-  CheckCircle, ChevronRight, MessageCircle, Send,
+  CheckCircle, ChevronRight, MessageCircle,
   AlertCircle, CreditCard, RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useOperatorNotifications } from '@/hooks/useOperatorNotifications';
+import RouteOptimizer from '@/components/ops/RouteOptimizer';
+import JobWorkflowActions from '@/components/ops/JobWorkflowActions';
+import JobPhotoUpload from '@/components/ops/JobPhotoUpload';
 
 interface TodayBooking {
   id: string;
@@ -31,6 +34,8 @@ interface TodayBooking {
   notes: string | null;
   final_price_ars: number | null;
   total_price_ars: number | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface OpsProps {
@@ -52,7 +57,7 @@ export default function OpsToday({ onNavigate }: OpsProps) {
     try {
       const { data, error: fetchErr } = await supabase
         .from('bookings')
-        .select('id, booking_date, booking_time, customer_name, customer_phone, customer_email, address, barrio, service_name, car_type, vehicle_size, status, payment_status, payment_method, is_subscription_booking, notes, final_price_ars, total_price_ars')
+        .select('id, booking_date, booking_time, customer_name, customer_phone, customer_email, address, barrio, service_name, car_type, vehicle_size, status, payment_status, payment_method, is_subscription_booking, notes, final_price_ars, total_price_ars, latitude, longitude')
         .eq('booking_date', today)
         .eq('is_test', false)
         .in('status', ['pending', 'confirmed', 'completed'])
@@ -98,13 +103,6 @@ export default function OpsToday({ onNavigate }: OpsProps) {
     if (ps === 'paid') return <Badge variant="outline" className="text-[10px] bg-accent/20 text-accent border-accent/30">Pagado</Badge>;
     if (ps === 'pending') return <Badge variant="outline" className="text-[10px] bg-yellow-500/20 text-yellow-700 border-yellow-300">Sin pagar</Badge>;
     return null;
-  };
-
-  const updateStatus = async (id: string, newStatus: 'pending' | 'confirmed' | 'completed' | 'cancelled') => {
-    try {
-      await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
-      fetchToday();
-    } catch {}
   };
 
   const openMaps = (address: string) => {
@@ -183,6 +181,9 @@ export default function OpsToday({ onNavigate }: OpsProps) {
         </div>
       )}
 
+      {/* Route Optimizer */}
+      <RouteOptimizer bookings={bookings} />
+
       {bookings.length === 0 && !error ? (
         <div className="text-center py-12">
           <CheckCircle className="w-12 h-12 text-accent mx-auto mb-3 opacity-50" />
@@ -256,6 +257,16 @@ export default function OpsToday({ onNavigate }: OpsProps) {
                       )}
                     </div>
 
+                    {/* Job Workflow */}
+                    {b.status !== 'completed' && (
+                      <JobWorkflowActions
+                        bookingId={b.id}
+                        currentStatus={b.status}
+                        customerName={b.customer_name}
+                        onStatusChange={fetchToday}
+                      />
+                    )}
+
                     <div className="grid grid-cols-2 gap-2">
                       {b.address && (
                         <Button size="sm" variant="outline" className="h-10 text-xs" onClick={() => openMaps(b.address!)}>
@@ -267,28 +278,12 @@ export default function OpsToday({ onNavigate }: OpsProps) {
                         <MessageCircle className="w-3.5 h-3.5 mr-1.5" />
                         WhatsApp
                       </Button>
-                      <Button size="sm" variant="outline" className="h-10 text-xs" onClick={() => sendQuickWhatsApp(b.customer_phone, `Hola ${(b.customer_name || '').split(' ')[0]}! Ya estamos en camino 🚗💨`)}>
-                        <Send className="w-3.5 h-3.5 mr-1.5" />
-                        En camino
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-10 text-xs" onClick={() => sendQuickWhatsApp(b.customer_phone, `Hola ${(b.customer_name || '').split(' ')[0]}! Llegamos en 10 minutos ⏱️`)}>
-                        <Clock className="w-3.5 h-3.5 mr-1.5" />
-                        10 min
-                      </Button>
                     </div>
 
-                    <div className="flex gap-2">
-                      {b.status === 'pending' && (
-                        <Button size="sm" className="flex-1 h-10" onClick={() => updateStatus(b.id, 'confirmed')}>
-                          Confirmar
-                        </Button>
-                      )}
-                      {(b.status === 'confirmed' || b.status === 'pending') && (
-                        <Button size="sm" className="flex-1 h-10 bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => updateStatus(b.id, 'completed')}>
-                          <CheckCircle className="w-4 h-4 mr-1.5" />
-                          Completado
-                        </Button>
-                      )}
+                    {/* Before/After Photos */}
+                    <div className="space-y-3 pt-2 border-t border-border">
+                      <JobPhotoUpload bookingId={b.id} type="before" />
+                      <JobPhotoUpload bookingId={b.id} type="after" />
                     </div>
                   </div>
                 )}
