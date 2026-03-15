@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LucideIcon, Calendar, Bell, Shield, Users, Clock, DollarSign, MessageCircle, CalendarDays, ChevronDown, Menu, MoreHorizontal, Settings, Tag, FileText, Sparkles, Mail, Map } from 'lucide-react';
+import { LucideIcon, Calendar, Bell, Shield, Users, Clock, DollarSign, MessageCircle, CalendarDays, ChevronDown, Menu, MoreHorizontal, Settings, Tag, FileText, Sparkles, Mail, Map, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
