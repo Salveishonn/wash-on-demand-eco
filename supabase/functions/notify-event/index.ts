@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { queueTemplateSend, triggerOutboxProcessing } from "../_whatsappAutomation/queueTemplateSend.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -199,21 +200,65 @@ serve(async (req) => {
       }
     }
 
-    // === WHATSAPP FOR SUBSCRIPTION APPROVED ===
-    if (payload.event === "subscription.approved" && payload.customer_phone) {
-      const customerName = payload.customer_name?.split(" ")[0] || "Cliente";
-      const planName = (payload.metadata?.plan_name as string) || "Tu plan";
-      const washesCount = (payload.metadata?.washes_per_month as string) || "tus lavados";
+    // ============================================================
+    // WHATSAPP TEMPLATE AUTOMATIONS
+    // Queue template messages for relevant events via centralized layer
+    // ============================================================
+    const meta = payload.metadata || {};
 
-      await supabase.from("whatsapp_outbox").insert({
-        entity_type: "subscription",
-        entity_id: payload.subscription_id,
-        to_phone_e164: payload.customer_phone,
-        template_name: "washero_subscription_active",
-        language_code: "es_AR",
-        template_vars: [customerName, planName, String(washesCount)],
-        status: "queued",
-      });
+    if (payload.event === "booking.created" && payload.customer_phone) {
+      const result = await queueTemplateSend(
+        supabase,
+        'booking_created',
+        {
+          customerName: payload.customer_name || 'Cliente',
+          customerPhone: payload.customer_phone,
+          bookingDate: (meta.booking_date as string) || undefined,
+          bookingTime: (meta.booking_time as string) || undefined,
+          address: (meta.address as string) || undefined,
+          serviceName: (meta.service_name as string) || undefined,
+          bookingId: payload.booking_id,
+        },
+        'reservation',
+        payload.booking_id,
+      );
+      console.log("[notify-event] Template queue result (booking_created):", result);
+      triggerOutboxProcessing(supabaseUrl, supabaseServiceKey);
+    }
+
+    if (payload.event === "booking.payment_required" && payload.customer_phone) {
+      const result = await queueTemplateSend(
+        supabase,
+        'payment_instructions',
+        {
+          customerName: payload.customer_name || 'Cliente',
+          customerPhone: payload.customer_phone,
+          paymentUrl: (meta.payment_url as string) || undefined,
+          bookingId: payload.booking_id,
+        },
+        'reservation',
+        payload.booking_id,
+      );
+      console.log("[notify-event] Template queue result (payment_instructions):", result);
+      triggerOutboxProcessing(supabaseUrl, supabaseServiceKey);
+    }
+
+    if (payload.event === "subscription.approved" && payload.customer_phone) {
+      const result = await queueTemplateSend(
+        supabase,
+        'subscription_approved',
+        {
+          customerName: payload.customer_name || 'Cliente',
+          customerPhone: payload.customer_phone,
+          planName: (meta.plan_name as string) || undefined,
+          washesPerMonth: meta.washes_per_month as number || undefined,
+          subscriptionId: payload.subscription_id,
+        },
+        'subscription',
+        payload.subscription_id,
+      );
+      console.log("[notify-event] Template queue result (subscription_approved):", result);
+      triggerOutboxProcessing(supabaseUrl, supabaseServiceKey);
     }
 
     // === EXTERNAL WEBHOOK (n8n) ===
