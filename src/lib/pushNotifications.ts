@@ -189,9 +189,10 @@ export async function subscribeToPush(userId: string): Promise<{ success: boolea
     let subscription = await swReg.pushManager.getSubscription();
 
     if (!subscription) {
+      const applicationServerKey = urlBase64ToUint8Array(vapidData.publicKey) as unknown as BufferSource;
       subscription = await swReg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey),
+        applicationServerKey,
       });
     }
 
