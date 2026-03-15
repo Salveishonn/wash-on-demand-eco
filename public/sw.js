@@ -15,31 +15,18 @@ async function broadcastToClients(payload) {
   }
 }
 
-function buildTargetUrl(rawUrl, receivedAt, fallbackTab) {
-  try {
-    const absolute = new URL(rawUrl || '/ops', self.location.origin);
-    if (!absolute.searchParams.get('push_received_at')) {
-      absolute.searchParams.set('push_received_at', receivedAt);
-    }
-    if (fallbackTab && !absolute.searchParams.get('tab')) {
-      absolute.searchParams.set('tab', fallbackTab);
-    }
-    return `${absolute.pathname}${absolute.search}${absolute.hash}`;
-  } catch {
-    const params = new URLSearchParams();
-    params.set('push_received_at', receivedAt);
-    if (fallbackTab) params.set('tab', fallbackTab);
-    return `/ops?${params.toString()}`;
-  }
-}
-
 // Handle push notifications
 self.addEventListener('push', (event) => {
-  let data = { title: 'Washero Ops', body: 'Nueva notificación', url: '/ops', tag: 'washero-ops', data: {} };
+  console.log('[SW] Push event received');
+
+  let data = { title: 'Washero Driver', body: 'Nueva notificación' };
 
   try {
     if (event.data) {
-      data = { ...data, ...event.data.json() };
+      const raw = event.data.text();
+      console.log('[SW] Push raw payload length:', raw.length);
+      data = { ...data, ...JSON.parse(raw) };
+      console.log('[SW] Push parsed OK — title:', data.title);
     }
   } catch (e) {
     console.error('[SW] Push data parse error:', e);
@@ -47,54 +34,72 @@ self.addEventListener('push', (event) => {
 
   const receivedAt = new Date().toISOString();
 
+  // Minimal iOS-safe notification options
   const options = {
-    body: data.body,
-    icon: data.icon || '/ops-icon-192.png',
-    badge: data.badge || '/ops-icon-192.png',
-    vibrate: [200, 100, 200],
+    body: data.body || 'Nueva notificación',
+    icon: data.icon || '/icons/washero-driver-192.png',
+    badge: data.badge || '/icons/washero-driver-192.png',
     tag: data.tag || 'washero-ops',
-    renotify: true,
     data: {
       url: data.url || '/ops',
       receivedAt,
-      tag: data.tag || 'washero-ops',
-      payload: data.data || {},
     },
-    actions: data.actions || [],
   };
 
-  event.waitUntil((async () => {
-    await self.registration.showNotification(data.title, options);
-    await broadcastToClients({
-      type: 'PUSH_RECEIVED',
-      receivedAt,
-      tag: options.tag,
-      payload: data,
-    });
-  })());
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Washero Driver', options)
+      .then(() => {
+        console.log('[SW] showNotification succeeded');
+        return broadcastToClients({
+          type: 'PUSH_RECEIVED',
+          receivedAt,
+          tag: options.tag,
+          title: data.title,
+          body: data.body,
+        });
+      })
+      .catch((err) => {
+        console.error('[SW] showNotification failed:', err);
+      })
+  );
 });
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
+  console.log('[SW] Notification clicked');
   event.notification.close();
 
-  const receivedAt = event.notification.data?.receivedAt || new Date().toISOString();
-  const payload = event.notification.data?.payload || {};
-  const fallbackTab = payload?.tab || (event.notification.data?.tag?.includes('whatsapp') ? 'messages' : 'notifications');
-  const targetUrl = buildTargetUrl(event.notification.data?.url || '/ops', receivedAt, fallbackTab);
+  const url = event.notification.data?.url || '/ops';
 
-  event.waitUntil((async () => {
-    const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-
-    for (const client of clientList) {
-      if (client.url.includes('/ops') && 'focus' in client) {
-        await client.navigate(targetUrl);
-        await client.focus();
-        await broadcastToClients({ type: 'PUSH_CLICKED', receivedAt, tag: event.notification.data?.tag });
-        return;
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes('/ops') && 'focus' in client) {
+          return client.focus().then(() => client.navigate(url));
+        }
       }
-    }
+      return clients.openWindow(url);
+    })
+  );
+});
 
-    await clients.openWindow(targetUrl);
-  })());
+// Handle local test notification message from app
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SHOW_LOCAL_NOTIFICATION') {
+    console.log('[SW] Local notification requested');
+    const { title, body, tag } = event.data;
+    event.waitUntil(
+      self.registration.showNotification(title || 'Washero Driver', {
+        body: body || 'Notificación local de prueba',
+        icon: '/icons/washero-driver-192.png',
+        badge: '/icons/washero-driver-192.png',
+        tag: tag || 'local-test',
+        data: { url: '/ops' },
+      }).then(() => {
+        console.log('[SW] Local notification shown');
+      }).catch((err) => {
+        console.error('[SW] Local notification failed:', err);
+      })
+    );
+  }
 });
