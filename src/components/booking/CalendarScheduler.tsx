@@ -161,12 +161,6 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
     setCurrentYear(today.getFullYear());
   };
 
-  const goToLaunchMonth = () => {
-    const [y, m] = LAUNCH_DATE.split("-").map(Number);
-    setCurrentYear(y);
-    setCurrentMonth(m - 1);
-    setShowPreLaunchModal(false);
-  };
 
   const handleDayClick = (date: Date) => {
     const dateKey = formatDateKey(date);
@@ -175,12 +169,6 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
 
     const todayStr = formatDateKey(today);
     if (dateKey < todayStr) return;
-
-    // Block dates before launch
-    if (isBeforeLaunch(dateKey)) {
-      setShowPreLaunchModal(true);
-      return;
-    }
 
     setSelectedDate(date);
     setSelectedTime(null);
