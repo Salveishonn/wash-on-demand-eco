@@ -81,27 +81,8 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [currentSurcharge, setCurrentSurcharge] = useState<{ amount: number | null; percent: number | null } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [showPreLaunchModal, setShowPreLaunchModal] = useState(false);
-  const [foundingSlotsRemaining, setFoundingSlotsRemaining] = useState<number | null>(null);
 
-  // Fetch founding slots count
-  useEffect(() => {
-    const fetchFoundingSlots = async () => {
-      try {
-        const { count } = await supabase
-          .from("bookings")
-          .select("*", { count: "exact", head: true })
-          .eq("is_launch_founder_slot", true)
-          .eq("is_test", false)
-          .in("status", ["pending", "confirmed", "completed"]);
-        const used = count ?? 0;
-        setFoundingSlotsRemaining(Math.max(0, FOUNDING_SLOTS_TOTAL - used));
-      } catch {
-        setFoundingSlotsRemaining(FOUNDING_SLOTS_TOTAL);
-      }
-    };
-    fetchFoundingSlots();
-  }, []);
+
 
   const fetchMonthAvailability = useCallback(async (year: number, month: number) => {
     setIsLoading(true);
