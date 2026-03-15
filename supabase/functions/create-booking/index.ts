@@ -79,25 +79,9 @@ serve(async (req) => {
       );
     }
 
-    // ========== 3. VALIDATE LAUNCH DATE ==========
-    // Try to get launch date from app_settings, fall back to constant
-    let launchDate = DEFAULT_LAUNCH_DATE;
-    try {
-      const { data: setting } = await supabase
-        .from("app_settings")
-        .select("value")
-        .eq("key", "LAUNCH_DATE")
-        .maybeSingle();
-      if (setting?.value) launchDate = setting.value;
-    } catch { /* use default */ }
-
-    const launchCheck = validateLaunchDate(data.bookingDate, launchDate);
-    if (!launchCheck.allowed) {
-      return new Response(
-        JSON.stringify({ error: launchCheck.reason }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // ========== 3. LAUNCH DATE CHECK REMOVED ==========
+    // Launch date restriction disabled — admin availability is the single source of truth.
+    // Only past-date prevention (handled by frontend) and admin availability (step 4) apply.
 
     // ========== 4. VALIDATE AVAILABILITY ==========
     const availability = await validateAvailability(supabase, data.bookingDate, data.bookingTime);
