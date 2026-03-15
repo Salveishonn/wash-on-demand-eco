@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AudioPlayer } from '@/components/ui/audio-player';
 import {
   Search,
   Send,
@@ -23,142 +24,8 @@ import {
   CheckCircle,
   CalendarX,
   AlertTriangle,
-  Mic,
-  Download,
-  Play,
-  Pause,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-/* ── Inline Audio Player ── */
-function AudioPlayer({ url, mime }: { url?: string | null; mime?: string | null }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [error, setError] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-
-  if (!url) {
-    return (
-      <div className="flex items-center gap-2 min-w-[180px] py-1">
-        <Mic className="w-4 h-4 flex-shrink-0 opacity-60" />
-        <span className="text-xs italic opacity-70">Audio no disponible</span>
-      </div>
-    );
-  }
-
-  const togglePlay = async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      setIsLoading(true);
-      try {
-        await audio.play();
-      } catch (e) {
-        console.error('Audio play failed:', e);
-        setError(true);
-      }
-      setIsLoading(false);
-    }
-  };
-
-  const formatDuration = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    const audio = audioRef.current;
-    if (!audio || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const pct = x / rect.width;
-    audio.currentTime = pct * duration;
-  };
-
-  if (error) {
-    return (
-      <div className="flex flex-col gap-1.5 min-w-[180px]">
-        <div className="flex items-center gap-2 text-xs opacity-70">
-          <Mic className="w-3.5 h-3.5" />
-          <span>No se pudo reproducir</span>
-        </div>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-fit"
-        >
-          <Download className="w-3 h-3" />
-          Descargar audio
-        </a>
-      </div>
-    );
-  }
-
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  return (
-    <div className="flex items-center gap-2.5 min-w-[200px] max-w-[280px]">
-      <audio
-        ref={audioRef}
-        src={url}
-        preload="metadata"
-        onLoadedMetadata={() => {
-          if (audioRef.current) setDuration(audioRef.current.duration);
-        }}
-        onTimeUpdate={() => {
-          if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
-        }}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
-        onError={() => setError(true)}
-      />
-      
-      {/* Play/Pause button */}
-      <button
-        onClick={togglePlay}
-        className="w-9 h-9 rounded-full bg-primary/20 hover:bg-primary/30 flex items-center justify-center flex-shrink-0 transition-colors active:scale-95"
-      >
-        {isLoading ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
-        ) : isPlaying ? (
-          <Pause className="w-4 h-4" />
-        ) : (
-          <Play className="w-4 h-4 ml-0.5" />
-        )}
-      </button>
-
-      {/* Waveform / progress bar */}
-      <div className="flex-1 min-w-0">
-        <div
-          className="h-2 bg-primary/10 rounded-full cursor-pointer overflow-hidden"
-          onClick={handleSeek}
-        >
-          <div
-            className="h-full bg-primary/60 rounded-full transition-[width] duration-100"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <div className="flex justify-between mt-0.5">
-          <span className="text-[10px] opacity-60">
-            {currentTime > 0 ? formatDuration(currentTime) : '0:00'}
-          </span>
-          <span className="text-[10px] opacity-60">
-            {duration > 0 ? formatDuration(duration) : '—'}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 
 interface Conversation {
   id: string;
