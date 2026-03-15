@@ -258,10 +258,11 @@ export default function RouteOptimizer({ bookings, onRefresh }: RouteOptimizerPr
     const loadResult = await loadGoogleMaps(apiKey);
     if (!loadResult.success || !window.google?.maps) return;
 
-    const bounds = new google.maps.LatLngBounds();
-    stopsWithCoords.forEach((s) => bounds.extend({ lat: s.latitude!, lng: s.longitude! }));
+    const gmaps = window.google.maps;
+    const bounds = new gmaps.LatLngBounds();
+    stopsWithCoords.forEach((s: BookingStop) => bounds.extend({ lat: s.latitude!, lng: s.longitude! }));
 
-    const map = new google.maps.Map(mapContainerRef.current, {
+    const map = new gmaps.Map(mapContainerRef.current, {
       center: bounds.getCenter(),
       zoom: 12,
       disableDefaultUI: true,
@@ -279,8 +280,8 @@ export default function RouteOptimizer({ bookings, onRefresh }: RouteOptimizerPr
 
     // Draw route line
     if (stopsWithCoords.length > 1) {
-      new google.maps.Polyline({
-        path: stopsWithCoords.map((s) => ({ lat: s.latitude!, lng: s.longitude! })),
+      new gmaps.Polyline({
+        path: stopsWithCoords.map((s: BookingStop) => ({ lat: s.latitude!, lng: s.longitude! })),
         geodesic: true,
         strokeColor: '#22c55e',
         strokeOpacity: 0.8,
@@ -290,7 +291,7 @@ export default function RouteOptimizer({ bookings, onRefresh }: RouteOptimizerPr
     }
 
     // Add numbered markers
-    stopsWithCoords.forEach((stop, i) => {
+    stopsWithCoords.forEach((stop: BookingStop, i: number) => {
       const svgIcon = {
         url: `data:image/svg+xml,${encodeURIComponent(`
           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40">
@@ -298,18 +299,18 @@ export default function RouteOptimizer({ bookings, onRefresh }: RouteOptimizerPr
             <text x="16" y="20" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial">${i + 1}</text>
           </svg>
         `)}`,
-        scaledSize: new google.maps.Size(32, 40),
-        anchor: new google.maps.Point(16, 40),
+        scaledSize: new gmaps.Size(32, 40),
+        anchor: new gmaps.Point(16, 40),
       };
 
-      const marker = new google.maps.Marker({
+      const marker = new gmaps.Marker({
         position: { lat: stop.latitude!, lng: stop.longitude! },
         map,
         icon: svgIcon,
         title: `${i + 1}. ${stop.customer_name}`,
       });
 
-      const infoWindow = new google.maps.InfoWindow({
+      const infoWindow = new gmaps.InfoWindow({
         content: `<div style="color:#000;font-size:13px;padding:4px"><strong>${i + 1}. ${stop.booking_time?.slice(0, 5)}</strong><br/>${stop.customer_name}<br/><span style="color:#666">${stop.barrio || ''}</span></div>`,
       });
       marker.addListener('click', () => infoWindow.open(map, marker));
