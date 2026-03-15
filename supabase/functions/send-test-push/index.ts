@@ -163,7 +163,7 @@ serve(async (req) => {
         error: success ? null : (failed[0] as any)?.error || "Push delivery failed",
       }),
       {
-        status: success ? 200 : 502,
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
