@@ -13,10 +13,7 @@ import {
 } from "@/components/ui/drawer";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateKey } from "@/lib/dateUtils";
-import { LAUNCH_DATE, LAUNCH_HIGHLIGHT_DATES, FOUNDING_SLOTS_TOTAL } from "@/config/prelaunch";
-import { LaunchBanner } from "./LaunchBanner";
 import { BarrioCard } from "./BarrioCard";
-import { PreLaunchModal } from "./PreLaunchModal";
 
 interface DayAvailability {
   date: string;
@@ -69,8 +66,6 @@ function formatDateLong(date: Date): string {
   return `${DAYS_FULL[date.getDay()]} ${date.getDate()} de ${MONTHS[date.getMonth()].toLowerCase()}`;
 }
 
-const isBeforeLaunch = (dateKey: string) => dateKey < LAUNCH_DATE;
-const isLaunchHighlight = (dateKey: string) => LAUNCH_HIGHLIGHT_DATES.includes(dateKey);
 
 export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" }: CalendarSchedulerProps) {
   const { toast } = useToast();
@@ -86,27 +81,8 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [currentSurcharge, setCurrentSurcharge] = useState<{ amount: number | null; percent: number | null } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [showPreLaunchModal, setShowPreLaunchModal] = useState(false);
-  const [foundingSlotsRemaining, setFoundingSlotsRemaining] = useState<number | null>(null);
 
-  // Fetch founding slots count
-  useEffect(() => {
-    const fetchFoundingSlots = async () => {
-      try {
-        const { count } = await supabase
-          .from("bookings")
-          .select("*", { count: "exact", head: true })
-          .eq("is_launch_founder_slot", true)
-          .eq("is_test", false)
-          .in("status", ["pending", "confirmed", "completed"]);
-        const used = count ?? 0;
-        setFoundingSlotsRemaining(Math.max(0, FOUNDING_SLOTS_TOTAL - used));
-      } catch {
-        setFoundingSlotsRemaining(FOUNDING_SLOTS_TOTAL);
-      }
-    };
-    fetchFoundingSlots();
-  }, []);
+
 
   const fetchMonthAvailability = useCallback(async (year: number, month: number) => {
     setIsLoading(true);
@@ -185,12 +161,6 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
     setCurrentYear(today.getFullYear());
   };
 
-  const goToLaunchMonth = () => {
-    const [y, m] = LAUNCH_DATE.split("-").map(Number);
-    setCurrentYear(y);
-    setCurrentMonth(m - 1);
-    setShowPreLaunchModal(false);
-  };
 
   const handleDayClick = (date: Date) => {
     const dateKey = formatDateKey(date);
@@ -199,12 +169,6 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
 
     const todayStr = formatDateKey(today);
     if (dateKey < todayStr) return;
-
-    // Block dates before launch
-    if (isBeforeLaunch(dateKey)) {
-      setShowPreLaunchModal(true);
-      return;
-    }
 
     setSelectedDate(date);
     setSelectedTime(null);
@@ -231,16 +195,6 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
     setSelectedDate(null);
     setSelectedTime(null);
     fetchMonthAvailability(currentYear, currentMonth);
-    // Refresh founding slots
-    supabase
-      .from("bookings")
-      .select("*", { count: "exact", head: true })
-      .eq("is_launch_founder_slot", true)
-      .eq("is_test", false)
-      .in("status", ["pending", "confirmed", "completed"])
-      .then(({ count }) => {
-        setFoundingSlotsRemaining(Math.max(0, FOUNDING_SLOTS_TOTAL - (count ?? 0)));
-      });
     onBookingComplete?.(bookingId, paymentMethod);
   };
 
@@ -253,8 +207,8 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      {/* Launch Banner */}
-      <LaunchBanner foundingSlotsRemaining={foundingSlotsRemaining} />
+
+
 
       {/* Calendar Card */}
       <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
@@ -312,57 +266,43 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
               const isFullyBooked = dayInfo && !dayInfo.closed && dayInfo.availableSlots === 0;
               const hasSurcharge = dayInfo?.surchargeAmount || dayInfo?.surchargePercent;
               const clusterEmoji = dayInfo?.clusterEmoji || "";
-              const preLaunch = isBeforeLaunch(dateKey) && !isPast;
-              const isHighlight = isLaunchHighlight(dateKey);
-              const isClickable = !isPast && !isClosed && !preLaunch;
+              const isClickable = !isPast && !isClosed;
 
               return (
                 <motion.button
                   key={dateKey}
                   type="button"
                   onClick={() => {
-                    if (preLaunch && !isPast) {
-                      setShowPreLaunchModal(true);
-                      return;
-                    }
                     if (isClickable) handleDayClick(date);
                   }}
                   disabled={isPast}
                   whileTap={isClickable ? { scale: 0.92 } : undefined}
-                  title={preLaunch ? "Disponible a partir del 15 de Abril" : undefined}
                   className={`
                     aspect-square min-h-[44px] min-w-[44px] p-0.5 sm:p-1 rounded-lg sm:rounded-xl 
                     flex flex-col items-center justify-center
                     transition-all relative touch-manipulation
                     ${isPast ? "opacity-30 cursor-not-allowed" : ""}
-                    ${preLaunch && !isPast ? "opacity-40 cursor-not-allowed" : ""}
-                    ${isClosed && !isPast && !preLaunch ? "bg-muted/30" : ""}
+                    ${isClosed && !isPast ? "bg-muted/30" : ""}
                     ${isClickable && hasAvailability ? "hover:bg-primary/10 active:bg-primary/20 cursor-pointer" : ""}
                     ${isClickable && isFullyBooked ? "bg-destructive/5" : ""}
                     ${isClickable && hasSurcharge ? "bg-yellow-50" : ""}
-                    ${isHighlight && !isPast ? "ring-2 ring-primary/50 bg-primary/5" : ""}
                     ${isToday ? "ring-2 ring-primary ring-inset" : ""}
-                    ${!isClickable && !isPast && !preLaunch ? "cursor-not-allowed" : ""}
+                    ${!isClickable && !isPast ? "cursor-not-allowed" : ""}
                   `}
                 >
                   <span className={`
                     text-sm sm:text-base font-semibold leading-none
                     ${isToday ? "text-primary" : "text-foreground"}
-                    ${isPast || isClosed || preLaunch ? "text-muted-foreground" : ""}
-                    ${isHighlight && !isPast ? "text-primary font-bold" : ""}
+                    ${isPast || isClosed ? "text-muted-foreground" : ""}
                   `}>
                     {date.getDate()}
                   </span>
 
-                  {/* Launch highlight label */}
-                  {isHighlight && !isPast && (
-                    <span className="text-[8px] sm:text-[9px] text-primary font-bold leading-none mt-0.5">
-                      🚀
-                    </span>
-                  )}
+
+
 
                   {/* Availability + Cluster indicators */}
-                  {!isPast && !isClosed && !preLaunch && dayInfo && (
+                  {!isPast && !isClosed && dayInfo && (
                     <div className="mt-0.5 sm:mt-1 flex gap-0.5 items-center">
                       {hasAvailability ? (
                         <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-accent" />
@@ -401,25 +341,16 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
             <span>🔥</span>
             <span>+Descuento</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span>🚀</span>
-            <span>Lanzamiento</span>
-          </div>
+
+
         </div>
       </div>
 
       {/* Barrio Card */}
       <BarrioCard />
 
-      {/* Pre-Launch Modal */}
-      <AnimatePresence>
-        {showPreLaunchModal && (
-          <PreLaunchModal
-            onClose={() => setShowPreLaunchModal(false)}
-            onPickLaunchDate={goToLaunchMonth}
-          />
-        )}
-      </AnimatePresence>
+
+
 
       {/* Slot Drawer */}
       <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
