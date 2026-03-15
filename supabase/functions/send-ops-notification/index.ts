@@ -8,6 +8,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function resolveNotificationTab(eventType?: string): "notifications" | "messages" | "calendar" {
+  if (!eventType) return "notifications";
+  if (eventType.includes("whatsapp") || eventType.includes("message")) return "messages";
+  if (eventType.includes("booking")) return "calendar";
+  return "notifications";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -16,7 +23,6 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  // Only internal callers (service role)
   const authHeader = req.headers.get("Authorization");
   if (!authHeader || authHeader !== `Bearer ${supabaseServiceKey}`) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -32,11 +38,14 @@ serve(async (req) => {
 
     console.log("[send-ops-notification] Event:", event_type, "Title:", title);
 
-    // 1. Insert into operator_notifications
+    const eventType = event_type || "washero_ops";
+    const tab = resolveNotificationTab(eventType);
+    const sentAt = new Date().toISOString();
+
     const { error: insertError } = await supabase
       .from("operator_notifications")
       .insert({
-        event_type,
+        event_type: eventType,
         title,
         body,
         data: data || {},
@@ -48,7 +57,6 @@ serve(async (req) => {
       console.error("[send-ops-notification] Insert error:", insertError);
     }
 
-    // 2. Send real push notifications
     const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
     const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
 
@@ -60,8 +68,7 @@ serve(async (req) => {
       );
     }
 
-    // Get push subscriptions
-    let query = supabase.from("push_subscriptions").select("*");
+    let query = supabase.from("push_subscriptions").select("id, endpoint, p256dh, auth");
     if (user_id) {
       query = query.eq("user_id", user_id);
     }
@@ -82,9 +89,14 @@ serve(async (req) => {
       body: body || "Nueva notificación",
       icon: "/icons/washero-driver-192.png",
       badge: "/icons/washero-driver-192.png",
-      tag: event_type || "washero-ops",
-      url: data?.url || "/ops",
-      data: data || {},
+      tag: eventType,
+      url: data?.url || `/ops?tab=${tab}`,
+      data: {
+        ...(data || {}),
+        tab,
+        event_type: eventType,
+        sentAt,
+      },
     };
 
     const results = await Promise.allSettled(
@@ -94,15 +106,15 @@ serve(async (req) => {
           p256dh: sub.p256dh,
           auth: sub.auth,
         };
+
         const result = await sendWebPush(pushSub, pushPayload, vapidPublicKey, vapidPrivateKey);
-        
-        // If subscription is expired/invalid (410 Gone), remove it
+
         if (result.status === 410 || result.status === 404) {
           console.log("[send-ops-notification] Removing expired subscription:", sub.endpoint.slice(0, 50));
           await supabase.from("push_subscriptions").delete().eq("id", sub.id);
         }
-        
-        return result;
+
+        return { ...result, endpoint: sub.endpoint, subscription_id: sub.id };
       })
     );
 
@@ -111,16 +123,22 @@ serve(async (req) => {
     ).length;
     const failed = results.length - sent;
 
+    const failures = results
+      .map((r) => {
+        if (r.status === "fulfilled" && !r.value.success) {
+          return { status: r.value.status, error: r.value.error };
+        }
+        if (r.status === "rejected") {
+          return { error: String(r.reason) };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
     console.log(`[send-ops-notification] Push results: ${sent} sent, ${failed} failed`);
-    
-    // Log failures for debugging
-    results.forEach((r) => {
-      if (r.status === "fulfilled" && !r.value.success) {
-        console.log(`[send-ops-notification] Push failed: ${r.value.status} ${r.value.error}`);
-      } else if (r.status === "rejected") {
-        console.log(`[send-ops-notification] Push rejected: ${r.reason}`);
-      }
-    });
+    if (failures.length > 0) {
+      console.log(`[send-ops-notification] Failure details: ${JSON.stringify(failures)}`);
+    }
 
     return new Response(
       JSON.stringify({
@@ -129,6 +147,8 @@ serve(async (req) => {
         sent,
         failed,
         total: subscriptions.length,
+        all_failed: sent === 0 && failed > 0,
+        failures,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

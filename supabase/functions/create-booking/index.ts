@@ -731,11 +731,16 @@ serve(async (req) => {
         booking_id: booking.id,
         amount_ars: data.totalPriceArs || Math.round(totalPriceCents / 100),
         status: bookingStatus,
-        metadata: { 
-          payment_method: paymentMethodValue,
-          is_subscription: isSubscription,
-          is_transfer: isTransfer
-        },
+          metadata: {
+            payment_method: paymentMethodValue,
+            is_subscription: isSubscription,
+            is_transfer: isTransfer,
+            booking_date: data.bookingDate,
+            booking_time: data.bookingTime,
+            service_name: data.serviceName,
+            barrio: data.barrio || null,
+            address: data.address,
+          },
       }),
     }).catch(err => console.error("[create-booking] Notify event error:", err));
 
