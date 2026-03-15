@@ -221,7 +221,7 @@ export default function RouteOptimizer({ bookings, onRefresh }: RouteOptimizerPr
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const mapInstanceRef = useRef<any>(null);
 
   const activeBookings = useMemo(
     () => bookings.filter((b) => b.status !== 'completed' && b.status !== 'cancelled'),
