@@ -195,16 +195,6 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
     setSelectedDate(null);
     setSelectedTime(null);
     fetchMonthAvailability(currentYear, currentMonth);
-    // Refresh founding slots
-    supabase
-      .from("bookings")
-      .select("*", { count: "exact", head: true })
-      .eq("is_launch_founder_slot", true)
-      .eq("is_test", false)
-      .in("status", ["pending", "confirmed", "completed"])
-      .then(({ count }) => {
-        setFoundingSlotsRemaining(Math.max(0, FOUNDING_SLOTS_TOTAL - (count ?? 0)));
-      });
     onBookingComplete?.(bookingId, paymentMethod);
   };
 
