@@ -84,18 +84,25 @@ serve(async (req) => {
 
     console.log(`[send-ops-notification] Sending push to ${subscriptions.length} subscribers`);
 
+    // Determine if this event type requires interaction
+    const criticalEvents = ["booking_created", "whatsapp_incoming_message", "subscription_created"];
+    const requireInteraction = body_json?.requireInteraction ?? criticalEvents.includes(eventType);
+
     const pushPayload = {
       title: title || "Washero Driver",
-      body: body || "Nueva notificación",
+      body: body || "Nueva actualización operativa",
       icon: "/icons/washero-driver-192.png",
       badge: "/icons/washero-driver-192.png",
-      tag: eventType,
-      url: data?.url || `/ops?tab=${tab}`,
+      tag: body_json?.tag || eventType,
+      url: body_json?.url || data?.url || `/ops?tab=${tab}`,
+      vibrate: [200, 100, 200],
+      requireInteraction,
       data: {
         ...(data || {}),
         tab,
         event_type: eventType,
         sentAt,
+        booking_id: data?.booking_id || null,
       },
     };
 
