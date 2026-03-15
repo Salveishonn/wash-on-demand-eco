@@ -2167,6 +2167,76 @@ export type Database = {
           },
         ]
       }
+      whatsapp_template_logs: {
+        Row: {
+          booking_id: string | null
+          created_at: string
+          customer_phone: string
+          error_message: string | null
+          event_type: string
+          id: string
+          language_code: string
+          outbox_id: string | null
+          status: string
+          subscription_id: string | null
+          template_name: string
+          template_vars: Json
+          wa_message_id: string | null
+        }
+        Insert: {
+          booking_id?: string | null
+          created_at?: string
+          customer_phone: string
+          error_message?: string | null
+          event_type: string
+          id?: string
+          language_code?: string
+          outbox_id?: string | null
+          status?: string
+          subscription_id?: string | null
+          template_name: string
+          template_vars?: Json
+          wa_message_id?: string | null
+        }
+        Update: {
+          booking_id?: string | null
+          created_at?: string
+          customer_phone?: string
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          language_code?: string
+          outbox_id?: string | null
+          status?: string
+          subscription_id?: string | null
+          template_name?: string
+          template_vars?: Json
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_template_logs_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_template_logs_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_bookings_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_template_logs_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_templates: {
         Row: {
           created_at: string | null
