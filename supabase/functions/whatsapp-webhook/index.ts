@@ -222,10 +222,11 @@ async function handleInboundMessages(
     } else {
       console.log("[whatsapp-webhook] Message stored, type:", msgType);
 
-      // Real push notification for inbound WhatsApp message
+      // Smart push notification for inbound WhatsApp message
+      const senderName = contactName || fromPhone;
       const preview = msgType === "text"
-        ? messageBody.slice(0, 70)
-        : `Nuevo ${msgType === "audio" || msgType === "voice" ? "audio" : msgType}`;
+        ? `"${messageBody.slice(0, 40)}"`
+        : msgType === "audio" || msgType === "voice" ? "🎤 Audio" : `📎 ${msgType}`;
 
       try {
         await fetch(`${supabaseUrl}/functions/v1/send-ops-notification`, {
@@ -236,11 +237,14 @@ async function handleInboundMessages(
           },
           body: JSON.stringify({
             event_type: "whatsapp_incoming_message",
-            title: "Nuevo mensaje de WhatsApp",
-            body: `${contactName || fromPhone} respondió por WhatsApp: ${preview}`,
+            title: "💬 Nuevo mensaje de cliente",
+            body: `${senderName}:\n${preview}`,
+            tag: "whatsapp-message",
+            url: "/ops/messages",
+            requireInteraction: true,
             data: {
               tab: "messages",
-              url: `/ops?tab=messages`,
+              url: "/ops/messages",
               conversation_phone: fromPhone,
               message_type: msgType,
             },

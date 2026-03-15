@@ -139,6 +139,8 @@ serve(async (req) => {
 
       console.log('[twilio-whatsapp-webhook] Saved inbound message to conversation:', conversationId);
 
+      // Smart push notification
+      const preview = body.length > 40 ? `"${body.substring(0, 40)}…"` : `"${body}"`;
       try {
         await fetch(`${supabaseUrl}/functions/v1/send-ops-notification`, {
           method: 'POST',
@@ -148,11 +150,14 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             event_type: 'whatsapp_incoming_message',
-            title: 'Nuevo mensaje de WhatsApp',
-            body: `${customerPhone} respondió por WhatsApp: ${body.substring(0, 70)}`,
+            title: '💬 Nuevo mensaje de cliente',
+            body: `${customerPhone}:\n${preview}`,
+            tag: 'whatsapp-message',
+            url: '/ops/messages',
+            requireInteraction: true,
             data: {
               tab: 'messages',
-              url: '/ops?tab=messages',
+              url: '/ops/messages',
               conversation_phone: customerPhone,
             },
           }),
