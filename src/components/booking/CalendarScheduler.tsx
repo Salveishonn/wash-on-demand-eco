@@ -13,10 +13,7 @@ import {
 } from "@/components/ui/drawer";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateKey } from "@/lib/dateUtils";
-import { LAUNCH_DATE, LAUNCH_HIGHLIGHT_DATES, FOUNDING_SLOTS_TOTAL } from "@/config/prelaunch";
-import { LaunchBanner } from "./LaunchBanner";
 import { BarrioCard } from "./BarrioCard";
-import { PreLaunchModal } from "./PreLaunchModal";
 
 interface DayAvailability {
   date: string;
