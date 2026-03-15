@@ -341,10 +341,8 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
             <span>🔥</span>
             <span>+Descuento</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span>🚀</span>
-            <span>Lanzamiento</span>
-          </div>
+
+
         </div>
       </div>
 
