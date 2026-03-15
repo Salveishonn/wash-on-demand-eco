@@ -207,8 +207,8 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      {/* Launch Banner */}
-      <LaunchBanner foundingSlotsRemaining={foundingSlotsRemaining} />
+
+
 
       {/* Calendar Card */}
       <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
