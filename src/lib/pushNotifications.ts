@@ -64,12 +64,12 @@ async function getServiceWorkerRegistration() {
 }
 
 export async function getPushState(): Promise<PushState> {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-    return 'unsupported';
-  }
-
   if (isIOSDevice() && !isStandaloneMode()) {
     return 'not_installed';
+  }
+
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    return 'unsupported';
   }
 
   const permission = Notification.permission;
