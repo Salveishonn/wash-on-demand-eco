@@ -84,6 +84,8 @@ interface CalendarBooking {
   created_at: string;
   confirmed_at: string | null;
   booking_source: string | null;
+  whatsapp_message_status: string | null;
+  whatsapp_last_message_type: string | null;
 }
 
 type ViewMode = 'day' | 'week' | 'month';
