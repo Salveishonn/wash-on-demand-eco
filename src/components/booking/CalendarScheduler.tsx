@@ -282,14 +282,12 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
                     flex flex-col items-center justify-center
                     transition-all relative touch-manipulation
                     ${isPast ? "opacity-30 cursor-not-allowed" : ""}
-                    ${preLaunch && !isPast ? "opacity-40 cursor-not-allowed" : ""}
-                    ${isClosed && !isPast && !preLaunch ? "bg-muted/30" : ""}
+                    ${isClosed && !isPast ? "bg-muted/30" : ""}
                     ${isClickable && hasAvailability ? "hover:bg-primary/10 active:bg-primary/20 cursor-pointer" : ""}
                     ${isClickable && isFullyBooked ? "bg-destructive/5" : ""}
                     ${isClickable && hasSurcharge ? "bg-yellow-50" : ""}
-                    ${isHighlight && !isPast ? "ring-2 ring-primary/50 bg-primary/5" : ""}
                     ${isToday ? "ring-2 ring-primary ring-inset" : ""}
-                    ${!isClickable && !isPast && !preLaunch ? "cursor-not-allowed" : ""}
+                    ${!isClickable && !isPast ? "cursor-not-allowed" : ""}
                   `}
                 >
                   <span className={`
