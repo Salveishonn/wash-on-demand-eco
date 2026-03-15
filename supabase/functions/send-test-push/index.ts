@@ -17,7 +17,6 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  // Verify authenticated user (admin)
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "No authorization header" }), {
@@ -31,13 +30,23 @@ serve(async (req) => {
     global: { headers: { Authorization: authHeader } },
   });
 
-  // Get the user
-  const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabaseUser.auth.getUser();
+
   if (userError || !user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  }
+
+  let body: { endpoint?: string | null } = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
   }
 
   try {
@@ -51,28 +60,49 @@ serve(async (req) => {
       );
     }
 
-    // Get this user's push subscriptions
-    const { data: subscriptions } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("push_subscriptions")
-      .select("*")
+      .select("id, endpoint, p256dh, auth")
       .eq("user_id", user.id);
+
+    if (body.endpoint) {
+      query = query.eq("endpoint", body.endpoint);
+    }
+
+    const { data: subscriptions, error: subscriptionError } = await query;
+
+    if (subscriptionError) {
+      return new Response(
+        JSON.stringify({ error: `Error reading subscriptions: ${subscriptionError.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!subscriptions || subscriptions.length === 0) {
       return new Response(
-        JSON.stringify({ error: "No push subscriptions found for this user" }),
+        JSON.stringify({ error: "No push subscriptions found for this user/device" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`[send-test-push] Sending test to ${subscriptions.length} devices for user ${user.id}`);
+    const testId = crypto.randomUUID();
+    const sentAt = new Date().toISOString();
+
+    console.log(`[send-test-push] testId=${testId} subscriptions=${subscriptions.length} user=${user.id}`);
 
     const pushPayload = {
       title: "🧪 Notificación de prueba",
-      body: "¡Las notificaciones push de Washero Driver están funcionando!",
+      body: "Push activa: vas a recibir alertas de reservas y mensajes.",
       icon: "/icons/washero-driver-192.png",
       badge: "/icons/washero-driver-192.png",
-      tag: "test-push",
-      url: "/ops",
+      tag: `test-push-${testId}`,
+      url: "/ops?tab=notifications",
+      data: {
+        tab: "notifications",
+        type: "test_push",
+        testId,
+        sentAt,
+      },
     };
 
     const results = await Promise.allSettled(
@@ -82,34 +112,60 @@ serve(async (req) => {
           p256dh: sub.p256dh,
           auth: sub.auth,
         };
+
         const result = await sendWebPush(pushSub, pushPayload, vapidPublicKey, vapidPrivateKey);
-        
+
         if (result.status === 410 || result.status === 404) {
           await supabaseAdmin.from("push_subscriptions").delete().eq("id", sub.id);
         }
-        
-        return result;
+
+        return {
+          subscription_id: sub.id,
+          endpoint: sub.endpoint,
+          ...result,
+        };
       })
     );
 
-    const sent = results.filter(
+    const successful = results.filter(
       (r) => r.status === "fulfilled" && r.value.success
-    ).length;
+    );
 
-    console.log(`[send-test-push] Results: ${sent}/${subscriptions.length} sent`);
+    const failed = results
+      .map((r) => {
+        if (r.status === "fulfilled" && !r.value.success) {
+          return { status: r.value.status, error: r.value.error };
+        }
+        if (r.status === "rejected") {
+          return { error: String(r.reason) };
+        }
+        return null;
+      })
+      .filter(Boolean);
 
-    // Log details for debugging
-    results.forEach((r, i) => {
-      if (r.status === "fulfilled") {
-        console.log(`[send-test-push] Sub ${i}: success=${r.value.success} status=${r.value.status} error=${r.value.error || 'none'}`);
-      } else {
-        console.log(`[send-test-push] Sub ${i}: rejected: ${r.reason}`);
-      }
-    });
+    const sent = successful.length;
+    const total = subscriptions.length;
+
+    console.log(`[send-test-push] testId=${testId} sent=${sent}/${total}`);
+    if (failed.length > 0) {
+      console.log(`[send-test-push] failures=${JSON.stringify(failed)}`);
+    }
+
+    const success = sent > 0;
 
     return new Response(
-      JSON.stringify({ success: true, sent, total: subscriptions.length }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        success,
+        sent,
+        total,
+        testId,
+        failures: failed,
+        error: success ? null : (failed[0] as any)?.error || "Push delivery failed",
+      }),
+      {
+        status: success ? 200 : 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
     );
   } catch (error: any) {
     console.error("[send-test-push] Error:", error);
