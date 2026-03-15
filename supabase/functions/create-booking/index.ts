@@ -15,8 +15,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Default launch date — can be overridden by app_settings
-const DEFAULT_LAUNCH_DATE = "2026-04-15";
+// Launch-date hard gate removed for testing and admin-managed availability.
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
