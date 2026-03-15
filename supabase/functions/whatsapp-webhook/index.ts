@@ -221,6 +221,34 @@ async function handleInboundMessages(
       console.error("[whatsapp-webhook] Error storing message:", insertError);
     } else {
       console.log("[whatsapp-webhook] Message stored, type:", msgType);
+
+      // Real push notification for inbound WhatsApp message
+      const preview = msgType === "text"
+        ? messageBody.slice(0, 70)
+        : `Nuevo ${msgType === "audio" || msgType === "voice" ? "audio" : msgType}`;
+
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/send-ops-notification`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            event_type: "whatsapp_incoming_message",
+            title: "Nuevo mensaje de WhatsApp",
+            body: `${contactName || fromPhone} respondió por WhatsApp: ${preview}`,
+            data: {
+              tab: "messages",
+              url: `/ops?tab=messages`,
+              conversation_phone: fromPhone,
+              message_type: msgType,
+            },
+          }),
+        });
+      } catch (pushErr: any) {
+        console.error("[whatsapp-webhook] Failed to trigger push:", pushErr.message);
+      }
     }
   }
 }

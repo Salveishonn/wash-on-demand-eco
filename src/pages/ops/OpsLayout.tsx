@@ -57,12 +57,25 @@ export default function OpsLayout() {
     }
   }, []);
 
-  // Auto-enable push — wrapped safely
+  // Apply notification deep links (tab + last received timestamp)
   useEffect(() => {
-    if (user && isAdmin && !pushEnabled) {
-      subscribeToPush(user.id).then((r) => setPushEnabled(r.success)).catch(() => {});
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const receivedAt = params.get('push_received_at');
+
+    if (tab && ['today', 'calendar', 'messages', 'notifications', 'settings'].includes(tab)) {
+      setActiveTab(tab as OpsTab);
     }
-  }, [user, isAdmin, pushEnabled]);
+
+    if (receivedAt) {
+      localStorage.setItem('ops_last_push_received_at', receivedAt);
+    }
+
+    if (tab || receivedAt) {
+      const cleanUrl = `${window.location.pathname}${window.location.hash}`;
+      window.history.replaceState({}, '', cleanUrl);
+    }
+  }, []);
 
   if (isLoading) {
     return (

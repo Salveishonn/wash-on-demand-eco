@@ -138,6 +138,28 @@ serve(async (req) => {
         .eq('id', conversationId);
 
       console.log('[twilio-whatsapp-webhook] Saved inbound message to conversation:', conversationId);
+
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/send-ops-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${serviceRoleKey}`,
+          },
+          body: JSON.stringify({
+            event_type: 'whatsapp_incoming_message',
+            title: 'Nuevo mensaje de WhatsApp',
+            body: `${customerPhone} respondió por WhatsApp: ${body.substring(0, 70)}`,
+            data: {
+              tab: 'messages',
+              url: '/ops?tab=messages',
+              conversation_phone: customerPhone,
+            },
+          }),
+        });
+      } catch (pushErr: any) {
+        console.error('[twilio-whatsapp-webhook] Push trigger error:', pushErr.message);
+      }
     }
 
     // Always return 200 to Twilio
