@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import { ScrollToTop } from "@/components/ScrollToTop";
@@ -32,6 +32,11 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import DebugPixel from "./pages/DebugPixel";
 import OpsLayout from "./pages/ops/OpsLayout";
+import OpsToday from "./pages/ops/OpsToday";
+import OpsCalendar from "./pages/ops/OpsCalendar";
+import OpsMessages from "./pages/ops/OpsMessages";
+import OpsNotifications from "./pages/ops/OpsNotifications";
+import OpsSettings from "./pages/ops/OpsSettings";
 
 const queryClient = new QueryClient();
 
@@ -81,8 +86,16 @@ const App = () => (
                 </AdminRoute>
               }
             />
-            {/* Operator App */}
-            <Route path="/ops" element={<OpsLayout />} />
+
+            {/* Operator App — nested routes */}
+            <Route path="/ops" element={<OpsLayout />}>
+              <Route index element={<Navigate to="/ops/today" replace />} />
+              <Route path="today" element={<OpsToday />} />
+              <Route path="calendar" element={<OpsCalendar />} />
+              <Route path="messages" element={<OpsMessages />} />
+              <Route path="notifications" element={<OpsNotifications />} />
+              <Route path="settings" element={<OpsSettings />} />
+            </Route>
             
             {/* Debug */}
             <Route path="/debug/pixel" element={<DebugPixel />} />

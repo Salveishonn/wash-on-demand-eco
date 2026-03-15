@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useOperatorNotifications } from '@/hooks/useOperatorNotifications';
 import { subscribeToPush, isPushSubscribed } from '@/lib/pushNotifications';
@@ -8,13 +8,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import OpsToday from './OpsToday';
-import OpsCalendar from './OpsCalendar';
-import OpsMessages from './OpsMessages';
-import OpsNotifications from './OpsNotifications';
-import OpsSettings from './OpsSettings';
-
-type OpsTab = 'today' | 'calendar' | 'messages' | 'notifications' | 'settings';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches
@@ -26,14 +19,23 @@ function isIOS() {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
+const TAB_ROUTES = [
+  { path: '/ops/today', label: 'Hoy', icon: Home },
+  { path: '/ops/calendar', label: 'Agenda', icon: CalendarDays },
+  { path: '/ops/messages', label: 'Mensajes', icon: MessageCircle },
+  { path: '/ops/notifications', label: 'Alertas', icon: Bell },
+  { path: '/ops/settings', label: 'Ajustes', icon: Settings },
+] as const;
+
 export default function OpsLayout() {
   const { user, isAdmin, isLoading } = useAuth();
   const { unreadCount } = useOperatorNotifications();
-  const [activeTab, setActiveTab] = useState<OpsTab>('today');
   const [pushEnabled, setPushEnabled] = useState(false);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     isPushSubscribed().then(setPushEnabled).catch(() => setPushEnabled(false));
@@ -49,7 +51,6 @@ export default function OpsLayout() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // Show onboarding if not installed and first visit
   useEffect(() => {
     if (!isStandalone()) {
       const dismissed = sessionStorage.getItem('ops-onboarding-dismissed');
@@ -57,25 +58,15 @@ export default function OpsLayout() {
     }
   }, []);
 
-  // Apply notification deep links (tab + last received timestamp)
+  // Handle deep link query params from push notifications
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get('tab');
+    const params = new URLSearchParams(location.search);
     const receivedAt = params.get('push_received_at');
-
-    if (tab && ['today', 'calendar', 'messages', 'notifications', 'settings'].includes(tab)) {
-      setActiveTab(tab as OpsTab);
-    }
-
     if (receivedAt) {
       localStorage.setItem('ops_last_push_received_at', receivedAt);
+      navigate(location.pathname, { replace: true });
     }
-
-    if (tab || receivedAt) {
-      const cleanUrl = `${window.location.pathname}${window.location.hash}`;
-      window.history.replaceState({}, '', cleanUrl);
-    }
-  }, []);
+  }, [location.search, navigate, location.pathname]);
 
   if (isLoading) {
     return (
@@ -110,34 +101,6 @@ export default function OpsLayout() {
   const handleDismissOnboarding = () => {
     setShowOnboarding(false);
     sessionStorage.setItem('ops-onboarding-dismissed', '1');
-  };
-
-  const tabs: { key: OpsTab; label: string; icon: typeof Home; badge?: number }[] = [
-    { key: 'today', label: 'Hoy', icon: Home },
-    { key: 'calendar', label: 'Agenda', icon: CalendarDays },
-    { key: 'messages', label: 'Mensajes', icon: MessageCircle },
-    { key: 'notifications', label: 'Alertas', icon: Bell, badge: unreadCount },
-    { key: 'settings', label: 'Ajustes', icon: Settings },
-  ];
-
-  const renderContent = () => {
-    try {
-      switch (activeTab) {
-        case 'today': return <OpsToday onNavigate={setActiveTab} />;
-        case 'calendar': return <OpsCalendar />;
-        case 'messages': return <OpsMessages />;
-        case 'notifications': return <OpsNotifications />;
-        case 'settings': return <OpsSettings pushEnabled={pushEnabled} onEnablePush={handleEnablePush} />;
-      }
-    } catch (err) {
-      console.error('[Ops] Render error:', err);
-      return (
-        <div className="px-4 py-12 text-center">
-          <p className="text-sm text-destructive">Error al cargar. Intentá de nuevo.</p>
-          <Button size="sm" className="mt-4" onClick={() => setActiveTab('today')}>Volver a Hoy</Button>
-        </div>
-      );
-    }
   };
 
   // Onboarding / install screen
@@ -186,6 +149,11 @@ export default function OpsLayout() {
     );
   }
 
+  const getBadge = (path: string) => {
+    if (path === '/ops/notifications' && unreadCount > 0) return unreadCount;
+    return undefined;
+  };
+
   return (
     <div className="min-h-screen bg-muted flex flex-col">
       {showInstallBanner && (
@@ -217,31 +185,35 @@ export default function OpsLayout() {
       </header>
 
       <main className="flex-1 overflow-y-auto pb-20">
-        {renderContent()}
+        <Outlet />
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-bottom">
         <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
-          {tabs.map(({ key, label, icon: Icon, badge }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={cn(
-                "flex flex-col items-center justify-center gap-0.5 flex-1 py-2 transition-colors relative",
-                activeTab === key ? "text-primary" : "text-muted-foreground"
-              )}
-            >
-              <div className="relative">
-                <Icon className="w-5 h-5" />
-                {badge != null && badge > 0 && (
-                  <span className="absolute -top-1.5 -right-2.5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                    {badge > 9 ? '9+' : badge}
-                  </span>
+          {TAB_ROUTES.map(({ path, label, icon: Icon }) => {
+            const badge = getBadge(path);
+            const isActive = location.pathname === path || (path === '/ops/today' && location.pathname === '/ops');
+            return (
+              <button
+                key={path}
+                onClick={() => navigate(path)}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 flex-1 py-2 transition-colors relative",
+                  isActive ? "text-primary" : "text-muted-foreground"
                 )}
-              </div>
-              <span className="text-[10px] font-medium">{label}</span>
-            </button>
-          ))}
+              >
+                <div className="relative">
+                  <Icon className="w-5 h-5" />
+                  {badge != null && badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2.5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] font-medium">{label}</span>
+              </button>
+            );
+          })}
         </div>
       </nav>
     </div>

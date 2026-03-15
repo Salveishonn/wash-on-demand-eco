@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -38,11 +39,8 @@ interface TodayBooking {
   longitude: number | null;
 }
 
-interface OpsProps {
-  onNavigate: (tab: 'today' | 'calendar' | 'messages' | 'notifications' | 'settings') => void;
-}
-
-export default function OpsToday({ onNavigate }: OpsProps) {
+export default function OpsToday() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState<TodayBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -164,7 +162,7 @@ export default function OpsToday({ onNavigate }: OpsProps) {
 
       {unreadCount > 0 && (
         <button 
-          onClick={() => onNavigate('notifications')}
+          onClick={() => navigate('/ops/notifications')}
           className="w-full bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3 flex items-center gap-3"
         >
           <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />

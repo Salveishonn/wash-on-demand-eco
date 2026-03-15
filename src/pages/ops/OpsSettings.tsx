@@ -27,14 +27,10 @@ import {
 import { toast } from 'sonner';
 import PushDiagnosticsCard from '@/components/ops/PushDiagnosticsCard';
 
-interface OpsSettingsProps {
-  pushEnabled: boolean;
-  onEnablePush: () => void;
-}
-
-export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsProps) {
+export default function OpsSettings() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [pushEnabled, setPushEnabled] = useState(false);
 
   const [pushState, setPushState] = useState<PushState>('not_requested');
   const [diagnostics, setDiagnostics] = useState<PushDiagnostics | null>(null);
@@ -82,7 +78,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
 
     if (result.success) {
       toast.success('Notificaciones activadas');
-      onEnablePush();
+      setPushEnabled(true);
       await refreshPushData();
     } else if (result.error === 'denied') {
       setPushState('denied');
@@ -94,7 +90,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
       toast.error(result.error || 'Error al activar notificaciones');
     }
     setIsActivating(false);
-  }, [user, onEnablePush, refreshPushData]);
+  }, [user, refreshPushData]);
 
   const handleTestPush = useCallback(async () => {
     setIsTesting(true);

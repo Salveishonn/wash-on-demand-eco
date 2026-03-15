@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LucideIcon, Calendar, Bell, Shield, Users, Clock, DollarSign, MessageCircle, CalendarDays, ChevronDown, Menu, MoreHorizontal, Settings, Tag, FileText, Sparkles, Mail, Map } from 'lucide-react';
+import { LucideIcon, Calendar, Bell, Shield, Users, Clock, DollarSign, MessageCircle, CalendarDays, ChevronDown, Menu, MoreHorizontal, Settings, Tag, FileText, Sparkles, Mail, Map, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-export type AdminTabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'facturas' | 'mensajes' | 'disponibilidad' | 'whatsapp-config' | 'pricing' | 'early-access' | 'contacts' | 'demand-map';
+export type AdminTabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'facturas' | 'mensajes' | 'disponibilidad' | 'whatsapp-config' | 'pricing' | 'early-access' | 'contacts' | 'demand-map' | 'app-settings';
 
 interface AdminSection {
   key: AdminTabType;
@@ -52,6 +52,7 @@ export const adminSections: AdminSection[] = [
   { key: 'pricing', label: 'Precios', icon: Tag, group: 'config' },
   { key: 'notifications', label: 'Notificaciones', icon: Bell, group: 'config' },
   { key: 'whatsapp-config', label: 'WhatsApp Config', icon: Settings, group: 'config' },
+  { key: 'app-settings', label: 'App Config', icon: Settings2, group: 'config' },
 ];
 
 interface AdminNavProps {

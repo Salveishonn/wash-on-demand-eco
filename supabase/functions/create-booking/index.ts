@@ -1,95 +1,23 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logError, isRateLimited, isHoneypotTriggered, isTooFastSubmission } from "../_shared/securityUtils.ts";
+import {
+  validateBookingInput,
+  validateCoverage,
+  validateLaunchDate,
+  validateAvailability,
+  resolveBookingKind,
+  calculateBookingFinancials,
+} from "../_bookingDomain/index.ts";
+import type { BookingInput, AddonItem } from "../_bookingDomain/index.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface AddonItem {
-  code: string;
-  name: string;
-  price_ars: number;
-}
-
-interface CreateBookingRequest {
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-  serviceName: string;
-  serviceCode?: string;
-  vehicleSize?: string;
-  pricingVersionId?: string;
-  basePriceArs?: number;
-  vehicleExtraArs?: number;
-  extrasTotalArs?: number;
-  totalPriceArs?: number;
-  // Legacy fields for backwards compatibility
-  servicePriceCents?: number;
-  carType?: string;
-  carTypeExtraCents?: number;
-  bookingDate: string;
-  bookingTime: string;
-  address: string;
-  barrio?: string;
-  latitude?: number;
-  longitude?: number;
-  notes?: string;
-  userId?: string;
-  subscriptionId?: string;
-  isSubscriptionBooking?: boolean;
-  bookingType?: "single" | "subscription";
-  paymentMethod?: "online" | "transfer" | "pay_later" | "subscription";
-  whatsappOptIn?: boolean;
-  kipperOptIn?: boolean;
-  addons?: AddonItem[];
-  addonsTotalCents?: number;
-  bookingSource?: string;
-}
-
-// ============================================
-// LAUNCH DATE GUARD
-// Bookings before this date are blocked
-// ============================================
-const LAUNCH_DATE = "2026-04-15";
-
-// ============================================
-// OPERATIVE ZONES (server-side enforcement)
-// ============================================
-const OPERATIVE_ZONES_LOWER = [
-  "caba", "capital federal", "ciudad autónoma de buenos aires", "ciudad de buenos aires",
-  "palermo", "belgrano", "nuñez", "colegiales", "recoleta", "retiro",
-  "san telmo", "la boca", "barracas", "caballito", "flores",
-  "villa crespo", "villa urquiza", "villa devoto", "chacarita", "saavedra",
-  "vicente lópez", "vicente lopez", "olivos", "la lucila", "florida", "munro",
-  "san isidro", "acassuso", "martínez", "martinez", "beccar", "boulogne",
-  "tigre", "nordelta", "don torcuato", "general pacheco",
-  "benavídez", "benavidez", "ingeniero maschwitz", "ing. maschwitz",
-  "garín", "garin", "escobar", "san fernando",
-];
-
-function isInOperativeArea(address: string): boolean {
-  if (!address) return false;
-  const lower = address.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  // Check for CABA postal codes (C1xxx)
-  if (/\bc\d{4}\b/.test(lower)) return true;
-  return OPERATIVE_ZONES_LOWER.some(zone => {
-    const normalized = zone.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    return lower.includes(normalized);
-  });
-}
-
-function isValidEmailServer(email: string): boolean {
-  if (!email) return false;
-  return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email.trim());
-}
-
-function isValidPhoneServer(phone: string): boolean {
-  if (!phone) return false;
-  const digits = phone.replace(/[^\d]/g, "");
-  return digits.length >= 8 && digits.length <= 13;
-}
+// Default launch date — can be overridden by app_settings
+const DEFAULT_LAUNCH_DATE = "2026-04-15";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -100,9 +28,9 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  let data: CreateBookingRequest & { _hp?: string; _ts?: number } | undefined;
+  let data: BookingInput & { _hp?: string; _ts?: number } | undefined;
   try {
-    // Rate limiting: max 5 booking attempts per IP per 5 minutes
+    // ========== RATE LIMITING ==========
     const rateLimited = await isRateLimited("create-booking", 5, 5, req);
     if (rateLimited) {
       await logError("create-booking", "rate_limit", "Rate limit exceeded for booking creation", {}, req);
@@ -114,142 +42,77 @@ serve(async (req) => {
 
     data = await req.json();
 
-    // Anti-bot: Honeypot check
+    // ========== ANTI-BOT ==========
     if (isHoneypotTriggered(data._hp)) {
-      console.log("[create-booking] BLOCKED: honeypot triggered");
       await logError("create-booking", "honeypot", "Bot detected via honeypot", {}, req);
-      // Return fake success to confuse bots
       return new Response(
         JSON.stringify({ success: true, bookingId: "00000000-0000-0000-0000-000000000000" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Anti-bot: Timing check
     if (isTooFastSubmission(data._ts)) {
-      console.log("[create-booking] BLOCKED: submission too fast");
       await logError("create-booking", "too_fast", "Submission completed too quickly", {}, req);
       return new Response(
         JSON.stringify({ success: true, bookingId: "00000000-0000-0000-0000-000000000000" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
+
     console.log("[create-booking] Creating booking for:", data.customerName);
-    console.log("[create-booking] Payment method:", data.paymentMethod);
-    console.log("[create-booking] Booking type:", data.bookingType);
-    console.log("[create-booking] Address:", data.address);
-    console.log("[create-booking] Coordinates:", data.latitude, data.longitude);
-    console.log("[create-booking] Barrio:", data.barrio);
-    console.log("[create-booking] Service:", data.serviceCode, data.serviceName);
-    console.log("[create-booking] Vehicle:", data.vehicleSize);
-    console.log("[create-booking] Price submitted - base:", data.basePriceArs, "vehicle:", data.vehicleExtraArs, "extras:", data.extrasTotalArs, "total:", data.totalPriceArs);
 
-    // Validate required fields
-    const validationErrors: string[] = [];
-    if (!data.customerName?.trim()) validationErrors.push("Nombre es requerido");
-    if (!data.customerEmail?.trim()) validationErrors.push("Email es requerido");
-    if (!data.customerPhone?.trim()) validationErrors.push("Teléfono es requerido");
-    if (!data.serviceName?.trim()) validationErrors.push("Servicio es requerido");
-    if (!data.bookingDate) validationErrors.push("Fecha es requerida");
-    if (!data.bookingTime) validationErrors.push("Horario es requerido");
-    if (!data.address?.trim()) validationErrors.push("Dirección es requerida");
-    
-    if (validationErrors.length > 0) {
-      console.error("[create-booking] Validation errors:", validationErrors);
+    // ========== 1. VALIDATE INPUT ==========
+    const validation = validateBookingInput(data as BookingInput);
+    if (!validation.valid) {
       return new Response(
-        JSON.stringify({ 
-          error: "Faltan datos requeridos", 
-          validationErrors,
-          message: validationErrors.join(", ")
-        }),
+        JSON.stringify({ error: "Faltan datos requeridos", validationErrors: validation.errors, message: validation.errors.join(", ") }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Validate email format
-    if (!isValidEmailServer(data.customerEmail)) {
+    // ========== 2. VALIDATE COVERAGE ==========
+    const coverage = validateCoverage(data.address);
+    if (!coverage.allowed) {
       return new Response(
-        JSON.stringify({ error: "Email inválido", message: "Ingresá un email válido" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Validate phone format
-    if (!isValidPhoneServer(data.customerPhone)) {
-      return new Response(
-        JSON.stringify({ error: "Teléfono inválido", message: "Ingresá un teléfono válido" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Validate operative zone
-    if (!isInOperativeArea(data.address)) {
-      console.log("[create-booking] BLOCKED: address outside operative area:", data.address);
-      return new Response(
-        JSON.stringify({ 
-          error: "Dirección fuera de zona operativa",
-          message: "Por ahora Washero está disponible en C.A.B.A. y Zona Norte (Vicente López a Escobar)."
-        }),
+        JSON.stringify({ error: "Dirección fuera de zona operativa", message: coverage.reason }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Block bookings before launch date
-    if (data.bookingDate < LAUNCH_DATE) {
-      console.log("[create-booking] BLOCKED: booking_date", data.bookingDate, "is before LAUNCH_DATE", LAUNCH_DATE);
+    // ========== 3. VALIDATE LAUNCH DATE ==========
+    // Try to get launch date from app_settings, fall back to constant
+    let launchDate = DEFAULT_LAUNCH_DATE;
+    try {
+      const { data: setting } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "LAUNCH_DATE")
+        .maybeSingle();
+      if (setting?.value) launchDate = setting.value;
+    } catch { /* use default */ }
+
+    const launchCheck = validateLaunchDate(data.bookingDate, launchDate);
+    if (!launchCheck.allowed) {
       return new Response(
-        JSON.stringify({ error: "Las reservas están disponibles a partir del 15 de Abril." }),
+        JSON.stringify({ error: launchCheck.reason }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Check if the date is blocked via availability_overrides
-    const { data: overrideData } = await supabase
-      .from("availability_overrides")
-      .select("is_closed")
-      .eq("date", data.bookingDate)
-      .eq("is_closed", true)
-      .maybeSingle();
-
-    if (overrideData) {
-      console.log("[create-booking] BLOCKED: date", data.bookingDate, "is closed via override");
+    // ========== 4. VALIDATE AVAILABILITY ==========
+    const availability = await validateAvailability(supabase, data.bookingDate, data.bookingTime);
+    if (!availability.available) {
       return new Response(
-        JSON.stringify({ error: "Esta fecha no está disponible para reservas." }),
+        JSON.stringify({ error: availability.reason }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Check if the time slot is blocked via availability_override_slots
-    const { data: slotOverrideData } = await supabase
-      .from("availability_override_slots")
-      .select("is_open")
-      .eq("date", data.bookingDate)
-      .eq("time", data.bookingTime)
-      .eq("is_open", false)
-      .maybeSingle();
+    // ========== 5. RESOLVE BOOKING KIND ==========
+    const kind = resolveBookingKind(data as BookingInput);
 
-    if (slotOverrideData) {
-      console.log("[create-booking] BLOCKED: slot", data.bookingDate, data.bookingTime, "is closed via slot override");
-      return new Response(
-        JSON.stringify({ error: "Este horario no está disponible." }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Determine booking type
-    const isSubscription: boolean = Boolean(
-      data.bookingType === "subscription" || 
-      (data.isSubscriptionBooking === true && data.subscriptionId)
-    );
-    const isTransfer: boolean = data.paymentMethod === "transfer";
-    const isPayLater: boolean = data.paymentMethod === "pay_later";
-    const whatsappOptIn: boolean = Boolean(data.whatsappOptIn);
-
-    console.log("[create-booking] isSubscription:", isSubscription, "isTransfer:", isTransfer, "isPayLater:", isPayLater);
-
-    // If subscription booking, verify subscription is active
-    if (isSubscription && data.subscriptionId) {
+    // ========== 6. SUBSCRIPTION VALIDATION ==========
+    if (kind.isSubscription && data.subscriptionId) {
       const { data: subscription, error: subError } = await supabase
         .from("subscriptions")
         .select("*, subscription_plans(*)")
@@ -259,216 +122,80 @@ serve(async (req) => {
       if (subError || !subscription) {
         throw new Error("Suscripción no encontrada");
       }
-
       if (subscription.status !== "active") {
-        console.error("[create-booking] Subscription not active. Status:", subscription.status, "ID:", data.subscriptionId);
         throw new Error("Tu suscripción no está activa. Estado actual: " + subscription.status);
       }
-
       if (subscription.washes_remaining <= 0) {
         throw new Error("No te quedan lavados disponibles este mes");
       }
 
-      // Atomic decrement: Only update if washes_remaining > 0 to prevent race conditions
+      // Atomic decrement
       const { data: updated, error: updateError } = await supabase
         .from("subscriptions")
-        .update({ 
+        .update({
           washes_remaining: subscription.washes_remaining - 1,
-          washes_used_in_cycle: (subscription.washes_used_in_cycle || 0) + 1
+          washes_used_in_cycle: (subscription.washes_used_in_cycle || 0) + 1,
         })
         .eq("id", data.subscriptionId)
         .gt("washes_remaining", 0)
         .select("washes_remaining")
         .maybeSingle();
 
-      if (updateError) {
-        console.error("[create-booking] Error updating subscription credits:", updateError);
-        throw new Error("Error al actualizar los créditos de suscripción");
-      }
+      if (updateError) throw new Error("Error al actualizar los créditos de suscripción");
+      if (!updated) throw new Error("No te quedan lavados disponibles este mes");
 
-      if (!updated) {
-        throw new Error("No te quedan lavados disponibles este mes");
-      }
-
-      console.log("[create-booking] Subscription booking - washes remaining updated to:", updated.washes_remaining);
+      console.log("[create-booking] Subscription credits updated:", updated.washes_remaining);
     }
 
-    // Determine booking/payment status based on payment method
-    let bookingStatus: string;
-    let paymentStatus: string;
-    let requiresPayment: boolean;
-    let paymentMethodValue: string | null = null;
+    // ========== 7. CALCULATE FINANCIALS ==========
+    const financials = await calculateBookingFinancials(supabase, data as BookingInput, kind.isSubscription);
 
-    if (isSubscription) {
-      bookingStatus = "confirmed";
-      paymentStatus = "approved";
-      requiresPayment = false;
-      paymentMethodValue = "subscription";
-    } else if (isTransfer) {
-      bookingStatus = "pending";
-      paymentStatus = "pending";
-      requiresPayment = true;
-      paymentMethodValue = "transfer";
-    } else {
-      bookingStatus = "pending";
-      paymentStatus = "pending";
-      requiresPayment = false;
-      paymentMethodValue = data.paymentMethod || "pay_later";
+    if (financials.priceMismatch) {
+      console.warn("[create-booking] PRICE MISMATCH detected");
+      await logError("create-booking", "price_mismatch", "Client price differs from server price", {
+        serviceCode: data.serviceCode,
+        vehicleSize: data.vehicleSize,
+      }, req);
     }
 
-    // =============================================
-    // SERVER-SIDE PRICE VERIFICATION
-    // Fetch authoritative prices from pricing_items
-    // For subscription bookings, base service + vehicle are covered by the plan (price = 0)
-    // =============================================
-    let serverBasePriceCents = 0;
-    let serverVehicleExtraCents = 0;
-    let serverAddonsTotalCents = 0;
-
-    // Get active pricing version
-    const { data: activePricingVersion } = await supabase
-      .from("pricing_versions")
-      .select("id")
-      .eq("is_active", true)
-      .order("version_number", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (activePricingVersion) {
-      const { data: pricingItems } = await supabase
-        .from("pricing_items")
-        .select("item_code, item_type, price_ars")
-        .eq("pricing_version_id", activePricingVersion.id);
-
-      if (pricingItems && pricingItems.length > 0) {
-        // For subscription bookings, skip base service and vehicle price verification
-        // Those are covered by the plan at $0
-        if (!isSubscription) {
-          // Find base service price
-          const serviceCode = data.serviceCode || data.serviceName?.toLowerCase().replace(/\s+/g, "_");
-          const serviceItem = pricingItems.find(
-            (i) => i.item_type === "service" && (i.item_code === serviceCode || i.item_code === data.serviceCode)
-          );
-          if (serviceItem) {
-            serverBasePriceCents = Math.round(serviceItem.price_ars * 100);
-          }
-
-          // Find vehicle size surcharge
-          if (data.vehicleSize || data.carType) {
-            const sizeCode = (data.vehicleSize || data.carType || "").toLowerCase().replace(/\s+/g, "_");
-            const sizeItem = pricingItems.find(
-              (i) => i.item_type === "vehicle_extra" && i.item_code === sizeCode
-            );
-            if (sizeItem) {
-              serverVehicleExtraCents = Math.round(sizeItem.price_ars * 100);
-            }
-          }
-        } else {
-          console.log("[create-booking] Subscription booking — skipping base/vehicle price verification (covered by plan)");
-        }
-
-        // Verify addon prices (addons cost extra even for subscriptions)
-        if (data.addons && data.addons.length > 0) {
-          for (const addon of data.addons) {
-            const addonItem = pricingItems.find(
-              (i) => (i.item_type === "addon" || i.item_type === "extra") && i.item_code === addon.code
-            );
-            if (addonItem) {
-              serverAddonsTotalCents += Math.round(addonItem.price_ars * 100);
-            } else {
-              // Addon not in pricing table - use submitted price but log it
-              serverAddonsTotalCents += Math.round((addon.price_ars || 0) * 100);
-              console.warn("[create-booking] Addon not found in pricing_items:", addon.code);
-            }
-          }
-        }
-      }
-    }
-
-    // Prepare addons data
-    const addonsData = data.addons || [];
-
-    // Use server-verified prices when available, fall back to client prices
-    // For subscription bookings, base + vehicle stay at 0
-    const basePriceCents = isSubscription ? 0 : (serverBasePriceCents > 0 ? serverBasePriceCents : (data.basePriceArs ? data.basePriceArs * 100 : (data.servicePriceCents || 0)));
-    const vehicleExtraCents = isSubscription ? 0 : (serverVehicleExtraCents > 0 ? serverVehicleExtraCents : (data.vehicleExtraArs ? data.vehicleExtraArs * 100 : (data.carTypeExtraCents || 0)));
-    const addonsTotalCents = serverAddonsTotalCents > 0 ? serverAddonsTotalCents : (data.addonsTotalCents || 
-      (data.extrasTotalArs ? data.extrasTotalArs * 100 : 
-        addonsData.reduce((sum: number, a: AddonItem) => sum + (a.price_ars ? a.price_ars * 100 : 0), 0)));
-
-    // Log if client-submitted price differs significantly from server price (only for non-subscription)
-    if (!isSubscription) {
-      const serverTotalCents = basePriceCents + vehicleExtraCents + addonsTotalCents;
-      const clientTotalCents = data.totalPriceArs ? data.totalPriceArs * 100 : (data.servicePriceCents || 0) + (data.carTypeExtraCents || 0) + (data.addonsTotalCents || 0);
-      if (serverBasePriceCents > 0 && Math.abs(serverTotalCents - clientTotalCents) > 100) {
-        console.warn("[create-booking] PRICE MISMATCH - Server:", serverTotalCents, "Client:", clientTotalCents);
-        await logError("create-booking", "price_mismatch", "Client price differs from server price", {
-          serverTotal: serverTotalCents,
-          clientTotal: clientTotalCents,
-          serviceCode: data.serviceCode,
-          vehicleSize: data.vehicleSize,
-        }, req);
-      }
-    }
-
-    // Calculate total using server-verified prices
-    // For subscriptions: total = only addons (base + vehicle = 0)
-    const totalPriceCents = basePriceCents + vehicleExtraCents + addonsTotalCents;
-
-    // Normalize phone to E.164 for Argentina
+    // ========== 8. UPSERT CUSTOMER ==========
     let phoneE164 = data.customerPhone.trim().replace(/[^0-9+]/g, "");
     if (!phoneE164.startsWith("+")) {
-      if (phoneE164.startsWith("54")) {
-        phoneE164 = "+" + phoneE164;
-      } else if (phoneE164.startsWith("11") || phoneE164.startsWith("15")) {
-        phoneE164 = "+549" + phoneE164.replace(/^15/, "");
-      } else {
-        phoneE164 = "+54" + phoneE164;
-      }
+      if (phoneE164.startsWith("54")) phoneE164 = "+" + phoneE164;
+      else if (phoneE164.startsWith("11") || phoneE164.startsWith("15")) phoneE164 = "+549" + phoneE164.replace(/^15/, "");
+      else phoneE164 = "+54" + phoneE164;
     }
 
-    // Upsert customer
     let customerId: string | null = null;
     if (data.whatsappOptIn) {
       const { data: existingCustomer } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("phone_e164", phoneE164)
-        .maybeSingle();
+        .from("customers").select("id").eq("phone_e164", phoneE164).maybeSingle();
 
       if (existingCustomer) {
         customerId = existingCustomer.id;
-        await supabase
-          .from("customers")
-          .update({
-            full_name: data.customerName.trim(),
-            email: data.customerEmail.trim().toLowerCase(),
-            whatsapp_opt_in: true,
-            whatsapp_opt_in_at: new Date().toISOString(),
-          })
-          .eq("id", customerId);
+        await supabase.from("customers").update({
+          full_name: data.customerName.trim(),
+          email: data.customerEmail.trim().toLowerCase(),
+          whatsapp_opt_in: true,
+          whatsapp_opt_in_at: new Date().toISOString(),
+        }).eq("id", customerId);
       } else {
-        const { data: newCustomer } = await supabase
-          .from("customers")
-          .insert({
-            full_name: data.customerName.trim(),
-            email: data.customerEmail.trim().toLowerCase(),
-            phone_e164: phoneE164,
-            whatsapp_opt_in: true,
-            whatsapp_opt_in_at: new Date().toISOString(),
-          })
-          .select("id")
-          .single();
+        const { data: newCustomer } = await supabase.from("customers").insert({
+          full_name: data.customerName.trim(),
+          email: data.customerEmail.trim().toLowerCase(),
+          phone_e164: phoneE164,
+          whatsapp_opt_in: true,
+          whatsapp_opt_in_at: new Date().toISOString(),
+        }).select("id").single();
         customerId = newCustomer?.id || null;
       }
-      console.log("[create-booking] Customer upserted:", customerId);
     }
 
-    // Normalize barrio
+    // ========== 9. CREATE BOOKING RECORD ==========
     const barrio = data.barrio?.trim() || null;
     const barrioGroupKey = barrio && data.bookingDate ? `${barrio.toLowerCase()}::${data.bookingDate}` : null;
+    const addonsData = data.addons || [];
 
-    // Create the booking with new pricing structure
     const bookingInsertData = {
       user_id: data.userId || null,
       subscription_id: data.subscriptionId || null,
@@ -479,311 +206,213 @@ serve(async (req) => {
       service_name: data.serviceName,
       service_code: data.serviceCode || null,
       vehicle_size: data.vehicleSize || null,
-      pricing_version_id: data.pricingVersionId || null,
-      service_price_cents: basePriceCents,
+      pricing_version_id: financials.pricingVersionId,
+      service_price_cents: financials.basePriceCents,
       car_type: data.carType || data.vehicleSize || null,
-      car_type_extra_cents: vehicleExtraCents,
+      car_type_extra_cents: financials.vehicleExtraCents,
       booking_date: data.bookingDate,
       booking_time: data.bookingTime,
       address: data.address.trim(),
       notes: data.notes?.trim() || null,
-      booking_type: isSubscription ? "subscription" : "single",
-      is_subscription_booking: isSubscription,
-      requires_payment: Boolean(requiresPayment),
-      status: bookingStatus,
-      payment_status: paymentStatus,
-      payment_method: paymentMethodValue,
-      confirmed_at: isSubscription ? new Date().toISOString() : null,
+      booking_type: kind.isSubscription ? "subscription" : "single",
+      is_subscription_booking: kind.isSubscription,
+      requires_payment: Boolean(kind.requiresPayment),
+      status: kind.bookingStatus,
+      payment_status: kind.paymentStatus,
+      payment_method: kind.paymentMethodValue,
+      confirmed_at: kind.isSubscription ? new Date().toISOString() : null,
       addons: addonsData,
-      addons_total_cents: addonsTotalCents,
-      base_price_ars: isSubscription ? 0 : (data.basePriceArs ?? Math.round(basePriceCents / 100)),
-      vehicle_extra_ars: isSubscription ? 0 : (data.vehicleExtraArs ?? Math.round(vehicleExtraCents / 100)),
-      extras_total_ars: data.extrasTotalArs ?? Math.round(addonsTotalCents / 100),
-      total_price_ars: isSubscription ? Math.round(addonsTotalCents / 100) : (data.totalPriceArs ?? Math.round(totalPriceCents / 100)),
+      addons_total_cents: financials.addonsTotalCents,
+      base_price_ars: kind.isSubscription ? 0 : (data.basePriceArs ?? Math.round(financials.basePriceCents / 100)),
+      vehicle_extra_ars: kind.isSubscription ? 0 : (data.vehicleExtraArs ?? Math.round(financials.vehicleExtraCents / 100)),
+      extras_total_ars: data.extrasTotalArs ?? Math.round(financials.addonsTotalCents / 100),
+      total_price_ars: kind.isSubscription
+        ? Math.round(financials.addonsTotalCents / 100)
+        : (data.totalPriceArs ?? Math.round(financials.totalPriceCents / 100)),
       booking_source: data.bookingSource || "direct",
-      whatsapp_opt_in: whatsappOptIn,
-      barrio: barrio,
+      whatsapp_opt_in: kind.whatsappOptIn,
+      barrio,
       barrio_group_key: barrioGroupKey,
       latitude: data.latitude || null,
       longitude: data.longitude || null,
     };
 
-    console.log("[create-booking] Insert payload:", JSON.stringify(bookingInsertData, null, 2));
-
     const { data: booking, error: bookingError } = await supabase
-      .from("bookings")
-      .insert(bookingInsertData)
-      .select()
-      .single();
+      .from("bookings").insert(bookingInsertData).select().single();
 
     if (bookingError) {
-      console.error("[create-booking] Error creating booking:", bookingError);
-      
       if (bookingError.code === "23505") {
         return new Response(
-          JSON.stringify({ 
-            error: "Ese horario ya fue reservado. Elegí otro.",
-            slotTaken: true,
-            code: "SLOT_TAKEN"
-          }),
+          JSON.stringify({ error: "Ese horario ya fue reservado. Elegí otro.", slotTaken: true, code: "SLOT_TAKEN" }),
           { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
       return new Response(
-        JSON.stringify({ 
-          error: "Error al crear la reserva", 
-          details: bookingError.message,
-          code: bookingError.code 
-        }),
+        JSON.stringify({ error: "Error al crear la reserva", details: bookingError.message, code: bookingError.code }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     console.log("[create-booking] Booking created:", booking.id);
 
-    // Apply discount engine (fire and forget for speed, but await for payment intent accuracy)
+    // ========== 10. LOG SYSTEM EVENT ==========
+    supabase.from("system_events").insert({
+      event_type: "booking_created",
+      entity_id: booking.id,
+      payload: {
+        booking_type: kind.isSubscription ? "subscription" : "single",
+        payment_method: kind.paymentMethodValue,
+        barrio,
+        service: data.serviceName,
+      },
+    }).then(() => {}).catch((e: any) => console.warn("[create-booking] system_events insert error:", e));
+
+    // ========== 11. APPLY DISCOUNT ==========
     let discountResult = null;
     try {
-      const discountUrl = `${supabaseUrl}/functions/v1/apply-booking-discount`;
-      const discountResp = await fetch(discountUrl, {
+      const discountResp = await fetch(`${supabaseUrl}/functions/v1/apply-booking-discount`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseServiceKey}`,
-        },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseServiceKey}` },
         body: JSON.stringify({ bookingId: booking.id }),
       });
       discountResult = await discountResp.json();
-      console.log("[create-booking] Discount result:", discountResult);
-    } catch (discountErr) {
-      console.error("[create-booking] Discount engine error:", discountErr);
-    }
+    } catch (e) { console.error("[create-booking] Discount engine error:", e); }
 
-    // Get updated booking with discount applied
+    // Get updated booking with discount
     const { data: updatedBooking } = await supabase
       .from("bookings")
       .select("final_price_ars, discount_type, discount_percent, discount_amount_ars, is_launch_founder_slot")
-      .eq("id", booking.id)
-      .single();
+      .eq("id", booking.id).single();
 
-    const finalPriceArs = updatedBooking?.final_price_ars || data.totalPriceArs || Math.round(totalPriceCents / 100);
+    const finalPriceArs = updatedBooking?.final_price_ars || data.totalPriceArs || Math.round(financials.totalPriceCents / 100);
 
-    // Create payment intent for non-subscription bookings
+    // ========== 12. CREATE PAYMENT INTENT ==========
     let paymentIntent = null;
     let paymentUrl = null;
-    
-    if (!isSubscription) {
-      const totalAmountArs = finalPriceArs;
-      
+
+    if (!kind.isSubscription) {
       const { data: intentData, error: intentError } = await supabase
-        .from("payment_intents")
-        .insert({
+        .from("payment_intents").insert({
           booking_id: booking.id,
           type: "one_time",
-          amount_ars: totalAmountArs,
+          amount_ars: finalPriceArs,
           currency: "ARS",
           status: "pending",
           expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
-        })
-        .select()
-        .single();
+        }).select().single();
 
-      if (intentError) {
-        console.error("[create-booking] Payment intent error:", intentError);
-      } else {
+      if (!intentError && intentData) {
         paymentIntent = intentData;
-        
-        await supabase
-          .from("bookings")
-          .update({ payment_intent_id: intentData.id })
-          .eq("id", booking.id);
-
-        const baseUrl = "https://washero.online";
-        paymentUrl = `${baseUrl}/pagar/${intentData.id}`;
-        
-        console.log("[create-booking] Payment intent created:", intentData.id);
+        await supabase.from("bookings").update({ payment_intent_id: intentData.id }).eq("id", booking.id);
+        paymentUrl = `https://washero.online/pagar/${intentData.id}`;
       }
     }
 
-    // Queue admin notifications
-    console.log("[create-booking] Queueing admin notifications");
-    
-    const queueUrl = `${supabaseUrl}/functions/v1/queue-notifications`;
-    
-    fetch(queueUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${supabaseServiceKey}`,
-      },
-      body: JSON.stringify({ 
-        bookingId: booking.id,
-        isPayLater: isPayLater,
-        isTransfer: isTransfer,
-        isSubscription: isSubscription,
-        whatsappOptIn: data.whatsappOptIn || false
-      }),
-    }).catch(err => console.error("[create-booking] Queue error:", err));
+    // ========== 13. TRIGGER NOTIFICATIONS (fire & forget) ==========
+    const authHeaders = { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseServiceKey}` };
 
-    // Send admin email notification (fire and forget)
-    const adminNotifyUrl = `${supabaseUrl}/functions/v1/admin-notify-booking`;
-    fetch(adminNotifyUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${supabaseServiceKey}`,
-      },
+    // Queue notifications
+    fetch(`${supabaseUrl}/functions/v1/queue-notifications`, {
+      method: "POST", headers: authHeaders,
       body: JSON.stringify({
-        bookingId: booking.id,
-        customerName: data.customerName.trim(),
-        customerEmail: data.customerEmail.trim().toLowerCase(),
-        customerPhone: data.customerPhone.trim(),
-        bookingDate: data.bookingDate,
-        bookingTime: data.bookingTime,
-        address: data.address.trim(),
-        serviceName: data.serviceName,
-        vehicleSize: data.vehicleSize || data.carType,
-        addons: addonsData,
-        paymentMethod: paymentMethodValue,
-        paymentStatus: paymentStatus,
-        totalArs: data.totalPriceArs || Math.round(totalPriceCents / 100),
+        bookingId: booking.id, isPayLater: kind.isPayLater, isTransfer: kind.isTransfer,
+        isSubscription: kind.isSubscription, whatsappOptIn: data.whatsappOptIn || false,
       }),
-    }).catch(err => console.error("[create-booking] Admin notify error:", err));
+    }).catch(e => console.error("[create-booking] Queue error:", e));
 
-    // Handle Kipper opt-in
+    // Admin email
+    fetch(`${supabaseUrl}/functions/v1/admin-notify-booking`, {
+      method: "POST", headers: authHeaders,
+      body: JSON.stringify({
+        bookingId: booking.id, customerName: data.customerName.trim(),
+        customerEmail: data.customerEmail.trim().toLowerCase(),
+        customerPhone: data.customerPhone.trim(), bookingDate: data.bookingDate,
+        bookingTime: data.bookingTime, address: data.address.trim(),
+        serviceName: data.serviceName, vehicleSize: data.vehicleSize || data.carType,
+        addons: addonsData, paymentMethod: kind.paymentMethodValue,
+        paymentStatus: kind.paymentStatus,
+        totalArs: data.totalPriceArs || Math.round(financials.totalPriceCents / 100),
+      }),
+    }).catch(e => console.error("[create-booking] Admin notify error:", e));
+
+    // Kipper opt-in
     if (data.kipperOptIn) {
-      console.log("[create-booking] Creating Kipper lead");
-      const { error: kipperError } = await supabase.from("kipper_leads").insert({
+      supabase.from("kipper_leads").insert({
         customer_name: data.customerName.trim(),
         customer_email: data.customerEmail.trim().toLowerCase(),
         customer_phone: data.customerPhone.trim(),
-        booking_id: booking.id,
-        source: "booking",
+        booking_id: booking.id, source: "booking",
         vehicle_type: data.carType || data.vehicleSize || null,
-      });
-      if (kipperError) console.error("[create-booking] Kipper lead error:", kipperError);
+      }).then(() => {}).catch((e: any) => console.error("[create-booking] Kipper lead error:", e));
     }
 
-    // For transfer bookings, send payment instructions
-    if (isTransfer && data.customerEmail && paymentIntent) {
-      console.log("[create-booking] Sending payment instructions to:", data.customerEmail);
-      
-      const sendNotificationsUrl = `${supabaseUrl}/functions/v1/send-notifications`;
-      
-      fetch(sendNotificationsUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({ 
-          bookingId: booking.id,
-          messageType: "payment_instructions",
-          paymentIntentId: paymentIntent.id,
-          paymentUrl: paymentUrl
-        }),
-      }).catch(err => console.error("[create-booking] Payment instructions error:", err));
-    }
-
-    // Determine response message
-    let message: string;
-    if (isSubscription) {
-      message = "¡Reserva confirmada con tu suscripción!";
-    } else if (isTransfer) {
-      message = "¡Reserva recibida! Te enviamos las instrucciones de pago por email.";
-    } else {
-      message = "¡Reserva recibida! Te contactaremos para coordinar el pago.";
-    }
-
-    // Generate invoice for subscription bookings (already paid) or pay_later (pending_payment)
-    if (isSubscription) {
-      const generateInvoiceUrl = `${supabaseUrl}/functions/v1/generate-invoice`;
-      fetch(generateInvoiceUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseServiceKey}`,
-        },
+    // Payment instructions for transfer
+    if (kind.isTransfer && paymentIntent) {
+      fetch(`${supabaseUrl}/functions/v1/send-notifications`, {
+        method: "POST", headers: authHeaders,
         body: JSON.stringify({
-          booking_id: booking.id,
-          type: "single",
-          status: "paid",
+          bookingId: booking.id, messageType: "payment_instructions",
+          paymentIntentId: paymentIntent.id, paymentUrl,
         }),
-      }).catch(err => console.error("[create-booking] Generate invoice error:", err));
+      }).catch(e => console.error("[create-booking] Payment instructions error:", e));
     }
 
-    // Emit webhook event
-    const notifyEventUrl = `${supabaseUrl}/functions/v1/notify-event`;
-    fetch(notifyEventUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${supabaseServiceKey}`,
-      },
+    // Generate invoice for subscription bookings
+    if (kind.isSubscription) {
+      fetch(`${supabaseUrl}/functions/v1/generate-invoice`, {
+        method: "POST", headers: authHeaders,
+        body: JSON.stringify({ booking_id: booking.id, type: "single", status: "paid" }),
+      }).catch(e => console.error("[create-booking] Generate invoice error:", e));
+    }
+
+    // Emit notify-event
+    fetch(`${supabaseUrl}/functions/v1/notify-event`, {
+      method: "POST", headers: authHeaders,
       body: JSON.stringify({
-        event: "booking.created",
-        timestamp: new Date().toISOString(),
-        user_id: data.userId,
-        customer_email: data.customerEmail,
-        customer_phone: data.customerPhone,
-        customer_name: data.customerName,
+        event: "booking.created", timestamp: new Date().toISOString(),
+        user_id: data.userId, customer_email: data.customerEmail,
+        customer_phone: data.customerPhone, customer_name: data.customerName,
         booking_id: booking.id,
-        amount_ars: data.totalPriceArs || Math.round(totalPriceCents / 100),
-        status: bookingStatus,
-          metadata: {
-            payment_method: paymentMethodValue,
-            is_subscription: isSubscription,
-            is_transfer: isTransfer,
-            booking_date: data.bookingDate,
-            booking_time: data.bookingTime,
-            service_name: data.serviceName,
-            barrio: data.barrio || null,
-            address: data.address,
-          },
-      }),
-    }).catch(err => console.error("[create-booking] Notify event error:", err));
-
-    // Emit payment_required event if transfer booking
-    if (isTransfer && paymentIntent) {
-      fetch(notifyEventUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseServiceKey}`,
+        amount_ars: data.totalPriceArs || Math.round(financials.totalPriceCents / 100),
+        status: kind.bookingStatus,
+        metadata: {
+          payment_method: kind.paymentMethodValue, is_subscription: kind.isSubscription,
+          is_transfer: kind.isTransfer, booking_date: data.bookingDate,
+          booking_time: data.bookingTime, service_name: data.serviceName,
+          barrio: data.barrio || null, address: data.address,
         },
+      }),
+    }).catch(e => console.error("[create-booking] Notify event error:", e));
+
+    // Payment required event
+    if (kind.isTransfer && paymentIntent) {
+      fetch(`${supabaseUrl}/functions/v1/notify-event`, {
+        method: "POST", headers: authHeaders,
         body: JSON.stringify({
-          event: "booking.payment_required",
-          timestamp: new Date().toISOString(),
-          user_id: data.userId,
-          customer_email: data.customerEmail,
-          customer_phone: data.customerPhone,
-          customer_name: data.customerName,
+          event: "booking.payment_required", timestamp: new Date().toISOString(),
+          user_id: data.userId, customer_email: data.customerEmail,
+          customer_phone: data.customerPhone, customer_name: data.customerName,
           booking_id: booking.id,
-          amount_ars: data.totalPriceArs || Math.round(totalPriceCents / 100),
-          status: "pending",
-          metadata: { payment_url: paymentUrl },
+          amount_ars: data.totalPriceArs || Math.round(financials.totalPriceCents / 100),
+          status: "pending", metadata: { payment_url: paymentUrl },
         }),
-      }).catch(err => console.error("[create-booking] Payment required event error:", err));
+      }).catch(e => console.error("[create-booking] Payment required event error:", e));
     }
+
+    // ========== 14. RESPONSE ==========
+    let message: string;
+    if (kind.isSubscription) message = "¡Reserva confirmada con tu suscripción!";
+    else if (kind.isTransfer) message = "¡Reserva recibida! Te enviamos las instrucciones de pago por email.";
+    else message = "¡Reserva recibida! Te contactaremos para coordinar el pago.";
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        bookingId: booking.id,
-        booking,
-        paymentIntent,
-        paymentIntentId: paymentIntent?.id,
-        paymentUrl,
-        message,
-        isTransfer,
-        isPayLater,
-        isSubscription,
+      JSON.stringify({
+        success: true, bookingId: booking.id, booking, paymentIntent,
+        paymentIntentId: paymentIntent?.id, paymentUrl, message,
+        isTransfer: kind.isTransfer, isPayLater: kind.isPayLater, isSubscription: kind.isSubscription,
         discount: updatedBooking ? {
-          type: updatedBooking.discount_type,
-          percent: updatedBooking.discount_percent,
-          amount: updatedBooking.discount_amount_ars,
-          finalPrice: updatedBooking.final_price_ars,
+          type: updatedBooking.discount_type, percent: updatedBooking.discount_percent,
+          amount: updatedBooking.discount_amount_ars, finalPrice: updatedBooking.final_price_ars,
           isFounderSlot: updatedBooking.is_launch_founder_slot,
         } : null,
       }),
@@ -792,17 +421,8 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("[create-booking] Error:", error);
-    console.error("[create-booking] Context:", JSON.stringify({
-      subscriptionId: data?.subscriptionId,
-      bookingType: data?.bookingType,
-      isSubscriptionBooking: data?.isSubscriptionBooking,
-      basePriceArs: data?.basePriceArs,
-      totalPriceArs: data?.totalPriceArs,
-    }));
-    await logError("create-booking", "unhandled", error.message, { 
-      stack: error.stack,
-      subscriptionId: data?.subscriptionId,
-      bookingType: data?.bookingType,
+    await logError("create-booking", "unhandled", error.message, {
+      stack: error.stack, subscriptionId: data?.subscriptionId, bookingType: data?.bookingType,
     }, req);
     return new Response(
       JSON.stringify({ error: error.message }),

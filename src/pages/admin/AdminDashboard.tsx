@@ -35,6 +35,7 @@ import { DiscountControlPanel } from '@/components/admin/DiscountControlPanel';
 import { EarlyAccessTab } from '@/components/admin/EarlyAccessTab';
 import { ContactsTab } from '@/components/admin/ContactsTab';
 import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
+import { AppSettingsTab } from '@/components/admin/AppSettingsTab';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { BookingPricingDebug } from '@/components/admin/BookingPricingDebug';
 import { Button } from '@/components/ui/button';
@@ -1339,6 +1340,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* WhatsApp Config Tab */}
         {activeTab === 'whatsapp-config' && <ErrorBoundaryCalendar><WhatsAppSettingsTab /></ErrorBoundaryCalendar>}
+
+        {/* App Settings Tab */}
+        {activeTab === 'app-settings' && <ErrorBoundaryCalendar><AppSettingsTab /></ErrorBoundaryCalendar>}
       </div>
 
       {/* Booking Detail Dialog */}

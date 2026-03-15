@@ -122,6 +122,36 @@ export type Database = {
         }
         Relationships: []
       }
+      app_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          key: string
+          type: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key: string
+          type?: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string
+          type?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       availability_override_slots: {
         Row: {
           date: string
@@ -202,6 +232,51 @@ export type Database = {
           weekday?: number
         }
         Relationships: []
+      }
+      booking_execution_events: {
+        Row: {
+          booking_id: string
+          created_at: string
+          event_type: string
+          id: string
+          notes: string | null
+          photo_url: string | null
+          worker_id: string | null
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          notes?: string | null
+          photo_url?: string | null
+          worker_id?: string | null
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          notes?: string | null
+          photo_url?: string | null
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_execution_events_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_execution_events_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_bookings_v"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bookings: {
         Row: {
@@ -1604,6 +1679,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      system_events: {
+        Row: {
+          created_at: string
+          entity_id: string | null
+          event_type: string
+          id: string
+          payload: Json | null
+          processed: boolean
+        }
+        Insert: {
+          created_at?: string
+          entity_id?: string | null
+          event_type: string
+          id?: string
+          payload?: Json | null
+          processed?: boolean
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          processed?: boolean
+        }
+        Relationships: []
       }
       user_bookings: {
         Row: {
