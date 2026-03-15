@@ -1339,6 +1339,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* WhatsApp Config Tab */}
         {activeTab === 'whatsapp-config' && <ErrorBoundaryCalendar><WhatsAppSettingsTab /></ErrorBoundaryCalendar>}
+
+        {/* App Settings Tab */}
+        {activeTab === 'app-settings' && <ErrorBoundaryCalendar><AppSettingsTab /></ErrorBoundaryCalendar>}
       </div>
 
       {/* Booking Detail Dialog */}
