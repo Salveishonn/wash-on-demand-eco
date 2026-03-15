@@ -78,7 +78,7 @@ export default function OpsSettings() {
 
     if (result.success) {
       toast.success('Notificaciones activadas');
-      onEnablePush();
+      setPushEnabled(true);
       await refreshPushData();
     } else if (result.error === 'denied') {
       setPushState('denied');
