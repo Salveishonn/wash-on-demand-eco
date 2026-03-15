@@ -273,15 +273,10 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
                   key={dateKey}
                   type="button"
                   onClick={() => {
-                    if (preLaunch && !isPast) {
-                      setShowPreLaunchModal(true);
-                      return;
-                    }
                     if (isClickable) handleDayClick(date);
                   }}
                   disabled={isPast}
                   whileTap={isClickable ? { scale: 0.92 } : undefined}
-                  title={preLaunch ? "Disponible a partir del 15 de Abril" : undefined}
                   className={`
                     aspect-square min-h-[44px] min-w-[44px] p-0.5 sm:p-1 rounded-lg sm:rounded-xl 
                     flex flex-col items-center justify-center
