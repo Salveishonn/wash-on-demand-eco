@@ -144,3 +144,5 @@ verify_jwt = false
 [functions.notify-event]
 verify_jwt = false
 
+[functions.booking-reminders]
+verify_jwt = false
