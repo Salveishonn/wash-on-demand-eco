@@ -176,7 +176,7 @@ export default function OpsMessages() {
                   : 'bg-card border border-border text-foreground rounded-bl-md'
                )}>
                 {(m.message_type === 'audio' || m.message_type === 'voice') ? (
-                  <OpsAudioPlayer url={m.media_url} mime={m.media_mime_type} />
+                  <AudioPlayer url={m.media_url} mime={m.media_mime_type} />
                 ) : m.media_url && (m.message_type === 'image') ? (
                   <img src={m.media_url} alt="Media" className="rounded-lg max-w-[200px] mb-1" />
                 ) : (
