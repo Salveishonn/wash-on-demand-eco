@@ -302,7 +302,7 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
 
 
                   {/* Availability + Cluster indicators */}
-                  {!isPast && !isClosed && !preLaunch && dayInfo && (
+                  {!isPast && !isClosed && dayInfo && (
                     <div className="mt-0.5 sm:mt-1 flex gap-0.5 items-center">
                       {hasAvailability ? (
                         <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-accent" />
