@@ -84,6 +84,8 @@ interface CalendarBooking {
   created_at: string;
   confirmed_at: string | null;
   booking_source: string | null;
+  whatsapp_message_status: string | null;
+  whatsapp_last_message_type: string | null;
 }
 
 type ViewMode = 'day' | 'week' | 'month';
@@ -1092,6 +1094,32 @@ export function CalendarTab() {
                   )}
                 </div>
               </div>
+
+              {/* WhatsApp Template Status */}
+              {(selectedBooking.whatsapp_message_status || selectedBooking.whatsapp_last_message_type) && (
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm text-muted-foreground uppercase flex items-center gap-1.5">
+                    <Send className="w-3.5 h-3.5" /> WhatsApp
+                  </h4>
+                  <div className="flex gap-2 flex-wrap">
+                    {selectedBooking.whatsapp_message_status === 'sent' && (
+                      <Badge className="bg-green-100 text-green-800 text-[10px]">✅ Enviado</Badge>
+                    )}
+                    {selectedBooking.whatsapp_message_status === 'failed' && (
+                      <Badge variant="destructive" className="text-[10px]">❌ Error</Badge>
+                    )}
+                    {selectedBooking.whatsapp_message_status === 'queued' && (
+                      <Badge variant="outline" className="text-[10px]">⏳ En cola</Badge>
+                    )}
+                    {!selectedBooking.whatsapp_message_status && (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">Sin envío</Badge>
+                    )}
+                    {selectedBooking.whatsapp_last_message_type && (
+                      <Badge variant="secondary" className="text-[10px]">{selectedBooking.whatsapp_last_message_type}</Badge>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="pt-4 text-xs text-muted-foreground">ID: {selectedBooking.id}</div>
             </div>
