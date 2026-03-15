@@ -1,11 +1,92 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, MessageCircle, Loader2, ArrowLeft, Send, AlertTriangle } from 'lucide-react';
+import { Search, MessageCircle, Loader2, ArrowLeft, Send, AlertTriangle, Mic, Play, Pause, Download } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+/* ── Inline Audio Player (mobile-optimized) ── */
+function OpsAudioPlayer({ url, mime }: { url?: string | null; mime?: string | null }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [error, setError] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  if (!url) {
+    return (
+      <div className="flex items-center gap-2 py-1">
+        <Mic className="w-4 h-4 flex-shrink-0 opacity-60" />
+        <span className="text-xs italic opacity-70">Audio no disponible</span>
+      </div>
+    );
+  }
+
+  const togglePlay = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      setIsLoading(true);
+      try { await audio.play(); } catch { setError(true); }
+      setIsLoading(false);
+    }
+  };
+
+  const fmtDur = (s: number) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    audio.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
+  };
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs opacity-70 flex items-center gap-1.5"><Mic className="w-3.5 h-3.5" /> No se pudo reproducir</span>
+        <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+          <Download className="w-3 h-3" /> Descargar audio
+        </a>
+      </div>
+    );
+  }
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  return (
+    <div className="flex items-center gap-2.5 min-w-[180px] max-w-[260px]">
+      <audio
+        ref={audioRef}
+        src={url}
+        preload="metadata"
+        onLoadedMetadata={() => { if (audioRef.current) setDuration(audioRef.current.duration); }}
+        onTimeUpdate={() => { if (audioRef.current) setCurrentTime(audioRef.current.currentTime); }}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
+        onError={() => setError(true)}
+      />
+      <button onClick={togglePlay} className="w-9 h-9 rounded-full bg-primary/20 hover:bg-primary/30 flex items-center justify-center flex-shrink-0 transition-colors active:scale-95">
+        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="h-2 bg-primary/10 rounded-full cursor-pointer overflow-hidden" onClick={handleSeek}>
+          <div className="h-full bg-primary/60 rounded-full transition-[width] duration-100" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="flex justify-between mt-0.5">
+          <span className="text-[10px] opacity-60">{currentTime > 0 ? fmtDur(currentTime) : '0:00'}</span>
+          <span className="text-[10px] opacity-60">{duration > 0 ? fmtDur(duration) : '—'}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface Conversation {
   id: string;
@@ -26,6 +107,7 @@ interface ChatMessage {
   created_at: string;
   message_type: string;
   media_mime_type: string | null;
+  media_url: string | null;
 }
 
 export default function OpsMessages() {
@@ -75,7 +157,7 @@ export default function OpsMessages() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_messages')
-        .select('id, body, direction, status, created_at, message_type, media_mime_type')
+        .select('id, body, direction, status, created_at, message_type, media_mime_type, media_url')
         .eq('conversation_id', conv.id)
         .order('created_at', { ascending: true })
         .limit(100);
@@ -172,8 +254,14 @@ export default function OpsMessages() {
                 m.direction === 'outbound'
                   ? 'bg-primary text-primary-foreground rounded-br-md'
                   : 'bg-card border border-border text-foreground rounded-bl-md'
-              )}>
-                <p className="whitespace-pre-wrap break-words">{m.body || '📎 Media'}</p>
+               )}>
+                {(m.message_type === 'audio' || m.message_type === 'voice') ? (
+                  <OpsAudioPlayer url={m.media_url} mime={m.media_mime_type} />
+                ) : m.media_url && (m.message_type === 'image') ? (
+                  <img src={m.media_url} alt="Media" className="rounded-lg max-w-[200px] mb-1" />
+                ) : (
+                  <p className="whitespace-pre-wrap break-words">{m.body || '📎 Media'}</p>
+                )}
                 <p className={cn("text-[10px] mt-1 text-right", m.direction === 'outbound' ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
                   {formatTime(m.created_at)}
                 </p>
