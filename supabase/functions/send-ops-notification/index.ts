@@ -34,7 +34,8 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { event_type, title, body, data, user_id } = await req.json();
+    const body_json = await req.json();
+    const { event_type, title, body, data, user_id } = body_json;
 
     console.log("[send-ops-notification] Event:", event_type, "Title:", title);
 
