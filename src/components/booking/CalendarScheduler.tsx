@@ -66,8 +66,6 @@ function formatDateLong(date: Date): string {
   return `${DAYS_FULL[date.getDay()]} ${date.getDate()} de ${MONTHS[date.getMonth()].toLowerCase()}`;
 }
 
-const isBeforeLaunch = (dateKey: string) => dateKey < LAUNCH_DATE;
-const isLaunchHighlight = (dateKey: string) => LAUNCH_HIGHLIGHT_DATES.includes(dateKey);
 
 export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" }: CalendarSchedulerProps) {
   const { toast } = useToast();
