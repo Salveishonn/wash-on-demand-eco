@@ -349,15 +349,8 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
       {/* Barrio Card */}
       <BarrioCard />
 
-      {/* Pre-Launch Modal */}
-      <AnimatePresence>
-        {showPreLaunchModal && (
-          <PreLaunchModal
-            onClose={() => setShowPreLaunchModal(false)}
-            onPickLaunchDate={goToLaunchMonth}
-          />
-        )}
-      </AnimatePresence>
+
+
 
       {/* Slot Drawer */}
       <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
