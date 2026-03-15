@@ -298,12 +298,8 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
                     {date.getDate()}
                   </span>
 
-                  {/* Launch highlight label */}
-                  {isHighlight && !isPast && (
-                    <span className="text-[8px] sm:text-[9px] text-primary font-bold leading-none mt-0.5">
-                      🚀
-                    </span>
-                  )}
+
+
 
                   {/* Availability + Cluster indicators */}
                   {!isPast && !isClosed && !preLaunch && dayInfo && (
