@@ -287,6 +287,30 @@ export function markPushReceivedAt(receivedAt: string) {
   localStorage.setItem(LAST_TEST_RECEIVED_KEY, receivedAt);
 }
 
+export async function showLocalTestNotification(): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!('serviceWorker' in navigator)) {
+      return { success: false, error: 'Service worker no disponible.' };
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+    if (!reg.active) {
+      return { success: false, error: 'Service worker no activo.' };
+    }
+
+    reg.active.postMessage({
+      type: 'SHOW_LOCAL_NOTIFICATION',
+      title: '🔔 Notificación local',
+      body: 'Si ves esto, el service worker puede mostrar notificaciones.',
+      tag: 'local-test-' + Date.now(),
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

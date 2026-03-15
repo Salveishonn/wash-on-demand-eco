@@ -20,6 +20,7 @@ import {
   getPushDiagnostics,
   listenForPushMessages,
   markPushReceivedAt,
+  showLocalTestNotification,
   type PushState,
   type PushDiagnostics,
 } from '@/lib/pushNotifications';
@@ -39,6 +40,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
   const [diagnostics, setDiagnostics] = useState<PushDiagnostics | null>(null);
   const [isActivating, setIsActivating] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [isTestingLocal, setIsTestingLocal] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
 
   const refreshPushData = useCallback(async () => {
@@ -63,10 +65,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
       refreshPushData();
     });
 
-    const onFocus = () => {
-      refreshPushData();
-    };
-
+    const onFocus = () => refreshPushData();
     window.addEventListener('focus', onFocus);
     return () => {
       stopListening();
@@ -76,7 +75,6 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
 
   const handleActivate = useCallback(async () => {
     if (!user) return;
-
     setIsActivating(true);
     setTestError(null);
 
@@ -95,7 +93,6 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
     } else {
       toast.error(result.error || 'Error al activar notificaciones');
     }
-
     setIsActivating(false);
   }, [user, onEnablePush, refreshPushData]);
 
@@ -106,16 +103,32 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
     const result = await sendTestPush();
 
     if (result.success) {
-      toast.success('Push de prueba enviada. Revisá la pantalla bloqueada/centro de notificaciones.');
+      toast.success('Push enviada. Revisá la pantalla bloqueada.');
     } else {
       const details = result.failures?.[0]?.error || result.error || 'Error desconocido';
       setTestError(`Push failed: ${details}`);
-      toast.error(`No se pudo enviar la prueba: ${details}`);
+      toast.error(`No se pudo enviar: ${details}`);
     }
 
     setIsTesting(false);
     await refreshPushData();
   }, [refreshPushData]);
+
+  const handleLocalTest = useCallback(async () => {
+    setIsTestingLocal(true);
+    setTestError(null);
+
+    const result = await showLocalTestNotification();
+
+    if (result.success) {
+      toast.success('Notificación local enviada al service worker.');
+    } else {
+      setTestError(`Local failed: ${result.error}`);
+      toast.error(`Error local: ${result.error}`);
+    }
+
+    setIsTestingLocal(false);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -132,7 +145,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
               <span>No compatible en este navegador</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Este navegador no soporta notificaciones push. Usá Safari/Chrome actualizados.
+              Usá Safari/Chrome actualizados.
             </p>
           </div>
         );
@@ -145,7 +158,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
               <span>Instalación requerida en iPhone/iPad</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              En iOS/iPadOS la push solo funciona desde la app instalada en pantalla de inicio.
+              En iOS la push solo funciona desde la app instalada en pantalla de inicio.
             </p>
             <Button size="sm" onClick={handleActivate} disabled={isActivating} className="h-9 gap-1.5">
               {isActivating ? 'Verificando...' : 'Reintentar desde la app instalada'}
@@ -161,7 +174,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
               <span>Permiso denegado</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Volvé a habilitarlo en Ajustes del navegador → Notificaciones → Permitir para este sitio.
+              Habilitalo en Ajustes del navegador → Notificaciones → Permitir.
             </p>
           </div>
         );
@@ -179,8 +192,6 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
           </div>
         );
 
-      case 'not_requested':
-      case 'unsubscribed':
       default:
         return (
           <div className="space-y-2">
@@ -221,15 +232,15 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
           <Bell className="w-4 h-4" />
           Notificaciones Push
         </h3>
-
         {renderPushStatus()}
-
         <PushDiagnosticsCard
           diagnostics={diagnostics}
           isTesting={isTesting}
+          isTestingLocal={isTestingLocal}
           canSendTest={pushState === 'subscribed'}
           testError={testError}
           onSendTest={handleTestPush}
+          onLocalTest={handleLocalTest}
         />
       </div>
 
@@ -237,7 +248,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
         <div className="bg-card rounded-xl border border-border p-4 space-y-2">
           <h3 className="text-sm font-semibold text-foreground">Ayuda para iPhone/iPad</h3>
           <p className="text-xs text-muted-foreground">
-            Para recibir notificaciones en iPhone/iPad: 1) Instalá Washero Driver en pantalla de inicio, 2) Abrí la app instalada, 3) Activá notificaciones desde Ajustes.
+            Para recibir notificaciones: 1) Instalá Washero Driver en pantalla de inicio, 2) Abrí la app instalada, 3) Activá notificaciones desde Ajustes.
           </p>
         </div>
       )}
@@ -248,7 +259,7 @@ export default function OpsSettings({ pushEnabled, onEnablePush }: OpsSettingsPr
           Instalar App
         </h3>
         <p className="text-xs text-muted-foreground">
-          Podés instalar Washero Driver como app. En Safari/Chrome: menú compartir → Agregar a pantalla de inicio.
+          En Safari/Chrome: menú compartir → Agregar a pantalla de inicio.
         </p>
       </div>
 
