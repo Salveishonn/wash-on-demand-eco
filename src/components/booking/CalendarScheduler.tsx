@@ -293,8 +293,7 @@ export function CalendarScheduler({ onBookingComplete, bookingSource = "direct" 
                   <span className={`
                     text-sm sm:text-base font-semibold leading-none
                     ${isToday ? "text-primary" : "text-foreground"}
-                    ${isPast || isClosed || preLaunch ? "text-muted-foreground" : ""}
-                    ${isHighlight && !isPast ? "text-primary font-bold" : ""}
+                    ${isPast || isClosed ? "text-muted-foreground" : ""}
                   `}>
                     {date.getDate()}
                   </span>
