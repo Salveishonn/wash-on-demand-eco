@@ -19,7 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-export type AdminTabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'facturas' | 'mensajes' | 'disponibilidad' | 'whatsapp-config' | 'pricing' | 'early-access' | 'contacts' | 'demand-map';
+export type AdminTabType = 'bookings' | 'notifications' | 'kipper' | 'subscriptions' | 'calendario' | 'finanzas' | 'facturas' | 'mensajes' | 'disponibilidad' | 'whatsapp-config' | 'pricing' | 'early-access' | 'contacts' | 'demand-map' | 'app-settings';
 
 interface AdminSection {
   key: AdminTabType;
