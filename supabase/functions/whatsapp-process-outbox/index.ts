@@ -272,6 +272,15 @@ serve(async (req) => {
             })
             .eq("id", item.id);
 
+          // Update template logs
+          await supabase
+            .from("whatsapp_template_logs")
+            .update({
+              status: "failed",
+              error_message: errorMessage,
+            })
+            .eq("outbox_id", item.id);
+
           // Update entity with failure
           if (item.entity_type === "reservation" && item.entity_id) {
             await supabase
