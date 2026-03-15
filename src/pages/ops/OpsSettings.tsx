@@ -90,7 +90,7 @@ export default function OpsSettings() {
       toast.error(result.error || 'Error al activar notificaciones');
     }
     setIsActivating(false);
-  }, [user, onEnablePush, refreshPushData]);
+  }, [user, refreshPushData]);
 
   const handleTestPush = useCallback(async () => {
     setIsTesting(true);
