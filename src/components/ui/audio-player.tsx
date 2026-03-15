@@ -150,9 +150,17 @@ export function AudioPlayer({ url, mime, className }: AudioPlayerProps) {
         ref={audioRef}
         src={blobUrl || url}
         preload="metadata"
-        crossOrigin="anonymous"
         onLoadedMetadata={() => {
-          if (audioRef.current) setDuration(audioRef.current.duration);
+          if (audioRef.current) {
+            const dur = audioRef.current.duration;
+            if (dur && isFinite(dur)) setDuration(dur);
+          }
+        }}
+        onDurationChange={() => {
+          if (audioRef.current) {
+            const dur = audioRef.current.duration;
+            if (dur && isFinite(dur)) setDuration(dur);
+          }
         }}
         onTimeUpdate={() => {
           if (audioRef.current) setCurrentTime(audioRef.current.currentTime);

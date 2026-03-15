@@ -100,14 +100,49 @@ export default function OpsMessages() {
   const sendReply = async () => {
     if (!replyText.trim() || !selectedConv || sending) return;
     setSending(true);
+    const textToSend = replyText.trim();
+    
+    // Optimistic message
+    const optimisticMsg: ChatMessage = {
+      id: `temp-${Date.now()}`,
+      body: textToSend,
+      direction: 'outbound',
+      status: 'queued',
+      created_at: new Date().toISOString(),
+      message_type: 'text',
+      media_mime_type: null,
+      media_url: null,
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+    setReplyText('');
+
     try {
-      await supabase.functions.invoke('whatsapp-send-text', {
-        body: { to: selectedConv.customer_phone_e164, message: replyText.trim() },
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+        body: {
+          to_phone_e164: selectedConv.customer_phone_e164,
+          body: textToSend,
+          conversation_id: selectedConv.id,
+        },
       });
-      setReplyText('');
-      loadChat(selectedConv);
-    } catch (err) {
-      console.error('Send failed:', err);
+
+      if (error) throw error;
+
+      if (data?.ok && data?.message) {
+        // Replace optimistic message with real one
+        setMessages(prev => prev.map(m => m.id === optimisticMsg.id ? data.message : m));
+      } else if (data?.stub) {
+        // Stored but not sent (no WhatsApp configured)
+        setMessages(prev => prev.map(m => m.id === optimisticMsg.id ? { ...optimisticMsg, status: 'stored', id: data.message?.id || optimisticMsg.id } : m));
+      } else {
+        throw new Error(data?.error || 'Send failed');
+      }
+
+      console.log('[OpsMessages] Message sent:', { ok: data?.ok, provider: data?.stub ? 'stub' : 'meta', wa_id: data?.wa_message_id });
+    } catch (err: any) {
+      console.error('[OpsMessages] Send failed:', err);
+      // Remove optimistic message on failure
+      setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
+      setReplyText(textToSend);
     }
     setSending(false);
   };
