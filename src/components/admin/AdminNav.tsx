@@ -52,6 +52,7 @@ export const adminSections: AdminSection[] = [
   { key: 'pricing', label: 'Precios', icon: Tag, group: 'config' },
   { key: 'notifications', label: 'Notificaciones', icon: Bell, group: 'config' },
   { key: 'whatsapp-config', label: 'WhatsApp Config', icon: Settings, group: 'config' },
+  { key: 'app-settings', label: 'App Config', icon: Settings2, group: 'config' },
 ];
 
 interface AdminNavProps {
