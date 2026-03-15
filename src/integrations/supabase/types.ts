@@ -2292,6 +2292,8 @@ export type Database = {
           service_price_cents: number | null
           subscription_id: string | null
           total_cents: number | null
+          whatsapp_last_message_type: string | null
+          whatsapp_message_status: string | null
           whatsapp_opt_in: boolean | null
         }
         Insert: {
@@ -2319,6 +2321,8 @@ export type Database = {
           service_price_cents?: number | null
           subscription_id?: string | null
           total_cents?: number | null
+          whatsapp_last_message_type?: string | null
+          whatsapp_message_status?: string | null
           whatsapp_opt_in?: boolean | null
         }
         Update: {
@@ -2346,6 +2350,8 @@ export type Database = {
           service_price_cents?: number | null
           subscription_id?: string | null
           total_cents?: number | null
+          whatsapp_last_message_type?: string | null
+          whatsapp_message_status?: string | null
           whatsapp_opt_in?: boolean | null
         }
         Relationships: [
