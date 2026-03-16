@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle, Calendar, Clock, MapPin, Loader2, Phone, CreditCard, Wallet, Gift, Users } from 'lucide-react';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Layout } from '@/components/layout/Layout';
 import { supabase } from '@/integrations/supabase/client';
 import { KipperConfirmationBanner } from '@/components/kipper/KipperConfirmationBanner';
+import { trackEvent } from '@/lib/gtag';
 
 interface BookingDetails {
   id: string;
@@ -52,6 +53,7 @@ export default function ReservaConfirmada() {
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const conversionFiredRef = useRef(false);
 
   useEffect(() => {
     const fetchBooking = async () => {
@@ -86,6 +88,14 @@ export default function ReservaConfirmada() {
     fetchBooking();
   }, [bookingId]);
 
+  // Fire Google Ads conversion exactly once when booking loads successfully
+  useEffect(() => {
+    if (booking && !conversionFiredRef.current) {
+      conversionFiredRef.current = true;
+      trackEvent('conversion_event_book_appointment_1');
+      console.log('Google Ads BOOK_APPOINTMENT conversion fired');
+    }
+  }, [booking]);
   if (isLoading) {
     return (
       <Layout>
