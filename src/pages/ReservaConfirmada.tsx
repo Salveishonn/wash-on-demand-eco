@@ -88,6 +88,14 @@ export default function ReservaConfirmada() {
     fetchBooking();
   }, [bookingId]);
 
+  // Fire Google Ads conversion exactly once when booking loads successfully
+  useEffect(() => {
+    if (booking && !conversionFiredRef.current) {
+      conversionFiredRef.current = true;
+      trackEvent('conversion_event_book_appointment_1');
+      console.log('Google Ads BOOK_APPOINTMENT conversion fired');
+    }
+  }, [booking]);
   if (isLoading) {
     return (
       <Layout>
