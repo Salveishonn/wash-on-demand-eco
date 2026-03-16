@@ -53,6 +53,7 @@ export default function ReservaConfirmada() {
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const conversionFiredRef = useRef(false);
 
   useEffect(() => {
     const fetchBooking = async () => {
