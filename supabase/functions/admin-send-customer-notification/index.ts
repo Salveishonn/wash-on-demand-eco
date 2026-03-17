@@ -221,7 +221,7 @@ serve(async (req) => {
     
     switch (type) {
       case 'ON_MY_WAY':
-        templateName = 'washero_on_the_way_u01';
+        templateName = 'washero_on_the_way';
         rawParams = [firstName, `${dateFormatted} ${timeFormatted} en ${address}`];
         message = `Hola ${firstName}! Somos Washero 🚐. Estamos en camino. Tu turno es ${dateFormatted} ${timeFormatted} en ${address}.`;
         emailSubject = 'Washero: Estamos en camino 🚐';
