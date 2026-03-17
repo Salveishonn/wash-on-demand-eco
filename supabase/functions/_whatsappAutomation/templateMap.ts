@@ -52,9 +52,9 @@ function formatDateTimeAddress(date?: string, time?: string, address?: string): 
  * Keys are system event types, values are template configurations.
  */
 export const EVENT_TEMPLATE_MAP: Record<string, TemplateMapping> = {
-  // ── Booking Created ────────────────────────────────────
+  // ── Booking Created (new booking → customer gets appointment confirmation) ──
   'booking_created': {
-    templateName: 'washero_booking_confirmed_u01',
+    templateName: 'appointment_confirmation_1',
     languageCode: 'es_AR',
     paramCount: 3,
     description: 'Booking confirmation: name, date+time, address',
@@ -65,9 +65,22 @@ export const EVENT_TEMPLATE_MAP: Record<string, TemplateMapping> = {
     ],
   },
 
+  // ── Booking Accepted (admin confirms → customer notified) ──
+  'booking_accepted': {
+    templateName: 'washero_booking_confirmed_u01',
+    languageCode: 'es_AR',
+    paramCount: 3,
+    description: 'Booking accepted by admin: name, date+time, address',
+    buildVars: (ctx) => [
+      firstName(ctx.customerName),
+      formatDateTimeAddress(ctx.bookingDate, ctx.bookingTime),
+      ctx.address?.split(',')[0]?.trim() || 'Tu ubicación',
+    ],
+  },
+
   // ── Worker En Camino ───────────────────────────────────
   'worker_en_route': {
-    templateName: 'washero_on_the_way_u01',
+    templateName: 'washero_on_the_way',
     languageCode: 'es_AR',
     paramCount: 2,
     description: 'On the way: name, datetime+address',
@@ -79,7 +92,7 @@ export const EVENT_TEMPLATE_MAP: Record<string, TemplateMapping> = {
 
   // ── Worker Arrived ─────────────────────────────────────
   'worker_arrived': {
-    templateName: 'washero_arrived',
+    templateName: 'washero_arrived_uc',
     languageCode: 'es_AR',
     paramCount: 1,
     description: 'Arrived: name',
@@ -90,7 +103,7 @@ export const EVENT_TEMPLATE_MAP: Record<string, TemplateMapping> = {
 
   // ── Subscription Approved ──────────────────────────────
   'subscription_approved': {
-    templateName: 'washero_subscription_active',
+    templateName: 'washero_payment_info_u01',
     languageCode: 'es_AR',
     paramCount: 3,
     description: 'Subscription active: name, plan, washes',
@@ -103,7 +116,7 @@ export const EVENT_TEMPLATE_MAP: Record<string, TemplateMapping> = {
 
   // ── Payment Instructions ───────────────────────────────
   'payment_instructions': {
-    templateName: 'washero_payment_instructions',
+    templateName: 'washero_payment_i',
     languageCode: 'es_AR',
     paramCount: 2,
     description: 'Payment link: name, url',
