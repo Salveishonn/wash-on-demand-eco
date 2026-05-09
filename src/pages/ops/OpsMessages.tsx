@@ -81,7 +81,7 @@ export default function OpsMessages() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_messages')
-        .select('id, body, direction, status, created_at, message_type, media_mime_type, media_url')
+        .select('id, body, direction, status, created_at, message_type, media_mime_type, media_url, media_filename, media_caption, media_size')
         .eq('conversation_id', conv.id)
         .order('created_at', { ascending: true })
         .limit(100);
