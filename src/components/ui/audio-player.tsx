@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Play, Pause, Loader2, Mic, Download, RotateCw } from 'lucide-react';
+import { Play, Pause, Loader2, Mic, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
