@@ -68,7 +68,7 @@ function mimeToExtension(mime: string): string {
 
 // ── Handlers ───────────────────────────────────────────────────
 async function handleInboundMessages(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   value: any,
   accessToken: string | undefined,
   supabaseUrl: string,
@@ -337,7 +337,7 @@ async function handleInboundMessages(
 }
 
 async function handleStatusUpdates(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   statuses: any[],
 ) {
   for (const status of statuses) {
