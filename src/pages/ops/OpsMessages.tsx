@@ -4,6 +4,7 @@ import { Search, MessageCircle, Loader2, ArrowLeft, Send, AlertTriangle } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { AudioPlayer } from '@/components/ui/audio-player';
+import { WhatsAppMedia } from '@/components/ui/whatsapp-media';
 import { cn } from '@/lib/utils';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -28,6 +29,9 @@ interface ChatMessage {
   message_type: string;
   media_mime_type: string | null;
   media_url: string | null;
+  media_filename?: string | null;
+  media_caption?: string | null;
+  media_size?: number | null;
 }
 
 export default function OpsMessages() {
@@ -77,7 +81,7 @@ export default function OpsMessages() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_messages')
-        .select('id, body, direction, status, created_at, message_type, media_mime_type, media_url')
+        .select('id, body, direction, status, created_at, message_type, media_mime_type, media_url, media_filename, media_caption, media_size')
         .eq('conversation_id', conv.id)
         .order('created_at', { ascending: true })
         .limit(100);
@@ -210,13 +214,15 @@ export default function OpsMessages() {
                   ? 'bg-primary text-primary-foreground rounded-br-md'
                   : 'bg-card border border-border text-foreground rounded-bl-md'
                )}>
-                {(m.message_type === 'audio' || m.message_type === 'voice') ? (
-                  <AudioPlayer url={m.media_url} mime={m.media_mime_type} />
-                ) : m.media_url && (m.message_type === 'image') ? (
-                  <img src={m.media_url} alt="Media" className="rounded-lg max-w-[200px] mb-1" />
-                ) : (
-                  <p className="whitespace-pre-wrap break-words">{m.body || '📎 Media'}</p>
-                )}
+                <WhatsAppMedia
+                  messageType={m.message_type}
+                  mediaUrl={m.media_url}
+                  mediaMime={m.media_mime_type}
+                  mediaFilename={m.media_filename}
+                  mediaCaption={m.media_caption}
+                  mediaSize={m.media_size}
+                  body={m.body}
+                />
                 <p className={cn("text-[10px] mt-1 text-right", m.direction === 'outbound' ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
                   {formatTime(m.created_at)}
                 </p>

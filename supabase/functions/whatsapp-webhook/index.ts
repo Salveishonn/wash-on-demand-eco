@@ -82,14 +82,32 @@ async function handleInboundMessages(
     // Determine message type & body
     const msgType: string = message.type || "text";
     let messageBody = "";
+    let mediaCaption: string | null = null;
+    let mediaFilename: string | null = null;
     if (msgType === "text") {
       messageBody = message.text?.body || "";
     } else if (msgType === "button") {
       messageBody = message.button?.text || "";
     } else {
-      // For media types, use caption or type label
-      messageBody = (message[msgType] as any)?.caption || `[${msgType}]`;
+      // For media types, use caption (preferred) or fallback label
+      const m: any = message[msgType] || {};
+      mediaCaption = m.caption || null;
+      mediaFilename = m.filename || null;
+      messageBody = mediaCaption || mediaFilename || `[${msgType}]`;
     }
+
+    const previewIcon = (t: string) => {
+      if (t === "audio" || t === "voice") return "🎤 Audio";
+      if (t === "image") return "📷 Imagen";
+      if (t === "video") return "🎥 Video";
+      if (t === "document") return `📄 ${mediaFilename || "Documento"}`;
+      if (t === "sticker") return "🌟 Sticker";
+      if (t === "location") return "📍 Ubicación";
+      if (t === "contacts") return "👤 Contacto";
+      if (t === "unsupported") return "⚠️ Mensaje no soportado";
+      return messageBody;
+    };
+    const previewText = msgType === "text" ? messageBody.substring(0, 100) : previewIcon(msgType);
 
     console.log("[whatsapp-webhook] Inbound:", { from: fromPhone, type: msgType, waMessageId });
 
@@ -139,7 +157,7 @@ async function handleInboundMessages(
         .from("whatsapp_conversations")
         .update({
           last_message_at: timestamp,
-          last_message_preview: msgType === "text" ? messageBody.substring(0, 100) : `🎤 Audio`,
+          last_message_preview: previewText,
           last_inbound_at: timestamp,
           is_open: true,
           customer_name: contactName || existingConv.customer_name,
@@ -153,7 +171,7 @@ async function handleInboundMessages(
           customer_name: contactName || customer?.full_name || "WhatsApp User",
           customer_id: customer?.id,
           last_message_at: timestamp,
-          last_message_preview: msgType === "text" ? messageBody.substring(0, 100) : `🎤 Audio`,
+          last_message_preview: previewText,
           last_inbound_at: timestamp,
           is_open: true,
         })
@@ -162,30 +180,34 @@ async function handleInboundMessages(
       conversation = newConv;
     }
 
-    // ── Handle audio / media download ──
+    // ── Handle media download (audio, voice, image, video, document, sticker) ──
     let mediaUrl: string | null = null;
     let mediaMime: string | null = null;
+    let mediaIdStr: string | null = null;
+    let mediaSize: number | null = null;
+    let mediaStoragePath: string | null = null;
 
-    if (msgType === "audio" || msgType === "voice" || msgType === "image" || msgType === "video" || msgType === "document") {
+    const mediaTypes = ["audio", "voice", "image", "video", "document", "sticker"];
+    if (mediaTypes.includes(msgType)) {
       const mediaObj = message[msgType];
       const mediaId = mediaObj?.id;
+      mediaIdStr = mediaId || null;
       mediaMime = mediaObj?.mime_type || null;
 
       if (mediaId && accessToken) {
         const downloaded = await downloadWhatsAppMedia(mediaId, accessToken);
         if (downloaded) {
-          mediaMime = downloaded.mimeType;
-          const ext = mimeToExtension(downloaded.mimeType);
-          // Sanitize waMessageId for safe storage paths (remove =, +, / etc.)
+          mediaMime = downloaded.mimeType || mediaMime;
+          mediaSize = downloaded.buffer.byteLength;
+          const ext = mediaFilename?.split(".").pop()?.toLowerCase() || mimeToExtension(mediaMime || "");
           const safeId = waMessageId.replace(/[^a-zA-Z0-9_-]/g, "");
-          const storagePath = `${fromPhone.replace("+", "")}/${safeId}.${ext}`;
+          mediaStoragePath = `${conversation?.id || fromPhone.replace("+", "")}/${safeId}.${ext}`;
 
-          // Upload to Supabase Storage using service-role client
           const storageClient = createClient(supabaseUrl, supabaseServiceKey);
           const { error: uploadErr } = await storageClient.storage
             .from("whatsapp-media")
-            .upload(storagePath, downloaded.buffer, {
-              contentType: downloaded.mimeType,
+            .upload(mediaStoragePath, downloaded.buffer, {
+              contentType: mediaMime || "application/octet-stream",
               upsert: true,
             });
 
@@ -194,10 +216,12 @@ async function handleInboundMessages(
           } else {
             const { data: urlData } = storageClient.storage
               .from("whatsapp-media")
-              .getPublicUrl(storagePath);
+              .getPublicUrl(mediaStoragePath);
             mediaUrl = urlData?.publicUrl || null;
-            console.log("[whatsapp-webhook] Media stored:", mediaUrl);
+            console.log("[whatsapp-webhook] Media stored:", { type: msgType, mime: mediaMime, size: mediaSize, url: mediaUrl });
           }
+        } else {
+          console.warn("[whatsapp-webhook] Media download returned null for", mediaId);
         }
       }
     }
@@ -215,6 +239,11 @@ async function handleInboundMessages(
         message_type: msgType === "voice" ? "audio" : msgType,
         media_url: mediaUrl,
         media_mime_type: mediaMime,
+        media_id: mediaIdStr,
+        media_size: mediaSize,
+        media_filename: mediaFilename,
+        media_caption: mediaCaption,
+        media_storage_path: mediaStoragePath,
       });
 
     if (insertError) {
@@ -226,7 +255,7 @@ async function handleInboundMessages(
       const senderName = contactName || fromPhone;
       const preview = msgType === "text"
         ? `"${messageBody.slice(0, 40)}"`
-        : msgType === "audio" || msgType === "voice" ? "🎤 Audio" : `📎 ${msgType}`;
+        : previewIcon(msgType);
 
       try {
         await fetch(`${supabaseUrl}/functions/v1/send-ops-notification`, {

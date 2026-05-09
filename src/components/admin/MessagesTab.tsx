@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AudioPlayer } from '@/components/ui/audio-player';
+import { WhatsAppMedia } from '@/components/ui/whatsapp-media';
 import {
   Search,
   Send,
@@ -49,6 +50,9 @@ interface Message {
   message_type?: string;
   media_url?: string | null;
   media_mime_type?: string | null;
+  media_filename?: string | null;
+  media_caption?: string | null;
+  media_size?: number | null;
 }
 
 // Quick actions mapped to smart-send action types
@@ -604,12 +608,16 @@ export function MessagesTab() {
                               : 'bg-muted rounded-bl-sm'
                           }`}
                         >
-                          {/* Audio player for voice notes */}
-                          {(msg.message_type === 'audio' || msg.message_type === 'voice') ? (
-                            <AudioPlayer url={msg.media_url} mime={msg.media_mime_type} />
-                          ) : (
-                            <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
-                          )}
+                          {/* Render text or media */}
+                          <WhatsAppMedia
+                            messageType={msg.message_type}
+                            mediaUrl={msg.media_url}
+                            mediaMime={msg.media_mime_type}
+                            mediaFilename={msg.media_filename}
+                            mediaCaption={msg.media_caption}
+                            mediaSize={msg.media_size}
+                            body={msg.body}
+                          />
                           <div className={`flex items-center justify-end gap-1 mt-1 ${
                             msg.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground'
                           }`}>
