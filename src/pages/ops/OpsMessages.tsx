@@ -214,13 +214,15 @@ export default function OpsMessages() {
                   ? 'bg-primary text-primary-foreground rounded-br-md'
                   : 'bg-card border border-border text-foreground rounded-bl-md'
                )}>
-                {(m.message_type === 'audio' || m.message_type === 'voice') ? (
-                  <AudioPlayer url={m.media_url} mime={m.media_mime_type} />
-                ) : m.media_url && (m.message_type === 'image') ? (
-                  <img src={m.media_url} alt="Media" className="rounded-lg max-w-[200px] mb-1" />
-                ) : (
-                  <p className="whitespace-pre-wrap break-words">{m.body || '📎 Media'}</p>
-                )}
+                <WhatsAppMedia
+                  messageType={m.message_type}
+                  mediaUrl={m.media_url}
+                  mediaMime={m.media_mime_type}
+                  mediaFilename={m.media_filename}
+                  mediaCaption={m.media_caption}
+                  mediaSize={m.media_size}
+                  body={m.body}
+                />
                 <p className={cn("text-[10px] mt-1 text-right", m.direction === 'outbound' ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
                   {formatTime(m.created_at)}
                 </p>
