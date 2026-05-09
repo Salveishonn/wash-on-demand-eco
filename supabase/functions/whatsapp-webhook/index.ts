@@ -249,6 +249,10 @@ async function handleInboundMessages(
     let mediaIdStr: string | null = null;
     let mediaSize: number | null = null;
     let mediaStoragePath: string | null = null;
+    let playableMediaStoragePath: string | null = null;
+    let playableMediaMimeType: string | null = null;
+    let mediaTranscodeStatus: string | null = null;
+    let mediaTranscodeError: string | null = null;
 
     const mediaTypes = ["audio", "voice", "image", "video", "document", "sticker"];
     if (mediaTypes.includes(msgType)) {
@@ -264,7 +268,8 @@ async function handleInboundMessages(
           mediaSize = downloaded.buffer.byteLength;
           const ext = mediaFilename?.split(".").pop()?.toLowerCase() || mimeToExtension(mediaMime || "");
           const safeId = waMessageId.replace(/[^a-zA-Z0-9_-]/g, "");
-          mediaStoragePath = `${conversation?.id || fromPhone.replace("+", "")}/${safeId}.${ext}`;
+          const storageFolder = conversation?.id || fromPhone.replace("+", "");
+          mediaStoragePath = `${storageFolder}/${safeId}.${ext}`;
 
           const storageClient = createClient(supabaseUrl, supabaseServiceKey);
           const { error: uploadErr } = await storageClient.storage
@@ -282,6 +287,46 @@ async function handleInboundMessages(
               .getPublicUrl(mediaStoragePath);
             mediaUrl = urlData?.publicUrl || null;
             console.log("[whatsapp-webhook] Media stored:", { type: msgType, mime: mediaMime, size: mediaSize, url: mediaUrl });
+
+            if (msgType === "audio" || msgType === "voice") {
+              if (isAudioPlayableWithoutTranscode(mediaMime)) {
+                playableMediaStoragePath = mediaStoragePath;
+                playableMediaMimeType = mediaMime;
+                mediaTranscodeStatus = "completed";
+              } else {
+                mediaTranscodeStatus = "processing";
+                try {
+                  const mp3Buffer = await transcodeWhatsAppAudioToMp3(downloaded.buffer);
+                  playableMediaStoragePath = `${storageFolder}/${safeId}.mp3`;
+                  playableMediaMimeType = "audio/mpeg";
+
+                  const { error: playableUploadErr } = await storageClient.storage
+                    .from("whatsapp-media")
+                    .upload(playableMediaStoragePath, mp3Buffer, {
+                      contentType: playableMediaMimeType,
+                      upsert: true,
+                    });
+
+                  if (playableUploadErr) throw playableUploadErr;
+                  mediaTranscodeStatus = "completed";
+                  console.log("[whatsapp-webhook] Audio transcoded:", {
+                    originalMime: mediaMime,
+                    outputMime: playableMediaMimeType,
+                    originalSize: mediaSize,
+                    outputSize: mp3Buffer.byteLength,
+                    path: playableMediaStoragePath,
+                  });
+                } catch (transcodeErr: any) {
+                  mediaTranscodeStatus = "failed";
+                  mediaTranscodeError = transcodeErr?.message || String(transcodeErr);
+                  console.error("[whatsapp-webhook] Audio transcode failed:", {
+                    mime: mediaMime,
+                    path: mediaStoragePath,
+                    error: mediaTranscodeError,
+                  });
+                }
+              }
+            }
           }
         } else {
           console.warn("[whatsapp-webhook] Media download returned null for", mediaId);
