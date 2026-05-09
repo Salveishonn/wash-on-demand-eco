@@ -1,4 +1,4 @@
-import { OggOpusDecoder } from "https://esm.sh/ogg-opus-decoder@1.7.3";
+import OggOpusDecoder from "https://esm.sh/ogg-opus-decoder@1.7.3/src/OggOpusDecoder.js";
 import lamejs from "https://esm.sh/lamejs@1.2.1";
 
 export function isAudioPlayableWithoutTranscode(mime?: string | null): boolean {
