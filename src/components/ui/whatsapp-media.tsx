@@ -8,8 +8,10 @@ interface WhatsAppMediaProps {
   messageType?: string | null;
   mediaUrl?: string | null;
   mediaMime?: string | null;
+  mediaStoragePath?: string | null;
   playableMediaUrl?: string | null;
   playableMediaMime?: string | null;
+  playableMediaStoragePath?: string | null;
   mediaFilename?: string | null;
   mediaCaption?: string | null;
   mediaSize?: number | null;
@@ -28,8 +30,10 @@ export function WhatsAppMedia({
   messageType,
   mediaUrl,
   mediaMime,
+  mediaStoragePath,
   playableMediaUrl,
   playableMediaMime,
+  playableMediaStoragePath,
   mediaFilename,
   mediaCaption,
   mediaSize,
@@ -50,7 +54,13 @@ export function WhatsAppMedia({
     const audioMime = playableMediaMime || mediaMime;
     return (
       <div className={className}>
-        <AudioPlayer url={audioUrl} mime={audioMime} downloadUrl={mediaUrl || audioUrl} />
+        <AudioPlayer
+          url={audioUrl}
+          mime={audioMime}
+          downloadUrl={mediaUrl || audioUrl}
+          storagePath={playableMediaStoragePath || mediaStoragePath}
+          originalStoragePath={mediaStoragePath}
+        />
         {mediaCaption && <p className="text-xs mt-1 opacity-80 whitespace-pre-wrap">{mediaCaption}</p>}
       </div>
     );

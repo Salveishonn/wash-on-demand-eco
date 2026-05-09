@@ -225,8 +225,10 @@ export default function OpsMessages() {
                   messageType={m.message_type}
                   mediaUrl={getWhatsAppMediaUrl(m.media_storage_path) || m.media_url}
                   mediaMime={m.media_mime_type}
+                  mediaStoragePath={m.media_storage_path}
                   playableMediaUrl={getWhatsAppMediaUrl(m.playable_media_storage_path)}
                   playableMediaMime={m.playable_media_mime_type}
+                  playableMediaStoragePath={m.playable_media_storage_path}
                   mediaFilename={m.media_filename}
                   mediaCaption={m.media_caption}
                   mediaSize={m.media_size}

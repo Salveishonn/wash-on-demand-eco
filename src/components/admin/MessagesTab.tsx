@@ -620,8 +620,10 @@ export function MessagesTab() {
                             messageType={msg.message_type}
                             mediaUrl={getWhatsAppMediaUrl(msg.media_storage_path) || msg.media_url}
                             mediaMime={msg.media_mime_type}
+                            mediaStoragePath={msg.media_storage_path}
                             playableMediaUrl={getWhatsAppMediaUrl(msg.playable_media_storage_path)}
                             playableMediaMime={msg.playable_media_mime_type}
+                            playableMediaStoragePath={msg.playable_media_storage_path}
                             mediaFilename={msg.media_filename}
                             mediaCaption={msg.media_caption}
                             mediaSize={msg.media_size}
