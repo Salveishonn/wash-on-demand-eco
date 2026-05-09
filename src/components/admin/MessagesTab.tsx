@@ -7,7 +7,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AudioPlayer } from '@/components/ui/audio-player';
 import { WhatsAppMedia } from '@/components/ui/whatsapp-media';
 import {
   Search,
@@ -53,6 +52,9 @@ interface Message {
   media_filename?: string | null;
   media_caption?: string | null;
   media_size?: number | null;
+  media_storage_path?: string | null;
+  playable_media_storage_path?: string | null;
+  playable_media_mime_type?: string | null;
 }
 
 // Quick actions mapped to smart-send action types
@@ -102,6 +104,11 @@ const getStatusIcon = (status: string) => {
     default:
       return null;
   }
+};
+
+const getWhatsAppMediaUrl = (path?: string | null) => {
+  if (!path) return null;
+  return supabase.storage.from('whatsapp-media').getPublicUrl(path).data.publicUrl;
 };
 
 export function MessagesTab() {
@@ -611,8 +618,10 @@ export function MessagesTab() {
                           {/* Render text or media */}
                           <WhatsAppMedia
                             messageType={msg.message_type}
-                            mediaUrl={msg.media_url}
+                            mediaUrl={getWhatsAppMediaUrl(msg.media_storage_path) || msg.media_url}
                             mediaMime={msg.media_mime_type}
+                            playableMediaUrl={getWhatsAppMediaUrl(msg.playable_media_storage_path)}
+                            playableMediaMime={msg.playable_media_mime_type}
                             mediaFilename={msg.media_filename}
                             mediaCaption={msg.media_caption}
                             mediaSize={msg.media_size}
