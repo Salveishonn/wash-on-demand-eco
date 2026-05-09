@@ -107,6 +107,14 @@ export function AudioPlayer({ url, mime, className }: AudioPlayerProps) {
   };
 
   const handleNativeError = () => {
+    const audio = audioRef.current;
+    const err = audio?.error;
+    console.error('[AudioPlayer] native playback error', {
+      url: blobUrl || url,
+      mime,
+      code: err?.code,
+      message: err?.message,
+    });
     if (!decodeAttempted.current && !decodeFailed) {
       attemptFallbackDecode();
     } else if (!blobUrl) {
