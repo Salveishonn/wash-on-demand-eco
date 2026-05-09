@@ -52,7 +52,7 @@ function encodeMp3(channelData: Float32Array[], sampleRate: number): Uint8Array 
 }
 
 export async function transcodeWhatsAppAudioToMp3(input: Uint8Array): Promise<Uint8Array> {
-  const decoder = new OggOpusDecoder({ sampleRate: 48000, forceStereo: false });
+  const decoder = new OggOpusDecoder({ forceStereo: false });
   try {
     await decoder.ready;
     const decoded = await decoder.decodeFile(input);
