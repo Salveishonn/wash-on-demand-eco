@@ -1,6 +1,33 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { isAudioPlayableWithoutTranscode, transcodeWhatsAppAudioToMp3 } from "../_shared/audioTranscode.ts";
+import { isAudioPlayableWithoutTranscode } from "../_shared/audioTranscode.ts";
+
+async function callExternalTranscoder(
+  sourcePath: string,
+  sourceMime: string | null,
+): Promise<{ playable_media_storage_path: string; playable_media_mime_type: string } | null> {
+  const url = Deno.env.get("WHATSAPP_TRANSCODER_URL");
+  const secret = Deno.env.get("WHATSAPP_TRANSCODER_SECRET");
+  if (!url || !secret) {
+    console.warn("[whatsapp-webhook] Transcoder not configured (WHATSAPP_TRANSCODER_URL/SECRET missing)");
+    return null;
+  }
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
+    body: JSON.stringify({ source_path: sourcePath, source_mime: sourceMime }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Transcoder HTTP ${res.status}: ${text}`);
+  }
+  const json = await res.json();
+  if (!json?.ok) throw new Error("Transcoder returned ok=false: " + (json?.error || "unknown"));
+  return {
+    playable_media_storage_path: json.playable_media_storage_path,
+    playable_media_mime_type: json.playable_media_mime_type,
+  };
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -234,26 +261,21 @@ async function handleInboundMessages(
               } else {
                 mediaTranscodeStatus = "processing";
                 try {
-                  const mp3Buffer = await transcodeWhatsAppAudioToMp3(downloaded.buffer);
-                  playableMediaStoragePath = `${storageFolder}/${safeId}.mp3`;
-                  playableMediaMimeType = "audio/mpeg";
-
-                  const { error: playableUploadErr } = await storageClient.storage
-                    .from("whatsapp-media")
-                    .upload(playableMediaStoragePath, mp3Buffer, {
-                      contentType: playableMediaMimeType,
-                      upsert: true,
+                  const result = await callExternalTranscoder(mediaStoragePath, mediaMime);
+                  if (!result) {
+                    mediaTranscodeStatus = "failed";
+                    mediaTranscodeError = "Transcoder service not configured";
+                  } else {
+                    playableMediaStoragePath = result.playable_media_storage_path;
+                    playableMediaMimeType = result.playable_media_mime_type;
+                    mediaTranscodeStatus = "completed";
+                    console.log("[whatsapp-webhook] Audio transcoded via external service:", {
+                      originalMime: mediaMime,
+                      outputMime: playableMediaMimeType,
+                      originalSize: mediaSize,
+                      path: playableMediaStoragePath,
                     });
-
-                  if (playableUploadErr) throw playableUploadErr;
-                  mediaTranscodeStatus = "completed";
-                  console.log("[whatsapp-webhook] Audio transcoded:", {
-                    originalMime: mediaMime,
-                    outputMime: playableMediaMimeType,
-                    originalSize: mediaSize,
-                    outputSize: mp3Buffer.byteLength,
-                    path: playableMediaStoragePath,
-                  });
+                  }
                 } catch (transcodeErr: any) {
                   mediaTranscodeStatus = "failed";
                   mediaTranscodeError = transcodeErr?.message || String(transcodeErr);
