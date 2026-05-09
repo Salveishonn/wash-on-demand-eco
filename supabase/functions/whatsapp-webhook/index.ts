@@ -6,22 +6,35 @@ async function callExternalTranscoder(
   sourcePath: string,
   sourceMime: string | null,
 ): Promise<{ playable_media_storage_path: string; playable_media_mime_type: string } | null> {
-  const url = Deno.env.get("WHATSAPP_TRANSCODER_URL");
+  const rawUrl = Deno.env.get("WHATSAPP_TRANSCODER_URL");
   const secret = Deno.env.get("WHATSAPP_TRANSCODER_SECRET");
-  if (!url || !secret) {
+  console.log("[whatsapp-webhook] Transcoder env:", {
+    urlPresent: !!rawUrl,
+    urlValue: rawUrl,
+    secretPresent: !!secret,
+    secretLen: secret?.length || 0,
+  });
+  if (!rawUrl || !secret) {
     console.warn("[whatsapp-webhook] Transcoder not configured (WHATSAPP_TRANSCODER_URL/SECRET missing)");
     return null;
   }
+  // Auto-append /transcode if user set base URL only
+  let url = rawUrl.trim().replace(/\/+$/, "");
+  if (!/\/transcode$/i.test(url)) url = url + "/transcode";
+  console.log("[whatsapp-webhook] Calling transcoder:", url, { sourcePath, sourceMime });
+
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
     body: JSON.stringify({ source_path: sourcePath, source_mime: sourceMime }),
   });
+  const text = await res.text().catch(() => "");
+  console.log("[whatsapp-webhook] Transcoder response:", { status: res.status, bodyPreview: text.slice(0, 500) });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
     throw new Error(`Transcoder HTTP ${res.status}: ${text}`);
   }
-  const json = await res.json();
+  let json: any;
+  try { json = JSON.parse(text); } catch { throw new Error("Transcoder returned non-JSON: " + text.slice(0, 200)); }
   if (!json?.ok) throw new Error("Transcoder returned ok=false: " + (json?.error || "unknown"));
   return {
     playable_media_storage_path: json.playable_media_storage_path,
