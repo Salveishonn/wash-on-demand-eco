@@ -52,6 +52,7 @@ interface Message {
   media_filename?: string | null;
   media_caption?: string | null;
   media_size?: number | null;
+  media_storage_path?: string | null;
   playable_media_storage_path?: string | null;
   playable_media_mime_type?: string | null;
 }
@@ -103,6 +104,11 @@ const getStatusIcon = (status: string) => {
     default:
       return null;
   }
+};
+
+const getWhatsAppMediaUrl = (path?: string | null) => {
+  if (!path) return null;
+  return supabase.storage.from('whatsapp-media').getPublicUrl(path).data.publicUrl;
 };
 
 export function MessagesTab() {
@@ -612,9 +618,9 @@ export function MessagesTab() {
                           {/* Render text or media */}
                           <WhatsAppMedia
                             messageType={msg.message_type}
-                            mediaUrl={msg.playable_media_storage_path ? `https://pkndizbozytnpgqxymms.supabase.co/storage/v1/object/public/whatsapp-media/${msg.media_storage_path}` : msg.media_url}
+                            mediaUrl={getWhatsAppMediaUrl(msg.media_storage_path) || msg.media_url}
                             mediaMime={msg.media_mime_type}
-                            playableMediaUrl={msg.playable_media_storage_path ? `https://pkndizbozytnpgqxymms.supabase.co/storage/v1/object/public/whatsapp-media/${msg.playable_media_storage_path}` : null}
+                            playableMediaUrl={getWhatsAppMediaUrl(msg.playable_media_storage_path)}
                             playableMediaMime={msg.playable_media_mime_type}
                             mediaFilename={msg.media_filename}
                             mediaCaption={msg.media_caption}
