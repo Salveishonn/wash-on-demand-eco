@@ -8,8 +8,10 @@ interface WhatsAppMediaProps {
   messageType?: string | null;
   mediaUrl?: string | null;
   mediaMime?: string | null;
+  mediaStoragePath?: string | null;
   playableMediaUrl?: string | null;
   playableMediaMime?: string | null;
+  playableMediaStoragePath?: string | null;
   mediaFilename?: string | null;
   mediaCaption?: string | null;
   mediaSize?: number | null;
