@@ -84,13 +84,13 @@ export async function transcodeWhatsAppAudioToMp3(input: Uint8Array): Promise<Ui
     forceStereo: false,
   });
 
-  await decoder.ready;
+  await (decoder as any).ready;
   try {
     const frames = pages.flatMap((page: any) => (page[codecFrames] || []).map((frame: any) => frame[data]));
-    const decoded = decoder.decodeFrames(frames);
+    const decoded = (decoder as any).decodeFrames(frames);
     const mergedChannels = decoded.channelData.map((channelChunks: Float32Array[]) => concatFloat32(channelChunks));
     return encodeMp3(mergedChannels, decoded.sampleRate || 48000);
   } finally {
-    decoder.free();
+    (decoder as any).free();
   }
 }
