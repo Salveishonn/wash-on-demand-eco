@@ -191,7 +191,11 @@ export function AudioPlayer({ url, mime, className }: AudioPlayerProps) {
           }
         }}
         onTimeUpdate={() => {
-          if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+          const audio = audioRef.current;
+          if (!audio) return;
+          const t = audio.currentTime;
+          // Ignore the absurd time set by the duration-trick seek
+          if (isFinite(t) && t < 1e9) setCurrentTime(t);
         }}
         onPlay={() => {
           setIsPlaying(true);
