@@ -261,26 +261,21 @@ async function handleInboundMessages(
               } else {
                 mediaTranscodeStatus = "processing";
                 try {
-                  const mp3Buffer = await transcodeWhatsAppAudioToMp3(downloaded.buffer);
-                  playableMediaStoragePath = `${storageFolder}/${safeId}.mp3`;
-                  playableMediaMimeType = "audio/mpeg";
-
-                  const { error: playableUploadErr } = await storageClient.storage
-                    .from("whatsapp-media")
-                    .upload(playableMediaStoragePath, mp3Buffer, {
-                      contentType: playableMediaMimeType,
-                      upsert: true,
+                  const result = await callExternalTranscoder(mediaStoragePath, mediaMime);
+                  if (!result) {
+                    mediaTranscodeStatus = "failed";
+                    mediaTranscodeError = "Transcoder service not configured";
+                  } else {
+                    playableMediaStoragePath = result.playable_media_storage_path;
+                    playableMediaMimeType = result.playable_media_mime_type;
+                    mediaTranscodeStatus = "completed";
+                    console.log("[whatsapp-webhook] Audio transcoded via external service:", {
+                      originalMime: mediaMime,
+                      outputMime: playableMediaMimeType,
+                      originalSize: mediaSize,
+                      path: playableMediaStoragePath,
                     });
-
-                  if (playableUploadErr) throw playableUploadErr;
-                  mediaTranscodeStatus = "completed";
-                  console.log("[whatsapp-webhook] Audio transcoded:", {
-                    originalMime: mediaMime,
-                    outputMime: playableMediaMimeType,
-                    originalSize: mediaSize,
-                    outputSize: mp3Buffer.byteLength,
-                    path: playableMediaStoragePath,
-                  });
+                  }
                 } catch (transcodeErr: any) {
                   mediaTranscodeStatus = "failed";
                   mediaTranscodeError = transcodeErr?.message || String(transcodeErr);
