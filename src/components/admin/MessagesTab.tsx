@@ -608,12 +608,16 @@ export function MessagesTab() {
                               : 'bg-muted rounded-bl-sm'
                           }`}
                         >
-                          {/* Audio player for voice notes */}
-                          {(msg.message_type === 'audio' || msg.message_type === 'voice') ? (
-                            <AudioPlayer url={msg.media_url} mime={msg.media_mime_type} />
-                          ) : (
-                            <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
-                          )}
+                          {/* Render text or media */}
+                          <WhatsAppMedia
+                            messageType={msg.message_type}
+                            mediaUrl={msg.media_url}
+                            mediaMime={msg.media_mime_type}
+                            mediaFilename={msg.media_filename}
+                            mediaCaption={msg.media_caption}
+                            mediaSize={msg.media_size}
+                            body={msg.body}
+                          />
                           <div className={`flex items-center justify-end gap-1 mt-1 ${
                             msg.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground'
                           }`}>
