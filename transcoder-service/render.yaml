@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: washero-whatsapp-transcoder
+    runtime: node
+    plan: starter
+    region: oregon
+    rootDir: transcoder-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: OUTPUT_FORMAT
+        value: m4a
+      - key: SUPABASE_BUCKET
+        value: whatsapp-media
+      - key: TRANSCODER_SHARED_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
