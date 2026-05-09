@@ -82,14 +82,32 @@ async function handleInboundMessages(
     // Determine message type & body
     const msgType: string = message.type || "text";
     let messageBody = "";
+    let mediaCaption: string | null = null;
+    let mediaFilename: string | null = null;
     if (msgType === "text") {
       messageBody = message.text?.body || "";
     } else if (msgType === "button") {
       messageBody = message.button?.text || "";
     } else {
-      // For media types, use caption or type label
-      messageBody = (message[msgType] as any)?.caption || `[${msgType}]`;
+      // For media types, use caption (preferred) or fallback label
+      const m: any = message[msgType] || {};
+      mediaCaption = m.caption || null;
+      mediaFilename = m.filename || null;
+      messageBody = mediaCaption || mediaFilename || `[${msgType}]`;
     }
+
+    const previewIcon = (t: string) => {
+      if (t === "audio" || t === "voice") return "🎤 Audio";
+      if (t === "image") return "📷 Imagen";
+      if (t === "video") return "🎥 Video";
+      if (t === "document") return `📄 ${mediaFilename || "Documento"}`;
+      if (t === "sticker") return "🌟 Sticker";
+      if (t === "location") return "📍 Ubicación";
+      if (t === "contacts") return "👤 Contacto";
+      if (t === "unsupported") return "⚠️ Mensaje no soportado";
+      return messageBody;
+    };
+    const previewText = msgType === "text" ? messageBody.substring(0, 100) : previewIcon(msgType);
 
     console.log("[whatsapp-webhook] Inbound:", { from: fromPhone, type: msgType, waMessageId });
 
