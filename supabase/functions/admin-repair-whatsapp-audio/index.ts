@@ -11,16 +11,22 @@ const corsHeaders = {
 type RepairRequest = { message_id?: string; limit?: number };
 
 async function callExternalTranscoder(sourcePath: string, sourceMime: string | null) {
-  const url = Deno.env.get("WHATSAPP_TRANSCODER_URL");
+  const rawUrl = Deno.env.get("WHATSAPP_TRANSCODER_URL");
   const secret = Deno.env.get("WHATSAPP_TRANSCODER_SECRET");
-  if (!url || !secret) throw new Error("Transcoder service not configured");
+  console.log("[repair] Transcoder env:", { urlPresent: !!rawUrl, urlValue: rawUrl, secretPresent: !!secret });
+  if (!rawUrl || !secret) throw new Error("Transcoder service not configured");
+  let url = rawUrl.trim().replace(/\/+$/, "");
+  if (!/\/transcode$/i.test(url)) url = url + "/transcode";
+  console.log("[repair] Calling transcoder:", url, { sourcePath, sourceMime });
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
     body: JSON.stringify({ source_path: sourcePath, source_mime: sourceMime }),
   });
-  if (!res.ok) throw new Error(`Transcoder HTTP ${res.status}: ${await res.text().catch(() => "")}`);
-  const json = await res.json();
+  const text = await res.text().catch(() => "");
+  console.log("[repair] Transcoder response:", { status: res.status, body: text.slice(0, 500) });
+  if (!res.ok) throw new Error(`Transcoder HTTP ${res.status}: ${text}`);
+  const json = JSON.parse(text);
   if (!json?.ok) throw new Error("Transcoder ok=false: " + (json?.error || "unknown"));
   return {
     playable_media_storage_path: json.playable_media_storage_path as string,
