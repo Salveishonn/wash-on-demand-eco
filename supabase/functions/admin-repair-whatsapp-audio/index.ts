@@ -1,30 +1,41 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAdmin } from "../_shared/adminAuth.ts";
-import { isAudioPlayableWithoutTranscode, transcodeWhatsAppAudioToMp3 } from "../_shared/audioTranscode.ts";
+import { isAudioPlayableWithoutTranscode } from "../_shared/audioTranscode.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type RepairRequest = {
-  message_id?: string;
-  limit?: number;
-};
+type RepairRequest = { message_id?: string; limit?: number };
+
+async function callExternalTranscoder(sourcePath: string, sourceMime: string | null) {
+  const url = Deno.env.get("WHATSAPP_TRANSCODER_URL");
+  const secret = Deno.env.get("WHATSAPP_TRANSCODER_SECRET");
+  if (!url || !secret) throw new Error("Transcoder service not configured");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
+    body: JSON.stringify({ source_path: sourcePath, source_mime: sourceMime }),
+  });
+  if (!res.ok) throw new Error(`Transcoder HTTP ${res.status}: ${await res.text().catch(() => "")}`);
+  const json = await res.json();
+  if (!json?.ok) throw new Error("Transcoder ok=false: " + (json?.error || "unknown"));
+  return {
+    playable_media_storage_path: json.playable_media_storage_path as string,
+    playable_media_mime_type: json.playable_media_mime_type as string,
+  };
+}
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const authResult = await requireAdmin(req);
     if ("error" in authResult) return authResult.error;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { message_id, limit = 25 }: RepairRequest = await req.json().catch(() => ({}));
 
     let query = supabase
@@ -62,25 +73,14 @@ serve(async (req) => {
           continue;
         }
 
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from("whatsapp-media")
-          .download(originalPath);
-        if (downloadError || !fileData) throw downloadError || new Error("No se pudo descargar el audio original");
-
-        const mp3Buffer = await transcodeWhatsAppAudioToMp3(new Uint8Array(await fileData.arrayBuffer()));
-        const playablePath = originalPath.replace(/\.[^/.]+$/, "") + ".mp3";
-        const { error: uploadError } = await supabase.storage
-          .from("whatsapp-media")
-          .upload(playablePath, mp3Buffer, { contentType: "audio/mpeg", upsert: true });
-        if (uploadError) throw uploadError;
-
+        const result = await callExternalTranscoder(originalPath, originalMime);
         await supabase.from("whatsapp_messages").update({
-          playable_media_storage_path: playablePath,
-          playable_media_mime_type: "audio/mpeg",
+          playable_media_storage_path: result.playable_media_storage_path,
+          playable_media_mime_type: result.playable_media_mime_type,
           media_transcode_status: "completed",
           media_transcode_error: null,
         }).eq("id", msg.id);
-        results.push({ id: msg.id, status: "completed", playable_path: playablePath });
+        results.push({ id: msg.id, status: "completed", playable_path: result.playable_media_storage_path });
       } catch (err: any) {
         const error = err?.message || String(err);
         await supabase.from("whatsapp_messages").update({ media_transcode_status: "failed", media_transcode_error: error }).eq("id", msg.id);
