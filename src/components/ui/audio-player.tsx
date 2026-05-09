@@ -239,15 +239,6 @@ export function AudioPlayer({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={handleDownloadClick}
-        className="w-7 h-7 rounded-full hover:bg-primary/15 flex items-center justify-center flex-shrink-0 transition-colors opacity-60 hover:opacity-100"
-        aria-label="Descargar audio"
-        title="Descargar"
-      >
-        <Download className="w-3.5 h-3.5" />
-      </button>
     </div>
   );
 }
