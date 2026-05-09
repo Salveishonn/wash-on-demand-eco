@@ -1,6 +1,33 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { isAudioPlayableWithoutTranscode, transcodeWhatsAppAudioToMp3 } from "../_shared/audioTranscode.ts";
+import { isAudioPlayableWithoutTranscode } from "../_shared/audioTranscode.ts";
+
+async function callExternalTranscoder(
+  sourcePath: string,
+  sourceMime: string | null,
+): Promise<{ playable_media_storage_path: string; playable_media_mime_type: string } | null> {
+  const url = Deno.env.get("WHATSAPP_TRANSCODER_URL");
+  const secret = Deno.env.get("WHATSAPP_TRANSCODER_SECRET");
+  if (!url || !secret) {
+    console.warn("[whatsapp-webhook] Transcoder not configured (WHATSAPP_TRANSCODER_URL/SECRET missing)");
+    return null;
+  }
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
+    body: JSON.stringify({ source_path: sourcePath, source_mime: sourceMime }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Transcoder HTTP ${res.status}: ${text}`);
+  }
+  const json = await res.json();
+  if (!json?.ok) throw new Error("Transcoder returned ok=false: " + (json?.error || "unknown"));
+  return {
+    playable_media_storage_path: json.playable_media_storage_path,
+    playable_media_mime_type: json.playable_media_mime_type,
+  };
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
