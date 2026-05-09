@@ -29,6 +29,9 @@ interface ChatMessage {
   message_type: string;
   media_mime_type: string | null;
   media_url: string | null;
+  media_filename?: string | null;
+  media_caption?: string | null;
+  media_size?: number | null;
 }
 
 export default function OpsMessages() {
