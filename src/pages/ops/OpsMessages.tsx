@@ -4,6 +4,7 @@ import { Search, MessageCircle, Loader2, ArrowLeft, Send, AlertTriangle } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { AudioPlayer } from '@/components/ui/audio-player';
+import { WhatsAppMedia } from '@/components/ui/whatsapp-media';
 import { cn } from '@/lib/utils';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
