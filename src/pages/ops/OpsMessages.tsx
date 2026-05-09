@@ -3,7 +3,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Search, MessageCircle, Loader2, ArrowLeft, Send, AlertTriangle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { AudioPlayer } from '@/components/ui/audio-player';
 import { WhatsAppMedia } from '@/components/ui/whatsapp-media';
 import { cn } from '@/lib/utils';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
@@ -29,6 +28,9 @@ interface ChatMessage {
   message_type: string;
   media_mime_type: string | null;
   media_url: string | null;
+  media_storage_path?: string | null;
+  playable_media_storage_path?: string | null;
+  playable_media_mime_type?: string | null;
   media_filename?: string | null;
   media_caption?: string | null;
   media_size?: number | null;
@@ -45,6 +47,11 @@ export default function OpsMessages() {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const getWhatsAppMediaUrl = (path?: string | null) => {
+    if (!path) return null;
+    return supabase.storage.from('whatsapp-media').getPublicUrl(path).data.publicUrl;
+  };
 
   useEffect(() => {
     const loadConversations = async () => {
@@ -81,7 +88,7 @@ export default function OpsMessages() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_messages')
-        .select('id, body, direction, status, created_at, message_type, media_mime_type, media_url, media_filename, media_caption, media_size')
+          .select('id, body, direction, status, created_at, message_type, media_mime_type, media_url, media_storage_path, playable_media_storage_path, playable_media_mime_type, media_filename, media_caption, media_size')
         .eq('conversation_id', conv.id)
         .order('created_at', { ascending: true })
         .limit(100);
@@ -216,8 +223,10 @@ export default function OpsMessages() {
                )}>
                 <WhatsAppMedia
                   messageType={m.message_type}
-                  mediaUrl={m.media_url}
+                  mediaUrl={getWhatsAppMediaUrl(m.media_storage_path) || m.media_url}
                   mediaMime={m.media_mime_type}
+                  playableMediaUrl={getWhatsAppMediaUrl(m.playable_media_storage_path)}
+                  playableMediaMime={m.playable_media_mime_type}
                   mediaFilename={m.media_filename}
                   mediaCaption={m.media_caption}
                   mediaSize={m.media_size}
