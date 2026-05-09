@@ -49,6 +49,9 @@ interface Message {
   message_type?: string;
   media_url?: string | null;
   media_mime_type?: string | null;
+  media_filename?: string | null;
+  media_caption?: string | null;
+  media_size?: number | null;
 }
 
 // Quick actions mapped to smart-send action types
