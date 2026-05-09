@@ -151,15 +151,35 @@ export function AudioPlayer({ url, mime, className }: AudioPlayerProps) {
         src={blobUrl || url}
         preload="metadata"
         onLoadedMetadata={() => {
-          if (audioRef.current) {
-            const dur = audioRef.current.duration;
-            if (dur && isFinite(dur)) setDuration(dur);
+          const audio = audioRef.current;
+          if (!audio) return;
+          const dur = audio.duration;
+          console.log('[AudioPlayer] loadedmetadata', { url: blobUrl || url, mime, duration: dur });
+          if (dur && isFinite(dur) && dur > 0) {
+            setDuration(dur);
+          } else {
+            // OGG/Opus from WhatsApp often reports Infinity — force browser to read full file.
+            try {
+              audio.currentTime = 1e101;
+            } catch {
+              /* noop */
+            }
           }
         }}
         onDurationChange={() => {
-          if (audioRef.current) {
-            const dur = audioRef.current.duration;
-            if (dur && isFinite(dur)) setDuration(dur);
+          const audio = audioRef.current;
+          if (!audio) return;
+          const dur = audio.duration;
+          if (dur && isFinite(dur) && dur > 0) {
+            setDuration(dur);
+            // Reset playhead after the Infinity-trick seek
+            if (audio.currentTime > dur) {
+              try {
+                audio.currentTime = 0;
+              } catch {
+                /* noop */
+              }
+            }
           }
         }}
         onTimeUpdate={() => {
