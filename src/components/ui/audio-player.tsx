@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Play, Pause, Loader2, Mic, Download, RotateCw } from 'lucide-react';
+import { Play, Pause, Loader2, Mic, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -132,24 +132,9 @@ export function AudioPlayer({
     }
   };
 
-  const handleDownloadClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    e.preventDefault();
-    let href = downloadUrl || currentSrc || url;
-    if (originalStoragePath) {
-      try {
-        const { data } = await supabase.storage
-          .from(BUCKET)
-          .createSignedUrl(originalStoragePath, 3600, { download: true });
-        if (data?.signedUrl) href = data.signedUrl;
-      } catch {
-        /* ignore */
-      }
-    }
-    if (!href) return;
-    // Open in new tab without navigating away from the chat.
-    window.open(href, '_blank', 'noopener,noreferrer');
-  };
+  // NOTE: Download button removed intentionally. Audio messages must remain
+  // strictly inline — opening a new tab/window navigates away from the PWA on
+  // iOS Safari, which the user perceives as "redirect to Supabase URL".
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -164,7 +149,9 @@ export function AudioPlayer({
   return (
     <div
       className={cn('flex items-center gap-2.5 min-w-[180px] max-w-[280px]', className)}
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); }}
+      onClickCapture={(e) => { e.stopPropagation(); }}
+      onPointerDownCapture={(e) => { e.stopPropagation(); }}
     >
       <audio
         ref={audioRef}
@@ -254,15 +241,6 @@ export function AudioPlayer({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={handleDownloadClick}
-        className="w-7 h-7 rounded-full hover:bg-primary/15 flex items-center justify-center flex-shrink-0 transition-colors opacity-60 hover:opacity-100"
-        aria-label="Descargar audio"
-        title="Descargar"
-      >
-        <Download className="w-3.5 h-3.5" />
-      </button>
     </div>
   );
 }
