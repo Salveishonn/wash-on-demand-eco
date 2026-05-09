@@ -352,6 +352,10 @@ async function handleInboundMessages(
         media_filename: mediaFilename,
         media_caption: mediaCaption,
         media_storage_path: mediaStoragePath,
+        playable_media_storage_path: playableMediaStoragePath,
+        playable_media_mime_type: playableMediaMimeType,
+        media_transcode_status: mediaTranscodeStatus,
+        media_transcode_error: mediaTranscodeError,
       });
 
     if (insertError) {
