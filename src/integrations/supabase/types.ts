@@ -2060,8 +2060,12 @@ export type Database = {
           media_mime_type: string | null
           media_size: number | null
           media_storage_path: string | null
+          media_transcode_error: string | null
+          media_transcode_status: string | null
           media_url: string | null
           message_type: string
+          playable_media_mime_type: string | null
+          playable_media_storage_path: string | null
           status: string
           twilio_message_sid: string | null
         }
@@ -2079,8 +2083,12 @@ export type Database = {
           media_mime_type?: string | null
           media_size?: number | null
           media_storage_path?: string | null
+          media_transcode_error?: string | null
+          media_transcode_status?: string | null
           media_url?: string | null
           message_type?: string
+          playable_media_mime_type?: string | null
+          playable_media_storage_path?: string | null
           status?: string
           twilio_message_sid?: string | null
         }
@@ -2098,8 +2106,12 @@ export type Database = {
           media_mime_type?: string | null
           media_size?: number | null
           media_storage_path?: string | null
+          media_transcode_error?: string | null
+          media_transcode_status?: string | null
           media_url?: string | null
           message_type?: string
+          playable_media_mime_type?: string | null
+          playable_media_storage_path?: string | null
           status?: string
           twilio_message_sid?: string | null
         }
