@@ -347,6 +347,13 @@ async function handleInboundMessages(
     if (insertError) {
       console.error("[whatsapp-webhook] Error storing message:", insertError);
     } else {
+      console.log("[whatsapp-webhook] DB update result:", {
+        success: true,
+        operation: "insert_whatsapp_message",
+        playableMediaStoragePath,
+        playableMediaMimeType,
+        mediaTranscodeStatus,
+      });
       console.log("[whatsapp-webhook] Message stored:", {
         type: msgType,
         mediaTranscodeStatus,
