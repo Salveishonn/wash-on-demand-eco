@@ -283,7 +283,7 @@ async function handleInboundMessages(
               if (isAudioPlayableWithoutTranscode(mediaMime)) {
                 playableMediaStoragePath = mediaStoragePath;
                 playableMediaMimeType = mediaMime;
-                mediaTranscodeStatus = "completed";
+                mediaTranscodeStatus = "success";
               } else {
                 mediaTranscodeStatus = "processing";
                 try {
