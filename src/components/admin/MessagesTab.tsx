@@ -432,6 +432,34 @@ export function MessagesTab() {
     }
   };
 
+  const handleRetryAudioTranscode = async (messageId: string) => {
+    if (!selectedConversation || retryingAudioMessageId) return;
+    setRetryingAudioMessageId(messageId);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-repair-whatsapp-audio', {
+        body: { message_id: messageId, limit: 1 },
+      });
+
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'No se pudo reintentar el audio');
+
+      const result = data.results?.[0];
+      if (result?.status === 'failed') throw new Error(result.error || 'Falló la transcodificación');
+
+      toast({ title: 'Audio reprocesado', description: 'El audio quedó listo para reproducir.' });
+      fetchMessages(selectedConversation.id);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error al reprocesar audio',
+        description: error.message || 'Revisá los logs del transcoder.',
+      });
+    } finally {
+      setRetryingAudioMessageId(null);
+    }
+  };
+
   const filteredConversations = useMemo(() => {
     if (!searchQuery) return conversations;
     const query = searchQuery.toLowerCase();
