@@ -507,8 +507,6 @@ export function MessagesTab() {
         </Alert>
       )}
 
-      {/* TEMP: Render keys reveal (borrar tras configurar Render) */}
-      <RenderKeysReveal />
 
       <div className="flex flex-1 bg-background rounded-xl shadow-sm overflow-hidden border border-border/50">
       {/* Left: Conversations List */}
