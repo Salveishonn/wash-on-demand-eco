@@ -8,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { WhatsAppMedia } from '@/components/ui/whatsapp-media';
-import { RenderKeysReveal } from '@/components/admin/RenderKeysReveal';
+
 import {
   Search,
   Send,
