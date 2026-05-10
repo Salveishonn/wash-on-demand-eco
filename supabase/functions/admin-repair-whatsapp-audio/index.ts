@@ -79,27 +79,32 @@ serve(async (req) => {
         await supabase.from("whatsapp_messages").update({ media_transcode_status: "processing", media_transcode_error: null }).eq("id", msg.id);
 
         if (isAudioPlayableWithoutTranscode(originalMime)) {
-          await supabase.from("whatsapp_messages").update({
+          const { error: updateError } = await supabase.from("whatsapp_messages").update({
             playable_media_storage_path: originalPath,
             playable_media_mime_type: originalMime,
-            media_transcode_status: "completed",
+            media_transcode_status: "success",
             media_transcode_error: null,
           }).eq("id", msg.id);
-          results.push({ id: msg.id, status: "completed", playable_path: originalPath });
+          console.log("[repair] DB update result:", { id: msg.id, success: !updateError, error: updateError?.message, playablePath: originalPath });
+          if (updateError) throw updateError;
+          results.push({ id: msg.id, status: "success", playable_path: originalPath });
           continue;
         }
 
         const result = await callExternalTranscoder(originalPath, originalMime);
-        await supabase.from("whatsapp_messages").update({
+        const { error: updateError } = await supabase.from("whatsapp_messages").update({
           playable_media_storage_path: result.playable_media_storage_path,
           playable_media_mime_type: result.playable_media_mime_type,
-          media_transcode_status: "completed",
+          media_transcode_status: "success",
           media_transcode_error: null,
         }).eq("id", msg.id);
-        results.push({ id: msg.id, status: "completed", playable_path: result.playable_media_storage_path });
+        console.log("[repair] DB update result:", { id: msg.id, success: !updateError, error: updateError?.message, playablePath: result.playable_media_storage_path });
+        if (updateError) throw updateError;
+        results.push({ id: msg.id, status: "success", playable_path: result.playable_media_storage_path });
       } catch (err: any) {
         const error = err?.message || String(err);
-        await supabase.from("whatsapp_messages").update({ media_transcode_status: "failed", media_transcode_error: error }).eq("id", msg.id);
+        const { error: failUpdateError } = await supabase.from("whatsapp_messages").update({ media_transcode_status: "failed", media_transcode_error: error }).eq("id", msg.id);
+        console.log("[repair] DB failure update result:", { id: msg.id, success: !failUpdateError, error: failUpdateError?.message, transcodeError: error });
         results.push({ id: msg.id, status: "failed", error });
       }
     }
