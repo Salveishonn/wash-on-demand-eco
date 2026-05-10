@@ -505,7 +505,10 @@ export function MessagesTab() {
           <AlertDescription className="text-xs">{configWarning}</AlertDescription>
         </Alert>
       )}
-      
+
+      {/* TEMP: Render keys reveal (borrar tras configurar Render) */}
+      <RenderKeysReveal />
+
       <div className="flex flex-1 bg-background rounded-xl shadow-sm overflow-hidden border border-border/50">
       {/* Left: Conversations List */}
       <div className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 border-r border-border flex-col`}>
