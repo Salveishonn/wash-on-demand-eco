@@ -294,7 +294,7 @@ async function handleInboundMessages(
                   } else {
                     playableMediaStoragePath = result.playable_media_storage_path;
                     playableMediaMimeType = result.playable_media_mime_type;
-                    mediaTranscodeStatus = "completed";
+                    mediaTranscodeStatus = "success";
                     console.log("[whatsapp-webhook] Audio transcoded via external service:", {
                       originalMime: mediaMime,
                       outputMime: playableMediaMimeType,
@@ -347,7 +347,13 @@ async function handleInboundMessages(
     if (insertError) {
       console.error("[whatsapp-webhook] Error storing message:", insertError);
     } else {
-      console.log("[whatsapp-webhook] Message stored, type:", msgType);
+      console.log("[whatsapp-webhook] Message stored:", {
+        type: msgType,
+        mediaTranscodeStatus,
+        playableMediaStoragePath,
+        playableMediaMimeType,
+        dbResult: "insert_success",
+      });
 
       // Smart push notification for inbound WhatsApp message
       const senderName = contactName || fromPhone;
