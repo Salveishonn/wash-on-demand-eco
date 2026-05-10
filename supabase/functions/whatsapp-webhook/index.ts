@@ -345,6 +345,7 @@ async function handleInboundMessages(
       });
 
     if (insertError) {
+      console.error("[whatsapp-webhook] DB update result:", { success: false, operation: "insert_whatsapp_message", error: insertError.message });
       console.error("[whatsapp-webhook] Error storing message:", insertError);
     } else {
       console.log("[whatsapp-webhook] DB update result:", {
