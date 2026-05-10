@@ -87,6 +87,14 @@ const App = () => (
                 </AdminRoute>
               }
             />
+            <Route
+              path="/admin/diag-audio"
+              element={
+                <AdminRoute>
+                  <AudioDiagnostics />
+                </AdminRoute>
+              }
+            />
 
             {/* Operator App — nested routes */}
             <Route path="/ops" element={<OpsLayout />}>
