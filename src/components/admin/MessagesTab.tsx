@@ -24,6 +24,7 @@ import {
   CheckCircle,
   CalendarX,
   AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -55,6 +56,8 @@ interface Message {
   media_storage_path?: string | null;
   playable_media_storage_path?: string | null;
   playable_media_mime_type?: string | null;
+  media_transcode_status?: string | null;
+  media_transcode_error?: string | null;
 }
 
 // Quick actions mapped to smart-send action types
@@ -132,6 +135,7 @@ export function MessagesTab() {
   const [isSending, setIsSending] = useState(false);
   const [configWarning, setConfigWarning] = useState<string | null>(null);
   const [sendingAction, setSendingAction] = useState<string | null>(null);
+  const [retryingAudioMessageId, setRetryingAudioMessageId] = useState<string | null>(null);
 
   // Load conversations with last_inbound_at for 24h window tracking
   const fetchConversations = async () => {
