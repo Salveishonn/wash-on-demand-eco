@@ -45,6 +45,7 @@ app.post("/transcode", async (req, res) => {
 
   const jobId = crypto.randomBytes(6).toString("hex");
   const log = (...args) => console.log(`[transcoder][${jobId}]`, ...args);
+  log("received source_path", { source_path, source_mime });
 
   const ext = PREFERRED_FORMAT === "mp3" ? "mp3" : "m4a";
   const outMime = ext === "mp3" ? "audio/mpeg" : "audio/mp4";
@@ -57,10 +58,13 @@ app.post("/transcode", async (req, res) => {
   try {
     log("download start", { source_path, source_mime });
     const { data: file, error: dlErr } = await supabase.storage.from(BUCKET).download(source_path);
-    if (dlErr || !file) throw new Error("Download failed: " + (dlErr?.message || "no file"));
+    if (dlErr || !file) {
+      log("download failed", { error: dlErr?.message || "no file" });
+      throw new Error("Download failed: " + (dlErr?.message || "no file"));
+    }
     const buf = Buffer.from(await file.arrayBuffer());
     await fs.writeFile(inFile, buf);
-    log("download ok", { bytes: buf.length });
+    log("download success", { bytes: buf.length });
 
     log("ffmpeg start", { ext, outFile });
     await new Promise((resolve, reject) => {
@@ -76,8 +80,14 @@ app.post("/transcode", async (req, res) => {
       }
       cmd
         .on("start", (cl) => log("ffmpeg cmd", cl))
-        .on("error", (err) => reject(new Error("ffmpeg: " + err.message)))
-        .on("end", () => resolve(null))
+        .on("error", (err) => {
+          log("ffmpeg failed", { error: err.message });
+          reject(new Error("ffmpeg: " + err.message));
+        })
+        .on("end", () => {
+          log("ffmpeg success");
+          resolve(null);
+        })
         .save(outFile);
     });
 
@@ -89,8 +99,12 @@ app.post("/transcode", async (req, res) => {
     const { error: upErr } = await supabase.storage
       .from(BUCKET)
       .upload(playablePath, outBuf, { contentType: outMime, upsert: true });
-    if (upErr) throw new Error("Upload failed: " + upErr.message);
-    log("upload ok");
+    if (upErr) {
+      log("upload failed", { error: upErr.message });
+      throw new Error("Upload failed: " + upErr.message);
+    }
+    log("upload success");
+    log("returned playable_media_storage_path", { playable_media_storage_path: playablePath, playable_media_mime_type: outMime });
 
     return res.json({
       ok: true,

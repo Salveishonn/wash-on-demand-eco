@@ -24,6 +24,7 @@ import {
   CheckCircle,
   CalendarX,
   AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -55,6 +56,8 @@ interface Message {
   media_storage_path?: string | null;
   playable_media_storage_path?: string | null;
   playable_media_mime_type?: string | null;
+  media_transcode_status?: string | null;
+  media_transcode_error?: string | null;
 }
 
 // Quick actions mapped to smart-send action types
@@ -132,6 +135,7 @@ export function MessagesTab() {
   const [isSending, setIsSending] = useState(false);
   const [configWarning, setConfigWarning] = useState<string | null>(null);
   const [sendingAction, setSendingAction] = useState<string | null>(null);
+  const [retryingAudioMessageId, setRetryingAudioMessageId] = useState<string | null>(null);
 
   // Load conversations with last_inbound_at for 24h window tracking
   const fetchConversations = async () => {
@@ -428,6 +432,34 @@ export function MessagesTab() {
     }
   };
 
+  const handleRetryAudioTranscode = async (messageId: string) => {
+    if (!selectedConversation || retryingAudioMessageId) return;
+    setRetryingAudioMessageId(messageId);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-repair-whatsapp-audio', {
+        body: { message_id: messageId, limit: 1 },
+      });
+
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'No se pudo reintentar el audio');
+
+      const result = data.results?.[0];
+      if (result?.status === 'failed') throw new Error(result.error || 'Falló la transcodificación');
+
+      toast({ title: 'Audio reprocesado', description: 'El audio quedó listo para reproducir.' });
+      fetchMessages(selectedConversation.id);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error al reprocesar audio',
+        description: error.message || 'Revisá los logs del transcoder.',
+      });
+    } finally {
+      setRetryingAudioMessageId(null);
+    }
+  };
+
   const filteredConversations = useMemo(() => {
     if (!searchQuery) return conversations;
     const query = searchQuery.toLowerCase();
@@ -629,6 +661,32 @@ export function MessagesTab() {
                             mediaSize={msg.media_size}
                             body={msg.body}
                           />
+                          {(msg.message_type === 'audio' || msg.message_type === 'voice') &&
+                            !msg.playable_media_storage_path &&
+                            msg.media_storage_path &&
+                            (msg.media_transcode_status === 'failed' || !msg.media_transcode_status) && (
+                              <div className="mt-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 px-2 text-[11px] bg-background/40"
+                                  disabled={retryingAudioMessageId === msg.id}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    handleRetryAudioTranscode(msg.id);
+                                  }}
+                                >
+                                  {retryingAudioMessageId === msg.id ? (
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="w-3 h-3 mr-1" />
+                                  )}
+                                  Reintentar audio
+                                </Button>
+                              </div>
+                            )}
                           <div className={`flex items-center justify-end gap-1 mt-1 ${
                             msg.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground'
                           }`}>

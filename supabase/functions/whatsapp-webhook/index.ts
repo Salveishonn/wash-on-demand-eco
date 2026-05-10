@@ -2,6 +2,12 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAudioPlayableWithoutTranscode } from "../_shared/audioTranscode.ts";
 
+function normalizeSourceMimeForTranscoder(sourceMime: string | null): string {
+  const normalized = (sourceMime || "").trim().toLowerCase();
+  if (!normalized || normalized === "audio/ogg") return "audio/ogg; codecs=opus";
+  return sourceMime || "audio/ogg; codecs=opus";
+}
+
 async function callExternalTranscoder(
   sourcePath: string,
   sourceMime: string | null,
@@ -21,12 +27,16 @@ async function callExternalTranscoder(
   // Auto-append /transcode if user set base URL only
   let url = rawUrl.trim().replace(/\/+$/, "");
   if (!/\/transcode$/i.test(url)) url = url + "/transcode";
-  console.log("[whatsapp-webhook] Calling transcoder:", url, { sourcePath, sourceMime });
+  const requestBody = {
+    source_path: sourcePath,
+    source_mime: normalizeSourceMimeForTranscoder(sourceMime),
+  };
+  console.log("[whatsapp-webhook] Calling transcoder:", url, requestBody);
 
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
-    body: JSON.stringify({ source_path: sourcePath, source_mime: sourceMime }),
+    body: JSON.stringify(requestBody),
   });
   const text = await res.text().catch(() => "");
   console.log("[whatsapp-webhook] Transcoder response:", { status: res.status, bodyPreview: text.slice(0, 500) });
@@ -36,6 +46,9 @@ async function callExternalTranscoder(
   let json: any;
   try { json = JSON.parse(text); } catch { throw new Error("Transcoder returned non-JSON: " + text.slice(0, 200)); }
   if (!json?.ok) throw new Error("Transcoder returned ok=false: " + (json?.error || "unknown"));
+  if (!json.playable_media_storage_path || !json.playable_media_mime_type) {
+    throw new Error("Transcoder returned missing playable media fields");
+  }
   return {
     playable_media_storage_path: json.playable_media_storage_path,
     playable_media_mime_type: json.playable_media_mime_type,
@@ -270,7 +283,7 @@ async function handleInboundMessages(
               if (isAudioPlayableWithoutTranscode(mediaMime)) {
                 playableMediaStoragePath = mediaStoragePath;
                 playableMediaMimeType = mediaMime;
-                mediaTranscodeStatus = "completed";
+                mediaTranscodeStatus = "success";
               } else {
                 mediaTranscodeStatus = "processing";
                 try {
@@ -281,7 +294,7 @@ async function handleInboundMessages(
                   } else {
                     playableMediaStoragePath = result.playable_media_storage_path;
                     playableMediaMimeType = result.playable_media_mime_type;
-                    mediaTranscodeStatus = "completed";
+                    mediaTranscodeStatus = "success";
                     console.log("[whatsapp-webhook] Audio transcoded via external service:", {
                       originalMime: mediaMime,
                       outputMime: playableMediaMimeType,
@@ -332,9 +345,23 @@ async function handleInboundMessages(
       });
 
     if (insertError) {
+      console.error("[whatsapp-webhook] DB update result:", { success: false, operation: "insert_whatsapp_message", error: insertError.message });
       console.error("[whatsapp-webhook] Error storing message:", insertError);
     } else {
-      console.log("[whatsapp-webhook] Message stored, type:", msgType);
+      console.log("[whatsapp-webhook] DB update result:", {
+        success: true,
+        operation: "insert_whatsapp_message",
+        playableMediaStoragePath,
+        playableMediaMimeType,
+        mediaTranscodeStatus,
+      });
+      console.log("[whatsapp-webhook] Message stored:", {
+        type: msgType,
+        mediaTranscodeStatus,
+        playableMediaStoragePath,
+        playableMediaMimeType,
+        dbResult: "insert_success",
+      });
 
       // Smart push notification for inbound WhatsApp message
       const senderName = contactName || fromPhone;
