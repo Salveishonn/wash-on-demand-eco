@@ -10,24 +10,34 @@ const corsHeaders = {
 
 type RepairRequest = { message_id?: string; limit?: number };
 
+function normalizeSourceMimeForTranscoder(sourceMime: string | null): string {
+  const normalized = (sourceMime || "").trim().toLowerCase();
+  if (!normalized || normalized === "audio/ogg") return "audio/ogg; codecs=opus";
+  return sourceMime || "audio/ogg; codecs=opus";
+}
+
 async function callExternalTranscoder(sourcePath: string, sourceMime: string | null) {
   const rawUrl = Deno.env.get("WHATSAPP_TRANSCODER_URL");
   const secret = Deno.env.get("WHATSAPP_TRANSCODER_SECRET");
-  console.log("[repair] Transcoder env:", { urlPresent: !!rawUrl, urlValue: rawUrl, secretPresent: !!secret });
+  console.log("[repair] Transcoder env:", { urlPresent: !!rawUrl, urlValue: rawUrl, secretPresent: !!secret, secretLen: secret?.length || 0 });
   if (!rawUrl || !secret) throw new Error("Transcoder service not configured");
   let url = rawUrl.trim().replace(/\/+$/, "");
   if (!/\/transcode$/i.test(url)) url = url + "/transcode";
-  console.log("[repair] Calling transcoder:", url, { sourcePath, sourceMime });
+  const requestBody = { source_path: sourcePath, source_mime: normalizeSourceMimeForTranscoder(sourceMime) };
+  console.log("[repair] Calling transcoder:", url, requestBody);
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
-    body: JSON.stringify({ source_path: sourcePath, source_mime: sourceMime }),
+    body: JSON.stringify(requestBody),
   });
   const text = await res.text().catch(() => "");
   console.log("[repair] Transcoder response:", { status: res.status, body: text.slice(0, 500) });
   if (!res.ok) throw new Error(`Transcoder HTTP ${res.status}: ${text}`);
   const json = JSON.parse(text);
   if (!json?.ok) throw new Error("Transcoder ok=false: " + (json?.error || "unknown"));
+  if (!json.playable_media_storage_path || !json.playable_media_mime_type) {
+    throw new Error("Transcoder returned missing playable media fields");
+  }
   return {
     playable_media_storage_path: json.playable_media_storage_path as string,
     playable_media_mime_type: json.playable_media_mime_type as string,
