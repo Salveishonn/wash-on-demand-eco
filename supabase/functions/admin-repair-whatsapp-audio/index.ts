@@ -68,18 +68,22 @@ serve(async (req) => {
     if ("error" in authResult) return authResult.error;
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { message_id, limit = 25 }: RepairRequest = await req.json().catch(() => ({}));
+    const { message_id, limit = 25, latest_failed = false }: RepairRequest = await req.json().catch(() => ({}));
 
     let query = supabase
       .from("whatsapp_messages")
       .select("id, message_type, media_storage_path, media_mime_type, playable_media_storage_path")
       .in("message_type", ["audio", "voice"])
-      .is("playable_media_storage_path", null)
       .not("media_storage_path", "is", null)
       .order("created_at", { ascending: false })
-      .limit(Math.min(Math.max(limit || 25, 1), 50));
+      .limit(latest_failed ? 1 : Math.min(Math.max(limit || 25, 1), 50));
 
     if (message_id) query = query.eq("id", message_id);
+    if (latest_failed) {
+      query = query.eq("media_transcode_status", "failed");
+    } else if (!message_id) {
+      query = query.or("playable_media_storage_path.is.null,media_transcode_status.eq.failed,media_transcode_status.eq.pending");
+    }
 
     const { data: messages, error: fetchError } = await query;
     if (fetchError) throw fetchError;
