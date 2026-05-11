@@ -237,8 +237,7 @@ export function AudioPlayer({
     <div
       className={cn('flex items-center gap-2.5 min-w-[180px] max-w-[280px]', className)}
       onClick={(e) => { e.stopPropagation(); }}
-      onClickCapture={(e) => { e.stopPropagation(); }}
-      onPointerDownCapture={(e) => { e.stopPropagation(); }}
+      onPointerDown={(e) => { e.stopPropagation(); }}
     >
       <audio
         ref={audioRef}
