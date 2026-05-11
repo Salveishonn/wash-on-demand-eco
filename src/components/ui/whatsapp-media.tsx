@@ -58,7 +58,7 @@ export function WhatsAppMedia({
           url={audioUrl}
           mime={audioMime}
           downloadUrl={audioUrl}
-          storagePath={playableMediaStoragePath || mediaStoragePath}
+          storagePath={playableMediaStoragePath}
           originalStoragePath={mediaStoragePath}
         />
         {mediaCaption && <p className="text-xs mt-1 opacity-80 whitespace-pre-wrap">{mediaCaption}</p>}
