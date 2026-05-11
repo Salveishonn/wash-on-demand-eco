@@ -15,6 +15,7 @@ interface AudioPlayerProps {
 }
 
 const BUCKET = 'whatsapp-media';
+const AUDIO_DEBUG = true;
 
 export function AudioPlayer({
   url,
@@ -38,6 +39,51 @@ export function AudioPlayer({
     setError(false);
     refreshAttempts.current = 0;
   }, [url]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const snapshot = () => ({
+      selectedSrc: currentSrc,
+      audioSrc: audio.currentSrc || audio.src || null,
+      readyState: audio.readyState,
+      networkState: audio.networkState,
+      errorCode: audio.error?.code ?? null,
+      errorMessage: audio.error?.message ?? null,
+      mime,
+      storagePath,
+    });
+
+    const log = (eventName: string, detail?: unknown) => {
+      if (!AUDIO_DEBUG) return;
+      console.log(`[AudioPlayer] ${eventName}`, { ...snapshot(), detail });
+    };
+
+    const onCanPlay = () => log('canplay');
+    const onLoadedMetadata = () => log('loadedmetadata', { duration: audio.duration });
+    const onStalled = () => log('stalled');
+    const onAbort = () => log('abort');
+    const onSuspend = () => log('suspend');
+    const onError = () => log('error');
+
+    audio.addEventListener('canplay', onCanPlay);
+    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+    audio.addEventListener('stalled', onStalled);
+    audio.addEventListener('abort', onAbort);
+    audio.addEventListener('suspend', onSuspend);
+    audio.addEventListener('error', onError);
+    log('listeners-attached');
+
+    return () => {
+      audio.removeEventListener('canplay', onCanPlay);
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+      audio.removeEventListener('stalled', onStalled);
+      audio.removeEventListener('abort', onAbort);
+      audio.removeEventListener('suspend', onSuspend);
+      audio.removeEventListener('error', onError);
+    };
+  }, [currentSrc, mime, storagePath]);
 
   const refreshSignedUrl = useCallback(async (): Promise<string | null> => {
     if (!storagePath) return null;
@@ -73,6 +119,7 @@ export function AudioPlayer({
     e.preventDefault();
     const audio = audioRef.current;
     console.log('[AudioPlayer] togglePlay clicked', {
+      selectedSrc: currentSrc,
       hasAudio: !!audio,
       isPlaying,
       currentSrc,
@@ -94,10 +141,26 @@ export function AudioPlayer({
     // Ensure we have a real src (not the page URL fallback).
     const needsSrc = !audio.src || audio.src === window.location.href || audio.src === window.location.href + '/';
     const tryPlay = () => {
+      console.log('[AudioPlayer] play()', {
+        selectedSrc: currentSrc,
+        audioSrc: audio.src,
+        readyState: audio.readyState,
+        networkState: audio.networkState,
+      });
       const p = audio.play();
       if (p && typeof p.then === 'function') {
         p.then(() => console.log('[AudioPlayer] play() resolved')).catch(async (playError) => {
-          console.warn('[AudioPlayer] play() failed', playError);
+          console.warn('[AudioPlayer] play() rejected', {
+            reason: playError,
+            name: playError?.name,
+            message: playError?.message,
+            selectedSrc: currentSrc,
+            audioSrc: audio.src,
+            readyState: audio.readyState,
+            networkState: audio.networkState,
+            errorCode: audio.error?.code,
+            errorMessage: audio.error?.message,
+          });
           if (refreshAttempts.current < 1 && storagePath) {
             refreshAttempts.current += 1;
             const fresh = await refreshSignedUrl();
@@ -174,8 +237,7 @@ export function AudioPlayer({
     <div
       className={cn('flex items-center gap-2.5 min-w-[180px] max-w-[280px]', className)}
       onClick={(e) => { e.stopPropagation(); }}
-      onClickCapture={(e) => { e.stopPropagation(); }}
-      onPointerDownCapture={(e) => { e.stopPropagation(); }}
+      onPointerDown={(e) => { e.stopPropagation(); }}
     >
       <audio
         ref={audioRef}
