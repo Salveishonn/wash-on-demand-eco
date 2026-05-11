@@ -68,10 +68,19 @@ export function AudioPlayer({
   const fmtDur = (s: number) =>
     `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 
-  const togglePlay = async (e: React.MouseEvent) => {
+  const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     const audio = audioRef.current;
+    console.log('[AudioPlayer] togglePlay clicked', {
+      hasAudio: !!audio,
+      isPlaying,
+      currentSrc,
+      audioSrc: audio?.src,
+      readyState: audio?.readyState,
+      networkState: audio?.networkState,
+      errorCode: audio?.error?.code,
+    });
     if (!audio) return;
 
     if (isPlaying) {
@@ -82,38 +91,53 @@ export function AudioPlayer({
     setIsLoading(true);
     setError(false);
 
-    // Ensure we have a src; if not, fetch a signed one.
-    if (!audio.src || audio.src === window.location.href) {
-      const fresh = await refreshSignedUrl();
-      if (fresh) {
-        setCurrentSrc(fresh);
-        audio.src = fresh;
-        audio.load();
+    // Ensure we have a real src (not the page URL fallback).
+    const needsSrc = !audio.src || audio.src === window.location.href || audio.src === window.location.href + '/';
+    const tryPlay = () => {
+      const p = audio.play();
+      if (p && typeof p.then === 'function') {
+        p.then(() => console.log('[AudioPlayer] play() resolved')).catch(async (playError) => {
+          console.warn('[AudioPlayer] play() failed', playError);
+          if (refreshAttempts.current < 1 && storagePath) {
+            refreshAttempts.current += 1;
+            const fresh = await refreshSignedUrl();
+            if (fresh) {
+              setCurrentSrc(fresh);
+              audio.src = fresh;
+              audio.load();
+              try {
+                await audio.play();
+                return;
+              } catch (retryErr) {
+                console.error('[AudioPlayer] retry play failed', retryErr);
+              }
+            }
+          }
+          setError(true);
+          setIsLoading(false);
+        });
       }
-    }
+    };
 
-    try {
-      await audio.play();
-    } catch (playError) {
-      console.warn('[AudioPlayer] play() failed, attempting URL refresh', playError);
-      // Try refreshing once on first failure (likely expired URL).
-      if (refreshAttempts.current < 1) {
-        refreshAttempts.current += 1;
-        const fresh = await refreshSignedUrl();
+    if (needsSrc && currentSrc) {
+      audio.src = currentSrc;
+      audio.load();
+      tryPlay();
+    } else if (needsSrc) {
+      // Fetch signed URL then play (note: iOS may lose gesture; best-effort).
+      refreshSignedUrl().then((fresh) => {
         if (fresh) {
           setCurrentSrc(fresh);
           audio.src = fresh;
           audio.load();
-          try {
-            await audio.play();
-            return;
-          } catch (retryErr) {
-            console.error('[AudioPlayer] retry play failed', retryErr);
-          }
+          tryPlay();
+        } else {
+          setError(true);
+          setIsLoading(false);
         }
-      }
-      setError(true);
-      setIsLoading(false);
+      });
+    } else {
+      tryPlay();
     }
   };
 
