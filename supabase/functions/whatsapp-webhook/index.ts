@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAudioPlayableWithoutTranscode } from "../_shared/audioTranscode.ts";
 
+declare const EdgeRuntime: { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
+
 function normalizeSourceMimeForTranscoder(sourceMime: string | null): string {
   const normalized = (sourceMime || "").trim().toLowerCase();
   if (!normalized || normalized === "audio/ogg") return "audio/ogg; codecs=opus";
