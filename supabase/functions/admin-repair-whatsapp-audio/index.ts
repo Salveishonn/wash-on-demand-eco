@@ -81,8 +81,6 @@ serve(async (req) => {
     if (message_id) query = query.eq("id", message_id);
     if (latest_failed) {
       query = query.eq("media_transcode_status", "failed");
-    } else if (!message_id) {
-      query = query.or("playable_media_storage_path.is.null,media_transcode_status.eq.failed,media_transcode_status.eq.pending");
     }
 
     const { data: messages, error: fetchError } = await query;
@@ -90,7 +88,12 @@ serve(async (req) => {
 
     const results: Array<{ id: string; status: string; error?: string; playable_path?: string }> = [];
 
-    for (const msg of messages || []) {
+    const repairableMessages = (messages || []).filter((msg: any) => {
+      if (message_id || latest_failed) return true;
+      return !msg.playable_media_storage_path || ["failed", "pending", "processing"].includes(msg.media_transcode_status || "");
+    });
+
+    for (const msg of repairableMessages) {
       const originalPath = msg.media_storage_path as string | null;
       const originalMime = msg.media_mime_type as string | null;
       if (!originalPath) continue;
