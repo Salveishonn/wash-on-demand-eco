@@ -98,6 +98,10 @@ export default function AudioDiagnostics() {
             {repairing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wrench className="w-4 h-4 mr-2" />}
             Reparar audios fallidos
           </Button>
+          <Button variant="outline" onClick={retryLatestFailed} disabled={retryingLatest}>
+            {retryingLatest ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+            Retry último fallido
+          </Button>
         </div>
       </div>
 
@@ -108,6 +112,11 @@ export default function AudioDiagnostics() {
           <Card className="p-4 space-y-2">
             <h2 className="font-semibold">Configuración</h2>
             <pre className="text-xs bg-muted p-2 rounded overflow-x-auto">{JSON.stringify(data.config, null, 2)}</pre>
+          </Card>
+
+          <Card className="p-4 space-y-2">
+            <h2 className="font-semibold">Resumen</h2>
+            <pre className="text-xs bg-muted p-2 rounded overflow-x-auto">{JSON.stringify({ counts: data.counts, latest: data.latest }, null, 2)}</pre>
           </Card>
 
           <Card className="p-4 space-y-3">
