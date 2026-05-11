@@ -28,6 +28,7 @@ import Dashboard from "./pages/Dashboard";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AudioDiagnostics from "./pages/admin/AudioDiagnostics";
+import TestAudio from "./pages/admin/TestAudio";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
@@ -92,6 +93,14 @@ const App = () => (
               element={
                 <AdminRoute>
                   <AudioDiagnostics />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/test-audio"
+              element={
+                <AdminRoute>
+                  <TestAudio />
                 </AdminRoute>
               }
             />
