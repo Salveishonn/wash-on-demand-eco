@@ -7,6 +7,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function maskUrl(url: string) {
+  return url ? url.replace(/[?&](apikey|token|secret|sig|signature)=[^&]+/gi, "$1=***") : "";
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 30_000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(`timeout_${timeoutMs}ms`), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -26,13 +40,23 @@ serve(async (req) => {
       supabase_url: SUPABASE_URL,
       bucket: BUCKET,
       transcoder_url_present: !!TRANSCODER_URL_RAW,
-      transcoder_url: TRANSCODER_URL_RAW,
+      transcoder_url: maskUrl(TRANSCODER_URL_RAW),
       transcoder_secret_present: !!TRANSCODER_SECRET,
       transcoder_secret_len: TRANSCODER_SECRET.length,
       service_key_present: !!SERVICE_KEY,
     },
     checks: {} as Record<string, any>,
+    counts: {},
+    latest: {},
   };
+
+  console.log("[admin-audio-diagnostics] Runtime env:", {
+    transcoderUrlPresent: !!TRANSCODER_URL_RAW,
+    transcoderUrl: maskUrl(TRANSCODER_URL_RAW),
+    transcoderSecretPresent: !!TRANSCODER_SECRET,
+    transcoderSecretLen: TRANSCODER_SECRET.length,
+    serviceKeyPresent: !!SERVICE_KEY,
+  });
 
   // 1) Bucket
   try {
