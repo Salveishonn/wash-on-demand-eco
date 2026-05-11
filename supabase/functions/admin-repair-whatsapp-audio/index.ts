@@ -72,7 +72,7 @@ serve(async (req) => {
 
     let query = supabase
       .from("whatsapp_messages")
-      .select("id, message_type, media_storage_path, media_mime_type, playable_media_storage_path")
+      .select("id, message_type, media_storage_path, media_mime_type, playable_media_storage_path, media_transcode_status")
       .in("message_type", ["audio", "voice"])
       .not("media_storage_path", "is", null)
       .order("created_at", { ascending: false })
