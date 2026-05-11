@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 interface DiagResult {
   config: Record<string, any>;
   checks: Record<string, any>;
+  counts?: Record<string, any>;
+  latest?: Record<string, any>;
   recent_audios: any[];
 }
 
@@ -24,7 +26,16 @@ const Status = ({ ok }: { ok: boolean | null | undefined }) =>
 export default function AudioDiagnostics() {
   const [loading, setLoading] = useState(false);
   const [repairing, setRepairing] = useState(false);
+  const [retryingLatest, setRetryingLatest] = useState(false);
   const [data, setData] = useState<DiagResult | null>(null);
+
+  const readFunctionError = async (e: any) => {
+    if (e?.context instanceof Response) {
+      const body = await e.context.text().catch(() => '');
+      return `${e.message}${body ? ` — ${body.slice(0, 500)}` : ''}`;
+    }
+    return e?.message || String(e);
+  };
 
   const run = async () => {
     setLoading(true);
@@ -33,7 +44,7 @@ export default function AudioDiagnostics() {
       if (error) throw error;
       setData(data as DiagResult);
     } catch (e: any) {
-      toast.error('Diagnóstico falló: ' + e.message);
+      toast.error('Diagnóstico falló: ' + await readFunctionError(e));
     } finally {
       setLoading(false);
     }
@@ -49,9 +60,25 @@ export default function AudioDiagnostics() {
       toast.success(`Reparados: ${(data as any)?.processed || 0}`);
       await run();
     } catch (e: any) {
-      toast.error('Reparación falló: ' + e.message);
+      toast.error('Reparación falló: ' + await readFunctionError(e));
     } finally {
       setRepairing(false);
+    }
+  };
+
+  const retryLatestFailed = async () => {
+    setRetryingLatest(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-repair-whatsapp-audio', {
+        body: { latest_failed: true },
+      });
+      if (error) throw error;
+      toast.success(`Retry ejecutado: ${(data as any)?.processed || 0}`);
+      await run();
+    } catch (e: any) {
+      toast.error('Retry falló: ' + await readFunctionError(e));
+    } finally {
+      setRetryingLatest(false);
     }
   };
 
