@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAudioPlayableWithoutTranscode } from "../_shared/audioTranscode.ts";
 
+declare const EdgeRuntime: { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
+
 function normalizeSourceMimeForTranscoder(sourceMime: string | null): string {
   const normalized = (sourceMime || "").trim().toLowerCase();
   if (!normalized || normalized === "audio/ogg") return "audio/ogg; codecs=opus";
@@ -31,15 +33,31 @@ async function callExternalTranscoder(
     source_path: sourcePath,
     source_mime: normalizeSourceMimeForTranscoder(sourceMime),
   };
-  console.log("[whatsapp-webhook] Calling transcoder:", url, requestBody);
+  console.log("[whatsapp-webhook] Calling transcoder:", { url, requestBody });
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
-    body: JSON.stringify(requestBody),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("transcoder_timeout_90000ms"), 90_000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+  } catch (fetchErr: any) {
+    console.error("[whatsapp-webhook] Transcoder fetch failed:", {
+      url,
+      sourcePath,
+      name: fetchErr?.name,
+      message: fetchErr?.message || String(fetchErr),
+    });
+    throw fetchErr;
+  } finally {
+    clearTimeout(timeout);
+  }
   const text = await res.text().catch(() => "");
-  console.log("[whatsapp-webhook] Transcoder response:", { status: res.status, bodyPreview: text.slice(0, 500) });
+  console.log("[whatsapp-webhook] Transcoder response:", { url, status: res.status, bodyPreview: text.slice(0, 1000) });
   if (!res.ok) {
     throw new Error(`Transcoder HTTP ${res.status}: ${text}`);
   }
@@ -53,6 +71,53 @@ async function callExternalTranscoder(
     playable_media_storage_path: json.playable_media_storage_path,
     playable_media_mime_type: json.playable_media_mime_type,
   };
+}
+
+async function processStoredAudioTranscode(
+  messageId: string,
+  mediaStoragePath: string,
+  mediaMime: string | null,
+  supabaseUrl: string,
+  supabaseServiceKey: string,
+) {
+  const db = createClient(supabaseUrl, supabaseServiceKey);
+  try {
+    console.log("[whatsapp-webhook] Background audio transcode start:", { messageId, mediaStoragePath, mediaMime });
+    const result = await callExternalTranscoder(mediaStoragePath, mediaMime);
+    if (!result) throw new Error("Transcoder service not configured");
+
+    const { error: updateError } = await db
+      .from("whatsapp_messages")
+      .update({
+        playable_media_storage_path: result.playable_media_storage_path,
+        playable_media_mime_type: result.playable_media_mime_type,
+        media_transcode_status: "success",
+        media_transcode_error: null,
+      })
+      .eq("id", messageId);
+
+    console.log("[whatsapp-webhook] DB update result:", {
+      rowId: messageId,
+      success: !updateError,
+      error: updateError?.message,
+      playable_media_storage_path: result.playable_media_storage_path,
+      playable_media_mime_type: result.playable_media_mime_type,
+    });
+    if (updateError) throw updateError;
+  } catch (err: any) {
+    const errorMessage = err?.message || String(err);
+    console.error("[whatsapp-webhook] Background audio transcode failed:", { messageId, mediaStoragePath, error: errorMessage });
+    const { error: failUpdateError } = await db
+      .from("whatsapp_messages")
+      .update({ media_transcode_status: "failed", media_transcode_error: errorMessage })
+      .eq("id", messageId);
+    console.log("[whatsapp-webhook] DB failure update result:", {
+      rowId: messageId,
+      success: !failUpdateError,
+      error: failUpdateError?.message,
+      media_transcode_error: errorMessage,
+    });
+  }
 }
 
 const corsHeaders = {
@@ -285,32 +350,13 @@ async function handleInboundMessages(
                 playableMediaMimeType = mediaMime;
                 mediaTranscodeStatus = "success";
               } else {
-                mediaTranscodeStatus = "processing";
-                try {
-                  const result = await callExternalTranscoder(mediaStoragePath, mediaMime);
-                  if (!result) {
-                    mediaTranscodeStatus = "failed";
-                    mediaTranscodeError = "Transcoder service not configured";
-                  } else {
-                    playableMediaStoragePath = result.playable_media_storage_path;
-                    playableMediaMimeType = result.playable_media_mime_type;
-                    mediaTranscodeStatus = "success";
-                    console.log("[whatsapp-webhook] Audio transcoded via external service:", {
-                      originalMime: mediaMime,
-                      outputMime: playableMediaMimeType,
-                      originalSize: mediaSize,
-                      path: playableMediaStoragePath,
-                    });
-                  }
-                } catch (transcodeErr: any) {
-                  mediaTranscodeStatus = "failed";
-                  mediaTranscodeError = transcodeErr?.message || String(transcodeErr);
-                  console.error("[whatsapp-webhook] Audio transcode failed:", {
-                    mime: mediaMime,
-                    path: mediaStoragePath,
-                    error: mediaTranscodeError,
-                  });
-                }
+                mediaTranscodeStatus = "pending";
+                mediaTranscodeError = null;
+                console.log("[whatsapp-webhook] Audio queued for background transcode:", {
+                  mime: mediaMime,
+                  originalSize: mediaSize,
+                  path: mediaStoragePath,
+                });
               }
             }
           }
@@ -321,7 +367,7 @@ async function handleInboundMessages(
     }
 
     // ── Store message ──
-    const { error: insertError } = await supabase
+    const { data: insertedMessage, error: insertError } = await supabase
       .from("whatsapp_messages")
       .insert({
         conversation_id: conversation?.id,
@@ -342,7 +388,9 @@ async function handleInboundMessages(
         playable_media_mime_type: playableMediaMimeType,
         media_transcode_status: mediaTranscodeStatus,
         media_transcode_error: mediaTranscodeError,
-      });
+      })
+      .select("id")
+      .single();
 
     if (insertError) {
       console.error("[whatsapp-webhook] DB update result:", { success: false, operation: "insert_whatsapp_message", error: insertError.message });
@@ -356,12 +404,33 @@ async function handleInboundMessages(
         mediaTranscodeStatus,
       });
       console.log("[whatsapp-webhook] Message stored:", {
+        rowId: insertedMessage?.id,
         type: msgType,
         mediaTranscodeStatus,
         playableMediaStoragePath,
         playableMediaMimeType,
         dbResult: "insert_success",
       });
+
+      if (
+        (msgType === "audio" || msgType === "voice") &&
+        insertedMessage?.id &&
+        mediaStoragePath &&
+        mediaTranscodeStatus === "pending"
+      ) {
+        const backgroundJob = processStoredAudioTranscode(
+          insertedMessage.id,
+          mediaStoragePath,
+          mediaMime,
+          supabaseUrl,
+          supabaseServiceKey,
+        );
+        if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+          EdgeRuntime.waitUntil(backgroundJob);
+        } else {
+          backgroundJob.catch((err) => console.error("[whatsapp-webhook] Background transcode unhandled:", err));
+        }
+      }
 
       // Smart push notification for inbound WhatsApp message
       const senderName = contactName || fromPhone;

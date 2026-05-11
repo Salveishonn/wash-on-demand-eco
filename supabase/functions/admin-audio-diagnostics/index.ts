@@ -7,6 +7,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function maskUrl(url: string) {
+  return url ? url.replace(/[?&](apikey|token|secret|sig|signature)=[^&]+/gi, "$1=***") : "";
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 30_000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(`timeout_${timeoutMs}ms`), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -26,13 +40,23 @@ serve(async (req) => {
       supabase_url: SUPABASE_URL,
       bucket: BUCKET,
       transcoder_url_present: !!TRANSCODER_URL_RAW,
-      transcoder_url: TRANSCODER_URL_RAW,
+      transcoder_url: maskUrl(TRANSCODER_URL_RAW),
       transcoder_secret_present: !!TRANSCODER_SECRET,
       transcoder_secret_len: TRANSCODER_SECRET.length,
       service_key_present: !!SERVICE_KEY,
     },
     checks: {} as Record<string, any>,
+    counts: {},
+    latest: {},
   };
+
+  console.log("[admin-audio-diagnostics] Runtime env:", {
+    transcoderUrlPresent: !!TRANSCODER_URL_RAW,
+    transcoderUrl: maskUrl(TRANSCODER_URL_RAW),
+    transcoderSecretPresent: !!TRANSCODER_SECRET,
+    transcoderSecretLen: TRANSCODER_SECRET.length,
+    serviceKeyPresent: !!SERVICE_KEY,
+  });
 
   // 1) Bucket
   try {
@@ -57,6 +81,31 @@ serve(async (req) => {
     .limit(10);
   result.recent_audios = msgs || [];
 
+  try {
+    const { count: failedCount, error: failedError } = await supabase
+      .from("whatsapp_messages")
+      .select("id", { count: "exact", head: true })
+      .in("message_type", ["audio", "voice"])
+      .eq("media_transcode_status", "failed");
+    if (failedError) throw failedError;
+    const { count: missingPlayableCount, error: missingError } = await supabase
+      .from("whatsapp_messages")
+      .select("id", { count: "exact", head: true })
+      .in("message_type", ["audio", "voice"])
+      .is("playable_media_storage_path", null);
+    if (missingError) throw missingError;
+    result.counts = { failed_audio_rows: failedCount || 0, missing_playable_audio_rows: missingPlayableCount || 0 };
+  } catch (e: any) {
+    result.counts = { error: e.message };
+  }
+
+  const latestPlayable = (msgs || []).find((m) => m.playable_media_storage_path);
+  result.latest = {
+    playable_media_storage_path: latestPlayable?.playable_media_storage_path || null,
+    playable_media_mime_type: latestPlayable?.playable_media_mime_type || null,
+    media_transcode_status: latestPlayable?.media_transcode_status || null,
+  };
+
   // 3) Test signed URL on most recent audio with a path
   const sample = (msgs || []).find((m) => m.playable_media_storage_path || m.media_storage_path);
   if (sample) {
@@ -76,7 +125,7 @@ serve(async (req) => {
   if (TRANSCODER_URL_RAW) {
     let base = TRANSCODER_URL_RAW.trim().replace(/\/+$/, "").replace(/\/transcode$/i, "");
     try {
-      const r = await fetch(base + "/health", { method: "GET" });
+      const r = await fetchWithTimeout(base + "/health", { method: "GET" }, 15_000);
       const txt = await r.text();
       result.checks.transcoder_health = { ok: r.ok, status: r.status, body: txt.slice(0, 200) };
     } catch (e: any) {
@@ -85,11 +134,11 @@ serve(async (req) => {
 
     // 5) Shared secret check: send POST without secret → should 401
     try {
-      const r = await fetch(base + "/transcode", {
+      const r = await fetchWithTimeout(base + "/transcode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source_path: "diagnostic-no-such-file" }),
-      });
+      }, 15_000);
       const txt = await r.text();
       result.checks.transcoder_rejects_missing_secret = {
         ok: r.status === 401,
@@ -102,23 +151,29 @@ serve(async (req) => {
 
     // 6) Shared secret check: with secret + bogus path → should 500 (not 401)
     try {
-      const r = await fetch(base + "/transcode", {
+      const r = await fetchWithTimeout(base + "/transcode", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-transcoder-secret": TRANSCODER_SECRET,
         },
         body: JSON.stringify({ source_path: "diagnostic-no-such-file.ogg", source_mime: "audio/ogg" }),
-      });
+      }, 30_000);
       const txt = await r.text();
       result.checks.transcoder_secret_accepted = {
         ok: r.status !== 401,
         status: r.status,
-        body: txt.slice(0, 300),
+        request_url: maskUrl(base + "/transcode"),
+        body: txt.slice(0, 500),
       };
     } catch (e: any) {
       result.checks.transcoder_secret_accepted = { ok: false, error: e.message };
     }
+
+    const sampleToTranscode = (msgs || []).find((m) => m.media_storage_path && !m.playable_media_storage_path);
+    result.checks.last_transcoder_response = sampleToTranscode
+      ? { ok: null, note: "Use Reparar audios fallidos to transcode", sample_id: sampleToTranscode.id, source_path: sampleToTranscode.media_storage_path }
+      : { ok: true, note: "No recent stored audio is missing playable output" };
   } else {
     result.checks.transcoder_health = { ok: false, error: "WHATSAPP_TRANSCODER_URL not set" };
   }

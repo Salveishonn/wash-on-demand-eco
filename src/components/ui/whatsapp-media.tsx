@@ -50,15 +50,15 @@ export function WhatsAppMedia({
 
   // Audio / voice notes
   if (type === 'audio' || type === 'voice') {
-    const audioUrl = playableMediaUrl || mediaUrl;
-    const audioMime = playableMediaMime || mediaMime;
+    const audioUrl = playableMediaUrl || null;
+    const audioMime = playableMediaMime || null;
     return (
       <div className={className}>
         <AudioPlayer
           url={audioUrl}
           mime={audioMime}
-          downloadUrl={mediaUrl || audioUrl}
-          storagePath={playableMediaStoragePath || mediaStoragePath}
+          downloadUrl={audioUrl}
+          storagePath={playableMediaStoragePath}
           originalStoragePath={mediaStoragePath}
         />
         {mediaCaption && <p className="text-xs mt-1 opacity-80 whitespace-pre-wrap">{mediaCaption}</p>}

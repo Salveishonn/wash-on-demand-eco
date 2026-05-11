@@ -8,7 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type RepairRequest = { message_id?: string; limit?: number };
+type RepairRequest = { message_id?: string; limit?: number; latest_failed?: boolean };
 
 function normalizeSourceMimeForTranscoder(sourceMime: string | null): string {
   const normalized = (sourceMime || "").trim().toLowerCase();
@@ -25,13 +25,29 @@ async function callExternalTranscoder(sourcePath: string, sourceMime: string | n
   if (!/\/transcode$/i.test(url)) url = url + "/transcode";
   const requestBody = { source_path: sourcePath, source_mime: normalizeSourceMimeForTranscoder(sourceMime) };
   console.log("[repair] Calling transcoder:", url, requestBody);
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
-    body: JSON.stringify(requestBody),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("transcoder_timeout_90000ms"), 90_000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+  } catch (fetchErr: any) {
+    console.error("[repair] Transcoder fetch failed:", {
+      url,
+      sourcePath,
+      name: fetchErr?.name,
+      message: fetchErr?.message || String(fetchErr),
+    });
+    throw fetchErr;
+  } finally {
+    clearTimeout(timeout);
+  }
   const text = await res.text().catch(() => "");
-  console.log("[repair] Transcoder response:", { status: res.status, body: text.slice(0, 500) });
+  console.log("[repair] Transcoder response:", { status: res.status, body: text.slice(0, 1000) });
   if (!res.ok) throw new Error(`Transcoder HTTP ${res.status}: ${text}`);
   const json = JSON.parse(text);
   if (!json?.ok) throw new Error("Transcoder ok=false: " + (json?.error || "unknown"));
@@ -52,25 +68,32 @@ serve(async (req) => {
     if ("error" in authResult) return authResult.error;
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { message_id, limit = 25 }: RepairRequest = await req.json().catch(() => ({}));
+    const { message_id, limit = 25, latest_failed = false }: RepairRequest = await req.json().catch(() => ({}));
 
     let query = supabase
       .from("whatsapp_messages")
-      .select("id, message_type, media_storage_path, media_mime_type, playable_media_storage_path")
+      .select("id, message_type, media_storage_path, media_mime_type, playable_media_storage_path, media_transcode_status")
       .in("message_type", ["audio", "voice"])
-      .is("playable_media_storage_path", null)
       .not("media_storage_path", "is", null)
       .order("created_at", { ascending: false })
-      .limit(Math.min(Math.max(limit || 25, 1), 50));
+      .limit(latest_failed ? 1 : Math.min(Math.max(limit || 25, 1), 50));
 
     if (message_id) query = query.eq("id", message_id);
+    if (latest_failed) {
+      query = query.eq("media_transcode_status", "failed");
+    }
 
     const { data: messages, error: fetchError } = await query;
     if (fetchError) throw fetchError;
 
     const results: Array<{ id: string; status: string; error?: string; playable_path?: string }> = [];
 
-    for (const msg of messages || []) {
+    const repairableMessages = (messages || []).filter((msg: any) => {
+      if (message_id || latest_failed) return true;
+      return !msg.playable_media_storage_path || ["failed", "pending", "processing"].includes(msg.media_transcode_status || "");
+    });
+
+    for (const msg of repairableMessages) {
       const originalPath = msg.media_storage_path as string | null;
       const originalMime = msg.media_mime_type as string | null;
       if (!originalPath) continue;
