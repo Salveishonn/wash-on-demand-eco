@@ -8,7 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type RepairRequest = { message_id?: string; limit?: number };
+type RepairRequest = { message_id?: string; limit?: number; latest_failed?: boolean };
 
 function normalizeSourceMimeForTranscoder(sourceMime: string | null): string {
   const normalized = (sourceMime || "").trim().toLowerCase();
@@ -25,13 +25,29 @@ async function callExternalTranscoder(sourcePath: string, sourceMime: string | n
   if (!/\/transcode$/i.test(url)) url = url + "/transcode";
   const requestBody = { source_path: sourcePath, source_mime: normalizeSourceMimeForTranscoder(sourceMime) };
   console.log("[repair] Calling transcoder:", url, requestBody);
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
-    body: JSON.stringify(requestBody),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("transcoder_timeout_90000ms"), 90_000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-transcoder-secret": secret },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+  } catch (fetchErr: any) {
+    console.error("[repair] Transcoder fetch failed:", {
+      url,
+      sourcePath,
+      name: fetchErr?.name,
+      message: fetchErr?.message || String(fetchErr),
+    });
+    throw fetchErr;
+  } finally {
+    clearTimeout(timeout);
+  }
   const text = await res.text().catch(() => "");
-  console.log("[repair] Transcoder response:", { status: res.status, body: text.slice(0, 500) });
+  console.log("[repair] Transcoder response:", { status: res.status, body: text.slice(0, 1000) });
   if (!res.ok) throw new Error(`Transcoder HTTP ${res.status}: ${text}`);
   const json = JSON.parse(text);
   if (!json?.ok) throw new Error("Transcoder ok=false: " + (json?.error || "unknown"));
