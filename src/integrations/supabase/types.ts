@@ -643,6 +643,7 @@ export type Database = {
           last_direction: string | null
           last_message_at: string | null
           last_message_preview: string | null
+          last_sender_type: string | null
           linked_booking_id: string | null
           linked_booking_request_id: string | null
           linked_customer_id: string | null
@@ -660,6 +661,7 @@ export type Database = {
           last_direction?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
+          last_sender_type?: string | null
           linked_booking_id?: string | null
           linked_booking_request_id?: string | null
           linked_customer_id?: string | null
@@ -677,11 +679,33 @@ export type Database = {
           last_direction?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
+          last_sender_type?: string | null
           linked_booking_id?: string | null
           linked_booking_request_id?: string | null
           linked_customer_id?: string | null
           unread_count?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      botmaker_diagnostics: {
+        Row: {
+          key: string
+          updated_at: string
+          value_at: string | null
+          value_text: string | null
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value_at?: string | null
+          value_text?: string | null
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value_at?: string | null
+          value_text?: string | null
         }
         Relationships: []
       }
@@ -737,7 +761,9 @@ export type Database = {
           conversation_id: string
           created_at: string
           direction: string
+          event_timestamp: string | null
           id: string
+          message_type: string | null
           provider_message_id: string | null
           raw: Json | null
           sender: string | null
@@ -748,7 +774,9 @@ export type Database = {
           conversation_id: string
           created_at?: string
           direction: string
+          event_timestamp?: string | null
           id?: string
+          message_type?: string | null
           provider_message_id?: string | null
           raw?: Json | null
           sender?: string | null
@@ -759,7 +787,9 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           direction?: string
+          event_timestamp?: string | null
           id?: string
+          message_type?: string | null
           provider_message_id?: string | null
           raw?: Json | null
           sender?: string | null

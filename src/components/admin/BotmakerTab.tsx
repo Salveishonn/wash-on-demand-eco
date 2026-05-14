@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, MessageSquare, RefreshCw, ExternalLink, FlaskConical, Calendar } from 'lucide-react';
+import { Loader2, MessageSquare, RefreshCw, ExternalLink, FlaskConical, Calendar, Activity, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+
+interface Diagnostic { key: string; value_text: string | null; value_at: string | null; }
 
 const PUBLIC_PROBE_URL = 'https://www.washero.ar/';
 
@@ -74,21 +77,70 @@ export function BotmakerTab() {
   const [simulating, setSimulating] = useState(false);
   const [simulatingBooking, setSimulatingBooking] = useState(false);
   const [hideTestRequests, setHideTestRequests] = useState(true);
+  const [diagnostics, setDiagnostics] = useState<Record<string, Diagnostic>>({});
+  const [conversationCount, setConversationCount] = useState<number>(0);
+  const [rawDialog, setRawDialog] = useState<any | null>(null);
+  const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
-    const [evts, reqs, bks, logs] = await Promise.all([
+    const [evts, reqs, bks, logs, diag, convCount] = await Promise.all([
       supabase.from('botmaker_events').select('*').order('created_at', { ascending: false }).limit(20),
       supabase.from('booking_requests').select('id,customer_name,customer_phone,address,preferred_date,preferred_time,service_type,botmaker_conversation_id,status,is_test,created_at').order('created_at', { ascending: false }).limit(30),
-      supabase.from('bookings').select('id,customer_name,customer_phone,address,booking_date,booking_time,service_name,status,payment_status,botmaker_conversation_id,created_at').eq('booking_source', 'botmaker').order('created_at', { ascending: false }).limit(15),
+      supabase.from('bookings').select('id,customer_name,customer_phone,address,booking_date,booking_time,service_name,status,payment_status,botmaker_conversation_id,created_at').or('booking_source.eq.botmaker,communication_channel.eq.whatsapp,created_from.eq.botmaker').order('created_at', { ascending: false }).limit(15),
       supabase.from('botmaker_booking_logs').select('id,conversation_id,customer_phone,result_status,booking_id,booking_request_id,error,created_at').order('created_at', { ascending: false }).limit(20),
+      supabase.from('botmaker_diagnostics').select('*'),
+      supabase.from('botmaker_conversations').select('id', { count: 'exact', head: true }),
     ]);
     if (evts.error) toast.error('Error cargando eventos');
     else setEvents((evts.data ?? []) as BotmakerEvent[]);
     if (!reqs.error) setRequests((reqs.data ?? []) as BookingRequest[]);
     if (!bks.error) setBotmakerBookings((bks.data ?? []) as BotmakerBooking[]);
     if (!logs.error) setBookingLogs((logs.data ?? []) as BookingLog[]);
+    if (!diag.error) {
+      const map: Record<string, Diagnostic> = {};
+      (diag.data ?? []).forEach((d: any) => { map[d.key] = d; });
+      setDiagnostics(map);
+    }
+    setConversationCount(convCount.count ?? 0);
     setLoading(false);
+  };
+
+  const runWebhookTest = async (mode: 'with_token' | 'without_token' | 'summary_and_confirm') => {
+    const { data, error } = await supabase.functions.invoke('botmaker-test-webhook', { body: { mode } });
+    if (error) { toast.error(`Test falló: ${error.message}`); return; }
+    const status = (data as any)?.upstream_status;
+    if (mode === 'without_token') {
+      status === 401 ? toast.success('Seguridad OK: webhook rechazó sin token (401).') : toast.error(`Esperaba 401, recibió ${status}.`);
+    } else if (mode === 'with_token') {
+      status && status < 400 ? toast.success(`Webhook OK con token (${status}).`) : toast.error(`Webhook falló con token (${status}).`);
+    } else {
+      const reqId = (data as any)?.booking_request_id;
+      reqId ? toast.success(`Booking request de prueba creado: ${String(reqId).slice(0, 8)}`) : toast.warning('Simulación enviada, revisá pedidos.');
+    }
+    load();
+  };
+
+  const updateRequest = async (id: string, action: 'request_more_info' | 'reject' | 'toggle_test', reason?: string) => {
+    setBusyRequestId(id);
+    try {
+      const { data, error } = await supabase.functions.invoke('botmaker-update-request', { body: { request_id: id, action, reason } });
+      if (error || !(data as any)?.ok) {
+        toast.error((data as any)?.error ?? error?.message ?? 'No se pudo actualizar');
+      } else {
+        toast.success('Pedido actualizado');
+        load();
+      }
+    } finally { setBusyRequestId(null); }
+  };
+
+  const viewRawPayload = async (id: string) => {
+    const { data, error } = await supabase
+      .from('booking_requests')
+      .select('id,customer_name,parsed_data,missing_fields,parsing_warnings,raw_payload,status,is_test,created_at')
+      .eq('id', id).maybeSingle();
+    if (error || !data) { toast.error('No se pudo cargar el payload'); return; }
+    setRawDialog(data);
   };
 
   const ping = async () => {
@@ -277,6 +329,41 @@ export function BotmakerTab() {
         </p>
       </div>
 
+      {/* Diagnóstico Botmaker */}
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-sm">Diagnóstico Botmaker</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => runWebhookTest('without_token')}>
+              Test sin token (esperado 401)
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => runWebhookTest('with_token')}>
+              Test con token
+            </Button>
+            <Button variant="default" size="sm" onClick={() => runWebhookTest('summary_and_confirm')}>
+              <FlaskConical className="w-3.5 h-3.5 mr-1" /> Simular resumen + confirmación
+            </Button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+          <DiagRow label="Conversaciones almacenadas" value={String(conversationCount)} />
+          <DiagRow label="Último webhook válido" value={fmtDiag(diagnostics['last_valid_webhook'])} />
+          <DiagRow label="Último webhook inválido" value={fmtDiag(diagnostics['last_invalid_webhook'])} />
+          <DiagRow label="Última conversación" value={fmtDiag(diagnostics['last_conversation_stored'])} />
+          <DiagRow label="Último resumen detectado" value={fmtDiag(diagnostics['last_summary_detected'])} />
+          <DiagRow label="Última confirmación" value={fmtDiag(diagnostics['last_confirmation_detected'])} />
+          <DiagRow label="Último booking_request creado" value={fmtDiag(diagnostics['last_booking_request_created'])} />
+        </div>
+        {conversationCount === 0 && (
+          <p className="text-xs text-amber-600">
+            No se recibieron eventos de Botmaker todavía. Verificá la URL del webhook y el header <code>auth-bm-token</code>.
+          </p>
+        )}
+      </div>
+
       {/* Reservas desde WhatsApp */}
       <div className="bg-card border border-border rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
@@ -340,20 +427,45 @@ export function BotmakerTab() {
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <Badge variant="outline">{r.status}</Badge>
                     <span className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleString('es-AR')}</span>
-                    <div className="flex gap-2">
-                      {r.status !== 'converted' && (
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {r.status !== 'converted' && r.status !== 'rejected' && (
                         <button
                           onClick={() => approveRequest(r.id)}
-                          className="text-[10px] text-green-600 hover:underline font-semibold"
+                          disabled={busyRequestId === r.id}
+                          className="text-[10px] text-green-600 hover:underline font-semibold disabled:opacity-50"
                         >
-                          Aprobar y crear reserva
+                          Aprobar
                         </button>
                       )}
                       <button
-                        onClick={() => markRequestAsTest(r.id, !r.is_test)}
+                        onClick={() => updateRequest(r.id, 'request_more_info')}
+                        disabled={busyRequestId === r.id}
                         className="text-[10px] text-primary hover:underline"
                       >
+                        Pedir más datos
+                      </button>
+                      <button
+                        onClick={() => {
+                          const reason = prompt('Motivo de rechazo:');
+                          if (reason && reason.trim()) updateRequest(r.id, 'reject', reason);
+                        }}
+                        disabled={busyRequestId === r.id}
+                        className="text-[10px] text-destructive hover:underline"
+                      >
+                        Rechazar
+                      </button>
+                      <button
+                        onClick={() => updateRequest(r.id, 'toggle_test')}
+                        disabled={busyRequestId === r.id}
+                        className="text-[10px] text-muted-foreground hover:underline"
+                      >
                         {r.is_test ? 'Marcar real' : 'Marcar test'}
+                      </button>
+                      <button
+                        onClick={() => viewRawPayload(r.id)}
+                        className="text-[10px] text-muted-foreground hover:underline inline-flex items-center gap-0.5"
+                      >
+                        <Eye className="w-2.5 h-2.5" /> Raw
                       </button>
                     </div>
                   </div>
@@ -445,42 +557,6 @@ export function BotmakerTab() {
       {/* Botmaker flow instructions */}
       <div className="bg-muted/30 border border-border rounded-xl p-4 text-xs text-muted-foreground space-y-2">
         <p className="font-semibold text-foreground">Flow de reserva por WhatsApp (Botmaker)</p>
-        <p>Crear estas variables en Botmaker y pedirlas en este orden:</p>
-        <ol className="list-decimal pl-5 space-y-0.5">
-          <li><code>customer_name</code> — "¿Cuál es tu nombre?"</li>
-          <li><code>address</code> — "¿Cuál es la dirección donde querés el lavado?"</li>
-          <li><code>neighborhood</code> — "¿En qué barrio o zona estás?"</li>
-          <li><code>vehicle_type</code> — Auto / SUV / Pick-up / Otro</li>
-          <li><code>service_type</code> — Lavado Básico / Lavado Completo / Otro</li>
-          <li><code>preferred_date</code> — formato YYYY-MM-DD o "mañana"</li>
-          <li><code>preferred_time</code> — formato HH:mm</li>
-          <li><code>payment_method</code> — MercadoPago / Transferencia / Pagar después</li>
-        </ol>
-        <p className="mt-2">Luego llamar (acción HTTP POST):</p>
-        <pre className="bg-background border border-border rounded p-2 overflow-x-auto text-[10px]">{`POST ${CREATE_BOOKING_URL}
-Content-Type: application/json
-auth-bm-token: <BOTMAKER_WEBHOOK_SECRET>
-
-{
-  "conversation_id": "{{conversation.id}}",
-  "channel": "whatsapp",
-  "customer_name": "{{customer_name}}",
-  "customer_phone": "{{contact.phone}}",
-  "address": "{{address}}",
-  "neighborhood": "{{neighborhood}}",
-  "vehicle_type": "{{vehicle_type}}",
-  "service_type": "{{service_type}}",
-  "preferred_date": "{{preferred_date}}",
-  "preferred_time": "{{preferred_time}}",
-  "payment_method": "{{payment_method}}",
-  "notes": "{{notes}}"
-}`}</pre>
-        <p>
-          <strong>Fallback resumen IA:</strong> si el flow no puede pedir todos los campos, mandar al menos
-          <code> customer_phone</code>, <code>ai_booking_summary</code> y <code>raw_conversation</code>.
-          Washero crea un <code>booking_request</code> con status <code>needs_review</code>.
-        </p>
-        <p className="font-semibold text-foreground mt-3">Code Action (un solo mensaje al cliente)</p>
         <pre className="bg-background border border-border rounded p-2 overflow-x-auto text-[10px]">{`const res = await fetch("${CREATE_BOOKING_URL}", {
   method: "POST",
   headers: {
@@ -512,6 +588,35 @@ if (res.ok && data && data.message) {
 }
 result.done();                 // siempre cerrar; nunca encadenar a fallback genérico`}</pre>
       </div>
+
+      <Dialog open={!!rawDialog} onOpenChange={(o) => !o && setRawDialog(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Raw payload del pedido</DialogTitle></DialogHeader>
+          {rawDialog && (
+            <div className="space-y-3 text-xs">
+              <div><strong>Parsed:</strong><pre className="bg-muted p-2 rounded overflow-x-auto">{JSON.stringify(rawDialog.parsed_data, null, 2)}</pre></div>
+              <div><strong>Missing fields:</strong> {(rawDialog.missing_fields ?? []).join(', ') || '—'}</div>
+              <div><strong>Warnings:</strong> {(rawDialog.parsing_warnings ?? []).join(', ') || '—'}</div>
+              <div><strong>Raw:</strong><pre className="bg-muted p-2 rounded overflow-x-auto max-h-96">{JSON.stringify(rawDialog.raw_payload, null, 2)}</pre></div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function fmtDiag(d?: Diagnostic): string {
+  if (!d || !d.value_at) return '—';
+  const when = new Date(d.value_at).toLocaleString('es-AR');
+  return d.value_text ? `${when} · ${d.value_text.slice(0, 30)}` : when;
+}
+
+function DiagRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-2 border-b border-border/40 py-1">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono truncate text-right">{value}</span>
     </div>
   );
 }
