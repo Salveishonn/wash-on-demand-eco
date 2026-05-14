@@ -1,3 +1,4 @@
+import { BotmakerWebchat } from "@/components/BotmakerWebchat";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -51,6 +52,7 @@ const App = () => (
         <BrowserRouter>
           <ScrollToTop />
           <MetaPixelPageView />
+          <BotmakerWebchat />
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Index />} />
