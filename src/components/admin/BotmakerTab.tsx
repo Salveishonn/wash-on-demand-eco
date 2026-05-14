@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, MessageSquare, RefreshCw, ExternalLink, FlaskConical } from 'lucide-react';
+import { Loader2, MessageSquare, RefreshCw, ExternalLink, FlaskConical, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -24,30 +24,68 @@ interface BookingRequest {
   id: string;
   customer_name: string | null;
   customer_phone: string | null;
+  address: string | null;
+  preferred_date: string | null;
+  preferred_time: string | null;
+  service_type: string | null;
+  botmaker_conversation_id: string | null;
   status: string;
   created_at: string;
 }
 
+interface BotmakerBooking {
+  id: string;
+  customer_name: string;
+  customer_phone: string;
+  address: string | null;
+  booking_date: string;
+  booking_time: string;
+  service_name: string;
+  status: string;
+  payment_status: string;
+  botmaker_conversation_id: string | null;
+  created_at: string;
+}
+
+interface BookingLog {
+  id: string;
+  conversation_id: string | null;
+  customer_phone: string | null;
+  result_status: string;
+  booking_id: string | null;
+  booking_request_id: string | null;
+  error: string | null;
+  created_at: string;
+}
+
 const WEBHOOK_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/botmaker-webhook`;
+const CREATE_BOOKING_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/botmaker-create-booking`;
 
 export function BotmakerTab() {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<BotmakerEvent[]>([]);
   const [requests, setRequests] = useState<BookingRequest[]>([]);
+  const [botmakerBookings, setBotmakerBookings] = useState<BotmakerBooking[]>([]);
+  const [bookingLogs, setBookingLogs] = useState<BookingLog[]>([]);
   const [healthStatus, setHealthStatus] = useState<'unknown' | 'ok' | 'error'>('unknown');
   const [signatureCheck, setSignatureCheck] = useState<string>('-');
   const [webchatProbe, setWebchatProbe] = useState<{ checked: boolean; scriptFound: boolean; url: string } | null>(null);
   const [simulating, setSimulating] = useState(false);
+  const [simulatingBooking, setSimulatingBooking] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    const [evts, reqs] = await Promise.all([
+    const [evts, reqs, bks, logs] = await Promise.all([
       supabase.from('botmaker_events').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('booking_requests').select('id,customer_name,customer_phone,status,created_at').order('created_at', { ascending: false }).limit(10),
+      supabase.from('booking_requests').select('id,customer_name,customer_phone,address,preferred_date,preferred_time,service_type,botmaker_conversation_id,status,created_at').order('created_at', { ascending: false }).limit(15),
+      supabase.from('bookings').select('id,customer_name,customer_phone,address,booking_date,booking_time,service_name,status,payment_status,botmaker_conversation_id,created_at').eq('booking_source', 'botmaker').order('created_at', { ascending: false }).limit(15),
+      supabase.from('botmaker_booking_logs').select('id,conversation_id,customer_phone,result_status,booking_id,booking_request_id,error,created_at').order('created_at', { ascending: false }).limit(20),
     ]);
     if (evts.error) toast.error('Error cargando eventos');
     else setEvents((evts.data ?? []) as BotmakerEvent[]);
     if (!reqs.error) setRequests((reqs.data ?? []) as BookingRequest[]);
+    if (!bks.error) setBotmakerBookings((bks.data ?? []) as BotmakerBooking[]);
+    if (!logs.error) setBookingLogs((logs.data ?? []) as BookingLog[]);
     setLoading(false);
   };
 
@@ -81,7 +119,7 @@ export function BotmakerTab() {
     }
   };
 
-  const simulateBookingIntent = async () => {
+  const simulateWebhookEvent = async () => {
     setSimulating(true);
     const fakeEventId = `sim-${Date.now()}`;
     const payload = {
@@ -95,10 +133,7 @@ export function BotmakerTab() {
     };
     const r = await fetch(WEBHOOK_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // Note: no auth header; expected to fail with 401 unless secret matches via service role.
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     setSimulating(false);
@@ -106,9 +141,26 @@ export function BotmakerTab() {
       toast.success('Evento simulado enviado');
       load();
     } else {
-      toast.warning('El webhook rechazó el evento (esperado si no se incluye auth-bm-token). Insertando directamente…');
-      // Fallback: insert directly via service-role-protected RPC isn't available; use authenticated insert is blocked by RLS.
-      // Mostrarlo como log local únicamente.
+      toast.warning('El webhook rechazó el evento (esperado si no se incluye auth-bm-token).');
+    }
+  };
+
+  const simulateBookingFromBotmaker = async () => {
+    setSimulatingBooking(true);
+    try {
+      const { data: tokenData, error: tokenErr } = await supabase.functions.invoke('botmaker-create-booking-simulate');
+      if (tokenErr) {
+        // Fallback: call directly without secret will be 401. We need a server simulator.
+        // Use the convert helper below; for now just inform admin.
+        toast.error('La simulación requiere el endpoint admin de simulación. Usá Botmaker para probar el flujo real.');
+      } else {
+        toast.success(`Simulación: ${tokenData?.status ?? 'ok'}`);
+        load();
+      }
+    } catch (e: any) {
+      toast.error(`Simulación falló: ${e?.message ?? 'unknown'}`);
+    } finally {
+      setSimulatingBooking(false);
     }
   };
 
@@ -165,38 +217,135 @@ export function BotmakerTab() {
         </div>
         <code className="text-xs break-all text-muted-foreground">{WEBHOOK_URL}</code>
         <p className="text-xs text-muted-foreground mt-2">
-          Configurar este URL en Botmaker como callback. Header de seguridad esperado: <code>auth-bm-token</code> con el valor exacto de <code>BOTMAKER_WEBHOOK_SECRET</code>.
+          Header de seguridad esperado: <code>auth-bm-token</code> con el valor exacto de <code>BOTMAKER_WEBHOOK_SECRET</code>.
         </p>
       </div>
 
+      <div className="bg-card border border-border rounded-xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-sm">URL de Reservas Botmaker</h3>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { navigator.clipboard.writeText(CREATE_BOOKING_URL); toast.success('Copiado'); }}
+          >
+            Copiar
+          </Button>
+        </div>
+        <code className="text-xs break-all text-muted-foreground">{CREATE_BOOKING_URL}</code>
+        <p className="text-xs text-muted-foreground mt-2">
+          Configurar como acción HTTP POST en Botmaker al final del flow de reserva. Incluir el header <code>auth-bm-token</code>.
+        </p>
+      </div>
+
+      {/* Reservas desde WhatsApp */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-sm">Reservas desde WhatsApp</h3>
+          </div>
+          <Button variant="outline" size="sm" onClick={simulateBookingFromBotmaker} disabled={simulatingBooking}>
+            <FlaskConical className="w-3.5 h-3.5 mr-1" />
+            {simulatingBooking ? 'Simulando…' : 'Simular reserva desde Botmaker'}
+          </Button>
+        </div>
+        {botmakerBookings.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">Aún no hay reservas creadas desde Botmaker.</p>
+        ) : (
+          <div className="space-y-2">
+            {botmakerBookings.map(b => (
+              <div key={b.id} className="flex items-center justify-between gap-3 text-xs border-b border-border/50 last:border-0 py-2">
+                <div className="min-w-0">
+                  <div className="font-semibold truncate">{b.customer_name} · {b.customer_phone}</div>
+                  <div className="text-muted-foreground truncate">
+                    {b.booking_date} {b.booking_time} · {b.service_name} · {b.address ?? '—'}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <Badge variant={b.status === 'pending' ? 'secondary' : 'default'}>{b.status}</Badge>
+                  <span className="text-[10px] text-muted-foreground">{new Date(b.created_at).toLocaleString('es-AR')}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Pedidos pendientes */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <h3 className="font-semibold text-sm mb-3">Pedidos de reserva pendientes (booking_requests)</h3>
+        {requests.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">Sin pedidos pendientes.</p>
+        ) : (
+          <div className="space-y-2">
+            {requests.map(r => (
+              <div key={r.id} className="flex items-center justify-between gap-3 text-xs border-b border-border/50 last:border-0 py-2">
+                <div className="min-w-0">
+                  <div className="font-semibold truncate">{r.customer_name ?? 'Sin nombre'} · {r.customer_phone}</div>
+                  <div className="text-muted-foreground truncate">
+                    {r.preferred_date ?? '?'} {r.preferred_time ?? ''} · {r.service_type ?? '—'} · {r.address ?? '—'}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <Badge variant="outline">{r.status}</Badge>
+                  <span className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleString('es-AR')}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Logs del endpoint de reservas */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <h3 className="font-semibold text-sm mb-3">Logs de reservas Botmaker</h3>
+        {bookingLogs.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">Sin logs todavía.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {bookingLogs.map(l => (
+              <div key={l.id} className="flex items-center justify-between gap-2 text-[11px] border-b border-border/50 last:border-0 py-1.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Badge variant={l.result_status === 'booking_created' ? 'default' : l.error ? 'destructive' : 'secondary'} className="shrink-0">
+                    {l.result_status}
+                  </Badge>
+                  <span className="text-muted-foreground truncate">
+                    {l.customer_phone ?? '—'} {l.error ? `· ${l.error}` : ''}
+                  </span>
+                </div>
+                <span className="text-muted-foreground shrink-0">{new Date(l.created_at).toLocaleString('es-AR')}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Diagnostics webchat / events */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-sm">Diagnóstico Webchat (sitio público)</h3>
+          <h3 className="font-semibold text-sm">Diagnóstico Webchat & Eventos</h3>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={verifyWebchat}>
               <ExternalLink className="w-3.5 h-3.5 mr-1" /> Verificar webchat
             </Button>
-            <Button variant="outline" size="sm" onClick={simulateBookingIntent} disabled={simulating}>
+            <Button variant="outline" size="sm" onClick={simulateWebhookEvent} disabled={simulating}>
               <FlaskConical className="w-3.5 h-3.5 mr-1" />
-              {simulating ? 'Enviando…' : 'Simular booking intent'}
+              {simulating ? 'Enviando…' : 'Simular evento'}
             </Button>
           </div>
         </div>
-        {webchatProbe ? (
+        {webchatProbe && (
           <div className="text-xs text-muted-foreground space-y-1">
             <div>URL probada: <code>{webchatProbe.url}</code></div>
             <div>Script Botmaker en HTML: <Badge variant={webchatProbe.scriptFound ? 'secondary' : 'destructive'}>{webchatProbe.scriptFound ? 'detectado' : 'no detectado'}</Badge></div>
-            {!webchatProbe.scriptFound && (
-              <p className="text-[11px]">Nota: el script se inyecta en runtime desde React, así que un "no detectado" en HTML inicial es esperado. Verificá visualmente abriendo el sitio público.</p>
-            )}
           </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">Probá el botón para confirmar que el script de Botmaker se inyecta en el sitio público.</p>
         )}
       </div>
 
+      {/* Eventos recientes */}
       <div className="bg-card border border-border rounded-xl p-4">
-        <h3 className="font-semibold text-sm mb-3">Eventos recientes</h3>
+        <h3 className="font-semibold text-sm mb-3">Eventos recientes del webhook</h3>
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
         ) : events.length === 0 ? (
@@ -222,34 +371,40 @@ export function BotmakerTab() {
         )}
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-4">
-        <h3 className="font-semibold text-sm mb-3">Pedidos de reserva pendientes</h3>
-        {requests.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">Sin pedidos pendientes.</p>
-        ) : (
-          <div className="space-y-2">
-            {requests.map(r => (
-              <div key={r.id} className="flex items-center justify-between text-xs border-b border-border/50 last:border-0 py-2">
-                <div>
-                  <span className="font-semibold">{r.customer_name || 'Sin nombre'}</span>
-                  <span className="text-muted-foreground ml-2">{r.customer_phone}</span>
-                </div>
-                <Badge variant="outline">{r.status}</Badge>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Botmaker flow instructions */}
+      <div className="bg-muted/30 border border-border rounded-xl p-4 text-xs text-muted-foreground space-y-2">
+        <p className="font-semibold text-foreground">Flow de reserva por WhatsApp (Botmaker)</p>
+        <p>Crear estas variables en Botmaker y pedirlas en este orden:</p>
+        <ol className="list-decimal pl-5 space-y-0.5">
+          <li><code>customer_name</code> — "¿Cuál es tu nombre?"</li>
+          <li><code>address</code> — "¿Cuál es la dirección donde querés el lavado?"</li>
+          <li><code>neighborhood</code> — "¿En qué barrio o zona estás?"</li>
+          <li><code>vehicle_type</code> — Auto / SUV / Pick-up / Otro</li>
+          <li><code>service_type</code> — Lavado Básico / Lavado Completo / Otro</li>
+          <li><code>preferred_date</code> — formato YYYY-MM-DD o "mañana"</li>
+          <li><code>preferred_time</code> — formato HH:mm</li>
+          <li><code>payment_method</code> — MercadoPago / Transferencia / Pagar después</li>
+        </ol>
+        <p className="mt-2">Luego llamar (acción HTTP POST):</p>
+        <pre className="bg-background border border-border rounded p-2 overflow-x-auto text-[10px]">{`POST ${CREATE_BOOKING_URL}
+Content-Type: application/json
+auth-bm-token: <BOTMAKER_WEBHOOK_SECRET>
 
-      <div className="bg-muted/30 border border-border rounded-xl p-4 text-xs text-muted-foreground space-y-1">
-        <p>
-          <strong className="text-foreground">Nota:</strong> esta es la fase de fundación (Milestone A).
-          El procesamiento de eventos, sincronización de clientes y envío saliente vía Botmaker
-          se habilitan en milestones siguientes.
-        </p>
-        <p>
-          Provider activo: definido por la variable de entorno <code>COMMUNICATION_PROVIDER</code> en el backend.
-        </p>
+{
+  "conversation_id": "{{conversation.id}}",
+  "channel": "whatsapp",
+  "customer_name": "{{customer_name}}",
+  "customer_phone": "{{contact.phone}}",
+  "address": "{{address}}",
+  "neighborhood": "{{neighborhood}}",
+  "vehicle_type": "{{vehicle_type}}",
+  "service_type": "{{service_type}}",
+  "preferred_date": "{{preferred_date}}",
+  "preferred_time": "{{preferred_time}}",
+  "payment_method": "{{payment_method}}",
+  "notes": "{{notes}}"
+}`}</pre>
+        <p>Manejo de respuesta según <code>status</code>: <code>booking_created</code> → mostrar <code>message</code>; <code>needs_review</code> → mostrar <code>message</code>; <code>slot_unavailable</code> → pedir otro horario; <code>missing_data</code> → pedir <code>missing_fields</code>; <code>duplicate</code> → ofrecer derivar a humano.</p>
       </div>
     </div>
   );
