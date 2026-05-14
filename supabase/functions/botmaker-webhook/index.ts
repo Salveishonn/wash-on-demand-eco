@@ -1,5 +1,5 @@
 // Botmaker webhook receiver — Milestone A
-// Receives raw events from Botmaker, verifies signature, persists to botmaker_events.
+// Receives raw events from Botmaker, verifies auth-bm-token, persists to botmaker_events.
 // Business processing happens in a later milestone.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -15,20 +15,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BOTMAKER_WEBHOOK_SECRET = Deno.env.get("BOTMAKER_WEBHOOK_SECRET") ?? "";
 
-async function hmacSha256Hex(secret: string, body: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 function timingSafeEq(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let res = 0;
@@ -36,22 +22,25 @@ function timingSafeEq(a: string, b: string): boolean {
   return res === 0;
 }
 
-async function verifySignature(req: Request, rawBody: string): Promise<boolean> {
-  if (!BOTMAKER_WEBHOOK_SECRET) return true; // not configured → skip
-  // Botmaker sends a static token in the auth-bm-token header.
-  const bmToken = req.headers.get("auth-bm-token");
-  if (bmToken && timingSafeEq(bmToken.trim(), BOTMAKER_WEBHOOK_SECRET.trim())) {
-    return true;
-  }
-  // Backwards compat: also accept HMAC-style headers if used.
-  const provided =
-    req.headers.get("x-botmaker-signature") ??
-    req.headers.get("x-hub-signature-256") ??
-    "";
-  if (!provided) return false;
-  const expected = await hmacSha256Hex(BOTMAKER_WEBHOOK_SECRET, rawBody);
-  const cleaned = provided.replace(/^sha256=/i, "").trim();
-  return timingSafeEq(cleaned, expected);
+function maskSecret(value: string | null): string {
+  if (!value) return "missing";
+  if (value.length <= 8) return `${value.slice(0, 2)}***${value.slice(-2)} (${value.length})`;
+  return `${value.slice(0, 4)}***${value.slice(-4)} (${value.length})`;
+}
+
+function verifyBotmakerToken(req: Request): boolean {
+  const received = req.headers.get("auth-bm-token");
+  const expected = BOTMAKER_WEBHOOK_SECRET;
+  const matches = Boolean(expected) && Boolean(received) && timingSafeEq(received, expected);
+
+  console.log("[botmaker-webhook] auth-bm-token check", {
+    received: maskSecret(received),
+    expected: maskSecret(expected),
+    expected_configured: Boolean(expected),
+    matches,
+  });
+
+  return matches;
 }
 
 function pickEventId(payload: Record<string, unknown>): string | null {
@@ -104,7 +93,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         ok: true,
         service: "botmaker-webhook",
-        signature_check: BOTMAKER_WEBHOOK_SECRET ? "enabled" : "disabled",
+        auth_bm_token_check: BOTMAKER_WEBHOOK_SECRET ? "enabled" : "disabled",
+        hmac_required: false,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
@@ -120,16 +110,16 @@ Deno.serve(async (req) => {
   const rawBody = await req.text();
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Signature verification
-  const sigOk = await verifySignature(req, rawBody);
-  if (!sigOk) {
+  // Botmaker static token verification. HMAC is intentionally not required.
+  const tokenOk = verifyBotmakerToken(req);
+  if (!tokenOk) {
     await supabase.from("botmaker_events").insert({
       event_type: "signature_invalid",
-      payload: { reason: "Invalid or missing signature" },
+      payload: { reason: "Invalid or missing auth-bm-token" },
       processed: true,
-      processing_error: "invalid_signature",
+      processing_error: "invalid_auth_bm_token",
     });
-    return new Response(JSON.stringify({ error: "invalid_signature" }), {
+    return new Response(JSON.stringify({ error: "invalid_auth_bm_token" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -53,7 +53,7 @@ export function BotmakerTab() {
       if (r.ok) {
         const j = await r.json();
         setHealthStatus('ok');
-        setSignatureCheck(j.signature_check ?? '-');
+        setSignatureCheck(j.auth_bm_token_check ?? j.signature_check ?? '-');
       } else {
         setHealthStatus('error');
       }
@@ -86,7 +86,7 @@ export function BotmakerTab() {
           tone={healthStatus === 'ok' ? 'ok' : healthStatus === 'error' ? 'err' : 'muted'}
         />
         <StatusCard
-          label="Verificación firma"
+          label="Verificación token"
           value={signatureCheck}
           tone={signatureCheck === 'enabled' ? 'ok' : 'muted'}
         />
