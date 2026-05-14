@@ -150,10 +150,63 @@ Deno.serve(async (req) => {
   }
 
   const conversation_id = payload.conversation_id ?? null;
+  const aiSummary = (payload.ai_booking_summary ?? payload.aiBookingSummary ?? "").toString().trim();
+  const rawConversation = payload.raw_conversation ?? payload.rawConversation ?? null;
 
   // Required fields check
   const missing = REQUIRED_FIELDS.filter((f) => !payload?.[f] || String(payload[f]).trim() === "");
   if (missing.length > 0) {
+    // AI summary fallback path: as long as we can identify the customer phone and have
+    // SOME conversation context, queue a needs_review request instead of bouncing.
+    if (payload.customer_phone && (aiSummary || rawConversation)) {
+      const phoneE164Fallback = normalizePhoneE164(payload.customer_phone);
+      const { data: reqRow, error: reqErr } = await supabase
+        .from("booking_requests")
+        .insert({
+          customer_name: payload.customer_name ?? null,
+          customer_phone: phoneE164Fallback,
+          address: payload.address ?? null,
+          neighborhood: payload.neighborhood ?? null,
+          vehicle_type: payload.vehicle_type ?? null,
+          service_type: payload.service_type ?? null,
+          preferred_date: null,
+          preferred_time: null,
+          notes: aiSummary || payload.notes || null,
+          status: "needs_review",
+          source: "botmaker",
+          channel: "whatsapp",
+          botmaker_conversation_id: conversation_id,
+          raw_payload: { ...payload, ai_booking_summary: aiSummary, raw_conversation: rawConversation, missing_fields: missing },
+        })
+        .select("id")
+        .single();
+      await logAttempt(supabase, {
+        conversation_id,
+        customer_phone: phoneE164Fallback,
+        payload,
+        result_status: "needs_review",
+        booking_request_id: reqRow?.id,
+        error: reqErr?.message ?? `ai_summary_fallback missing:${missing.join(",")}`,
+      });
+      if (reqRow?.id) {
+        await notifyOps(
+          supabase,
+          "Pedido de reserva (resumen IA) desde Botmaker",
+          `${payload.customer_name ?? "Sin nombre"} · ${phoneE164Fallback}`,
+          { request_id: reqRow.id, ai_booking_summary: aiSummary },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          status: "needs_review",
+          request_id: reqRow?.id ?? null,
+          message: "Gracias 🙌 Recibimos tu pedido. Un asesor de Washero revisa los detalles y te confirma por WhatsApp.",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const msg = `Me falta un dato para completar la reserva. Necesito: ${missing.join(", ")}.`;
     await logAttempt(supabase, {
       conversation_id,
