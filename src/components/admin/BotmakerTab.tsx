@@ -292,27 +292,45 @@ export function BotmakerTab() {
 
       {/* Pedidos pendientes */}
       <div className="bg-card border border-border rounded-xl p-4">
-        <h3 className="font-semibold text-sm mb-3">Pedidos de reserva pendientes (booking_requests)</h3>
-        {requests.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">Sin pedidos pendientes.</p>
-        ) : (
-          <div className="space-y-2">
-            {requests.map(r => (
-              <div key={r.id} className="flex items-center justify-between gap-3 text-xs border-b border-border/50 last:border-0 py-2">
-                <div className="min-w-0">
-                  <div className="font-semibold truncate">{r.customer_name ?? 'Sin nombre'} · {r.customer_phone}</div>
-                  <div className="text-muted-foreground truncate">
-                    {r.preferred_date ?? '?'} {r.preferred_time ?? ''} · {r.service_type ?? '—'} · {r.address ?? '—'}
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-sm">Pedidos de reserva pendientes (booking_requests)</h3>
+          <Button variant="outline" size="sm" onClick={() => setHideTestRequests(v => !v)}>
+            {hideTestRequests ? 'Mostrar pedidos test' : 'Ocultar pedidos test'}
+          </Button>
+        </div>
+        {(() => {
+          const visible = hideTestRequests ? requests.filter(r => !r.is_test) : requests;
+          if (visible.length === 0) {
+            return <p className="text-sm text-muted-foreground py-6 text-center">Sin pedidos pendientes.</p>;
+          }
+          return (
+            <div className="space-y-2">
+              {visible.map(r => (
+                <div key={r.id} className="flex items-center justify-between gap-3 text-xs border-b border-border/50 last:border-0 py-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">
+                      {r.customer_name ?? 'Sin nombre'} · {r.customer_phone}
+                      {r.is_test && <Badge variant="outline" className="ml-2">test</Badge>}
+                    </div>
+                    <div className="text-muted-foreground truncate">
+                      {r.preferred_date ?? '?'} {r.preferred_time ?? ''} · {r.service_type ?? '—'} · {r.address ?? '—'}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <Badge variant="outline">{r.status}</Badge>
+                    <span className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleString('es-AR')}</span>
+                    <button
+                      onClick={() => markRequestAsTest(r.id, !r.is_test)}
+                      className="text-[10px] text-primary hover:underline"
+                    >
+                      {r.is_test ? 'Marcar real' : 'Marcar test'}
+                    </button>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <Badge variant="outline">{r.status}</Badge>
-                  <span className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleString('es-AR')}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Logs del endpoint de reservas */}
