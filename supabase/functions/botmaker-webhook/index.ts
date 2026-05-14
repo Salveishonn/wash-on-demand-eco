@@ -555,19 +555,36 @@ Deno.serve(async (req) => {
   try {
     if (meta.conversation_id) {
       const preview = typeof meta.message_text === "string" ? meta.message_text.slice(0, 140) : null;
+      let storedMessageId: string | null = null;
 
-      // Insert message
-      const { data: storedMsg } = await supabase.from("botmaker_messages").insert({
-        conversation_id: meta.conversation_id,
-        direction: meta.direction,
-        sender: meta.customer_name ?? meta.customer_phone ?? meta.sender_type,
-        body: typeof meta.message_text === "string" ? meta.message_text.slice(0, 4000) : null,
-        message_type: meta.message_type,
-        event_timestamp: meta.event_timestamp ? new Date(meta.event_timestamp).toISOString() : null,
-        raw: payload,
-        provider_message_id: event_id,
-      }).select("id").single();
-      logStep("message_stored", { id: storedMsg?.id });
+      if (typeof meta.message_text === "string" && meta.message_text.trim()) {
+        const safeTimestamp = meta.event_timestamp ? new Date(meta.event_timestamp) : null;
+        const { data: storedMsg, error: msgErr } = await supabase.from("botmaker_messages").insert({
+          conversation_id: meta.conversation_id,
+          botmaker_message_id: meta.botmaker_message_id,
+          direction: meta.direction,
+          sender: meta.customer_name ?? meta.customer_phone ?? meta.sender_type,
+          sender_type: meta.sender_type,
+          body: meta.message_text.slice(0, 4000),
+          message_text: meta.message_text.slice(0, 4000),
+          message_type: meta.message_type,
+          customer_phone: meta.customer_phone,
+          customer_name: meta.customer_name,
+          channel: meta.channel ?? "whatsapp",
+          event_timestamp: safeTimestamp && !Number.isNaN(safeTimestamp.getTime()) ? safeTimestamp.toISOString() : null,
+          raw: payload,
+          raw_payload: payload,
+          provider_message_id: event_id,
+        }).select("id").single();
+        if (msgErr) logStep("message_insert_failed", { error: msgErr.message });
+        else {
+          storedMessageId = storedMsg?.id ?? null;
+          logStep("message_inserted", { id: storedMessageId });
+          await setDiagnostic(supabase, "last_stored_botmaker_message_id", storedMessageId);
+        }
+      } else {
+        logStep("no_message_text_found", { conversation_id: meta.conversation_id, event_type: meta.event_type });
+      }
 
       // Conversation upsert
       const { data: convExisting } = await supabase
@@ -577,24 +594,30 @@ Deno.serve(async (req) => {
           customer_phone: meta.customer_phone ?? undefined,
           customer_name: meta.customer_name ?? undefined,
           last_message_at: new Date().toISOString(),
-          last_message_preview: preview,
+          last_message: preview ?? undefined,
+          last_message_preview: preview ?? undefined,
           last_direction: meta.direction,
           last_sender_type: meta.sender_type,
           channel: meta.channel ?? "whatsapp",
+          raw_payload: payload,
           updated_at: new Date().toISOString(),
         }).eq("id", convExisting.id);
       } else {
         await supabase.from("botmaker_conversations").insert({
           conversation_id: meta.conversation_id,
+          botmaker_conversation_id: meta.conversation_id,
           customer_phone: meta.customer_phone,
           customer_name: meta.customer_name,
           channel: meta.channel ?? "whatsapp",
           last_message_at: new Date().toISOString(),
+          last_message: preview,
           last_message_preview: preview,
           last_direction: meta.direction,
           last_sender_type: meta.sender_type,
+          raw_payload: payload,
         });
       }
+      logStep("conversation_upserted", { conversation_id: meta.conversation_id, stored_message_id: storedMessageId });
       await setDiagnostic(supabase, "last_conversation_stored", meta.conversation_id);
 
       // Customer upsert
