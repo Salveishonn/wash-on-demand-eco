@@ -7,7 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-botmaker-signature, x-hub-signature-256",
+    "authorization, x-client-info, apikey, content-type, x-botmaker-signature, x-hub-signature-256, auth-bm-token",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
@@ -38,13 +38,18 @@ function timingSafeEq(a: string, b: string): boolean {
 
 async function verifySignature(req: Request, rawBody: string): Promise<boolean> {
   if (!BOTMAKER_WEBHOOK_SECRET) return true; // not configured → skip
+  // Botmaker sends a static token in the auth-bm-token header.
+  const bmToken = req.headers.get("auth-bm-token");
+  if (bmToken && timingSafeEq(bmToken.trim(), BOTMAKER_WEBHOOK_SECRET.trim())) {
+    return true;
+  }
+  // Backwards compat: also accept HMAC-style headers if used.
   const provided =
     req.headers.get("x-botmaker-signature") ??
     req.headers.get("x-hub-signature-256") ??
     "";
   if (!provided) return false;
   const expected = await hmacSha256Hex(BOTMAKER_WEBHOOK_SECRET, rawBody);
-  // Accept both "sha256=<hex>" and "<hex>"
   const cleaned = provided.replace(/^sha256=/i, "").trim();
   return timingSafeEq(cleaned, expected);
 }

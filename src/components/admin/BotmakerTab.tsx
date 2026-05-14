@@ -115,7 +115,7 @@ export function BotmakerTab() {
         </div>
         <code className="text-xs break-all text-muted-foreground">{WEBHOOK_URL}</code>
         <p className="text-xs text-muted-foreground mt-2">
-          Configurar este URL en Botmaker como callback. Header de firma esperado: <code>x-botmaker-signature</code> (HMAC-SHA256 hex del body con <code>BOTMAKER_WEBHOOK_SECRET</code>).
+          Configurar este URL en Botmaker como callback. Header de seguridad esperado: <code>auth-bm-token</code> con el valor exacto de <code>BOTMAKER_WEBHOOK_SECRET</code>.
         </p>
       </div>
 
