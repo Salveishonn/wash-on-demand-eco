@@ -391,7 +391,7 @@ async function tryCreateBookingRequestFromConversation(
     r.preferred_date === parsed.preferred_date && r.preferred_time === parsed.preferred_time,
   );
   if (dup) {
-    logStep("duplicate_skipped", { existing_id: dup.id });
+    logStep("duplicate_booking_request_skipped", { existing_id: dup.id });
     return { skipped: "duplicate", existing_id: dup.id };
   }
 
@@ -463,9 +463,11 @@ Deno.serve(async (req) => {
 
   const rawBody = await req.text();
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  logStep("webhook_received", { bytes: rawBody.length });
 
   // Auth
   const received = req.headers.get("auth-bm-token");
+  logStep("auth_header_present", { present: Boolean(received) });
   const tokenOk = Boolean(BOTMAKER_WEBHOOK_SECRET) && Boolean(received) &&
     timingSafeEq(received!, BOTMAKER_WEBHOOK_SECRET);
   logStep("auth_check", {
@@ -652,7 +654,7 @@ Deno.serve(async (req) => {
       }
     }
   } catch (e) {
-    logStep("post_processing_error", { error: (e as Error).message });
+    logStep("error", { stage: "post_processing", message: (e as Error).message });
   }
 
   return new Response(JSON.stringify({ ok: true, id: insertedEvent.id, booking: bookingResult }), {
