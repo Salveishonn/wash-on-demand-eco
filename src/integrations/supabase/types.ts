@@ -282,6 +282,7 @@ export type Database = {
         Row: {
           address: string | null
           botmaker_conversation_id: string | null
+          channel: string | null
           created_at: string
           customer_email: string | null
           customer_id: string | null
@@ -303,6 +304,7 @@ export type Database = {
         Insert: {
           address?: string | null
           botmaker_conversation_id?: string | null
+          channel?: string | null
           created_at?: string
           customer_email?: string | null
           customer_id?: string | null
@@ -324,6 +326,7 @@ export type Database = {
         Update: {
           address?: string | null
           botmaker_conversation_id?: string | null
+          channel?: string | null
           created_at?: string
           customer_email?: string | null
           customer_id?: string | null
@@ -357,12 +360,15 @@ export type Database = {
           booking_source: string | null
           booking_time: string
           booking_type: string | null
+          botmaker_conversation_id: string | null
           car_type: string | null
           car_type_extra_cents: number | null
           cluster_discount_percent: number | null
           cluster_size: number | null
+          communication_channel: string | null
           confirmed_at: string | null
           created_at: string
+          created_from: string | null
           customer_email: string
           customer_id: string | null
           customer_name: string
@@ -417,12 +423,15 @@ export type Database = {
           booking_source?: string | null
           booking_time: string
           booking_type?: string | null
+          botmaker_conversation_id?: string | null
           car_type?: string | null
           car_type_extra_cents?: number | null
           cluster_discount_percent?: number | null
           cluster_size?: number | null
+          communication_channel?: string | null
           confirmed_at?: string | null
           created_at?: string
+          created_from?: string | null
           customer_email: string
           customer_id?: string | null
           customer_name: string
@@ -477,12 +486,15 @@ export type Database = {
           booking_source?: string | null
           booking_time?: string
           booking_type?: string | null
+          botmaker_conversation_id?: string | null
           car_type?: string | null
           car_type_extra_cents?: number | null
           cluster_discount_percent?: number | null
           cluster_size?: number | null
+          communication_channel?: string | null
           confirmed_at?: string | null
           created_at?: string
+          created_from?: string | null
           customer_email?: string
           customer_id?: string | null
           customer_name?: string
@@ -555,6 +567,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      botmaker_booking_logs: {
+        Row: {
+          booking_id: string | null
+          booking_request_id: string | null
+          conversation_id: string | null
+          created_at: string
+          customer_phone: string | null
+          error: string | null
+          id: string
+          normalized_payload: Json | null
+          payload: Json
+          result_status: string
+        }
+        Insert: {
+          booking_id?: string | null
+          booking_request_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_phone?: string | null
+          error?: string | null
+          id?: string
+          normalized_payload?: Json | null
+          payload?: Json
+          result_status: string
+        }
+        Update: {
+          booking_id?: string | null
+          booking_request_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_phone?: string | null
+          error?: string | null
+          id?: string
+          normalized_payload?: Json | null
+          payload?: Json
+          result_status?: string
+        }
+        Relationships: []
       }
       botmaker_events: {
         Row: {
@@ -778,6 +829,7 @@ export type Database = {
           email: string | null
           full_name: string
           id: string
+          last_contact_at: string | null
           last_contact_channel: string | null
           phone_e164: string
           whatsapp_last_message_at: string | null
@@ -792,6 +844,7 @@ export type Database = {
           email?: string | null
           full_name: string
           id?: string
+          last_contact_at?: string | null
           last_contact_channel?: string | null
           phone_e164: string
           whatsapp_last_message_at?: string | null
@@ -806,6 +859,7 @@ export type Database = {
           email?: string | null
           full_name?: string
           id?: string
+          last_contact_at?: string | null
           last_contact_channel?: string | null
           phone_e164?: string
           whatsapp_last_message_at?: string | null

@@ -147,3 +147,9 @@ verify_jwt = false
 
 [functions.botmaker-webhook]
 verify_jwt = false
+
+[functions.botmaker-create-booking]
+verify_jwt = false
+
+[functions.botmaker-create-booking-simulate]
+verify_jwt = false
