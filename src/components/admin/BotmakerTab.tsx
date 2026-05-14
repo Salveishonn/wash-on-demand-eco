@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, MessageSquare, RefreshCw, ExternalLink, FlaskConical, Calendar } from 'lucide-react';
+import { Loader2, MessageSquare, RefreshCw, ExternalLink, FlaskConical, Calendar, Activity, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+
+interface Diagnostic { key: string; value_text: string | null; value_at: string | null; }
 
 const PUBLIC_PROBE_URL = 'https://www.washero.ar/';
 
@@ -74,21 +77,70 @@ export function BotmakerTab() {
   const [simulating, setSimulating] = useState(false);
   const [simulatingBooking, setSimulatingBooking] = useState(false);
   const [hideTestRequests, setHideTestRequests] = useState(true);
+  const [diagnostics, setDiagnostics] = useState<Record<string, Diagnostic>>({});
+  const [conversationCount, setConversationCount] = useState<number>(0);
+  const [rawDialog, setRawDialog] = useState<any | null>(null);
+  const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
-    const [evts, reqs, bks, logs] = await Promise.all([
+    const [evts, reqs, bks, logs, diag, convCount] = await Promise.all([
       supabase.from('botmaker_events').select('*').order('created_at', { ascending: false }).limit(20),
       supabase.from('booking_requests').select('id,customer_name,customer_phone,address,preferred_date,preferred_time,service_type,botmaker_conversation_id,status,is_test,created_at').order('created_at', { ascending: false }).limit(30),
-      supabase.from('bookings').select('id,customer_name,customer_phone,address,booking_date,booking_time,service_name,status,payment_status,botmaker_conversation_id,created_at').eq('booking_source', 'botmaker').order('created_at', { ascending: false }).limit(15),
+      supabase.from('bookings').select('id,customer_name,customer_phone,address,booking_date,booking_time,service_name,status,payment_status,botmaker_conversation_id,created_at').or('booking_source.eq.botmaker,communication_channel.eq.whatsapp,created_from.eq.botmaker').order('created_at', { ascending: false }).limit(15),
       supabase.from('botmaker_booking_logs').select('id,conversation_id,customer_phone,result_status,booking_id,booking_request_id,error,created_at').order('created_at', { ascending: false }).limit(20),
+      supabase.from('botmaker_diagnostics').select('*'),
+      supabase.from('botmaker_conversations').select('id', { count: 'exact', head: true }),
     ]);
     if (evts.error) toast.error('Error cargando eventos');
     else setEvents((evts.data ?? []) as BotmakerEvent[]);
     if (!reqs.error) setRequests((reqs.data ?? []) as BookingRequest[]);
     if (!bks.error) setBotmakerBookings((bks.data ?? []) as BotmakerBooking[]);
     if (!logs.error) setBookingLogs((logs.data ?? []) as BookingLog[]);
+    if (!diag.error) {
+      const map: Record<string, Diagnostic> = {};
+      (diag.data ?? []).forEach((d: any) => { map[d.key] = d; });
+      setDiagnostics(map);
+    }
+    setConversationCount(convCount.count ?? 0);
     setLoading(false);
+  };
+
+  const runWebhookTest = async (mode: 'with_token' | 'without_token' | 'summary_and_confirm') => {
+    const { data, error } = await supabase.functions.invoke('botmaker-test-webhook', { body: { mode } });
+    if (error) { toast.error(`Test falló: ${error.message}`); return; }
+    const status = (data as any)?.upstream_status;
+    if (mode === 'without_token') {
+      status === 401 ? toast.success('Seguridad OK: webhook rechazó sin token (401).') : toast.error(`Esperaba 401, recibió ${status}.`);
+    } else if (mode === 'with_token') {
+      status && status < 400 ? toast.success(`Webhook OK con token (${status}).`) : toast.error(`Webhook falló con token (${status}).`);
+    } else {
+      const reqId = (data as any)?.booking_request_id;
+      reqId ? toast.success(`Booking request de prueba creado: ${String(reqId).slice(0, 8)}`) : toast.warning('Simulación enviada, revisá pedidos.');
+    }
+    load();
+  };
+
+  const updateRequest = async (id: string, action: 'request_more_info' | 'reject' | 'toggle_test', reason?: string) => {
+    setBusyRequestId(id);
+    try {
+      const { data, error } = await supabase.functions.invoke('botmaker-update-request', { body: { request_id: id, action, reason } });
+      if (error || !(data as any)?.ok) {
+        toast.error((data as any)?.error ?? error?.message ?? 'No se pudo actualizar');
+      } else {
+        toast.success('Pedido actualizado');
+        load();
+      }
+    } finally { setBusyRequestId(null); }
+  };
+
+  const viewRawPayload = async (id: string) => {
+    const { data, error } = await supabase
+      .from('booking_requests')
+      .select('id,customer_name,parsed_data,missing_fields,parsing_warnings,raw_payload,status,is_test,created_at')
+      .eq('id', id).maybeSingle();
+    if (error || !data) { toast.error('No se pudo cargar el payload'); return; }
+    setRawDialog(data);
   };
 
   const ping = async () => {
