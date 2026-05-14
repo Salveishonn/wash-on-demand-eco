@@ -189,6 +189,20 @@ export function BotmakerTab() {
     else { toast.success(isTest ? 'Marcado como test' : 'Marcado como real'); load(); }
   };
 
+  const approveRequest = async (id: string) => {
+    const { data, error } = await supabase.functions.invoke('botmaker-convert-request', {
+      body: { request_id: id },
+    });
+    if (error || !(data as any)?.ok) {
+      const msg = (data as any)?.error ?? error?.message ?? 'error';
+      const missing = (data as any)?.missing;
+      toast.error(`No se pudo aprobar: ${msg}${missing ? ` (faltan: ${missing.join(', ')})` : ''}`);
+    } else {
+      toast.success('Reserva creada desde el pedido');
+      load();
+    }
+  };
+
   useEffect(() => { load(); ping(); }, []);
 
   const lastEvent = events[0];

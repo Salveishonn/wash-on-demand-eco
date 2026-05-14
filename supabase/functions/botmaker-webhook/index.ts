@@ -171,6 +171,78 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Best-effort: populate botmaker_conversations + botmaker_messages so Admin → Mensajes can read them.
+  try {
+    if (meta.conversation_id) {
+      const text =
+        payload.text ?? payload.message ?? payload.body ?? payload.lastUserSentence ??
+        payload.lastBotSentence ?? meta.event_type;
+      const direction =
+        payload.direction ??
+        (meta.event_type?.toLowerCase().includes("outbound") ? "out" :
+          meta.event_type?.toLowerCase().includes("event") ? "event" : "in");
+
+      await supabase.from("botmaker_messages").insert({
+        conversation_id: meta.conversation_id,
+        direction,
+        sender: meta.customer_name ?? meta.customer_phone ?? "botmaker",
+        body: typeof text === "string" ? text.slice(0, 4000) : null,
+        raw: payload,
+        provider_message_id: event_id,
+      });
+
+      const preview = typeof text === "string" ? text.slice(0, 140) : null;
+      const { data: existing } = await supabase
+        .from("botmaker_conversations").select("id").eq("conversation_id", meta.conversation_id).maybeSingle();
+      if (existing) {
+        await supabase.from("botmaker_conversations").update({
+          customer_phone: meta.customer_phone ?? undefined,
+          customer_name: meta.customer_name ?? undefined,
+          last_message_at: new Date().toISOString(),
+          last_message_preview: preview,
+          last_direction: direction,
+          channel: meta.channel ?? "whatsapp",
+          updated_at: new Date().toISOString(),
+        }).eq("id", existing.id);
+      } else {
+        await supabase.from("botmaker_conversations").insert({
+          conversation_id: meta.conversation_id,
+          customer_phone: meta.customer_phone,
+          customer_name: meta.customer_name,
+          channel: meta.channel ?? "whatsapp",
+          last_message_at: new Date().toISOString(),
+          last_message_preview: preview,
+          last_direction: direction,
+        });
+      }
+    }
+
+    // Customer upsert by phone
+    if (meta.customer_phone) {
+      const { data: cust } = await supabase
+        .from("customers").select("id").eq("phone_e164", meta.customer_phone).maybeSingle();
+      if (!cust) {
+        await supabase.from("customers").insert({
+          full_name: meta.customer_name ?? "Sin nombre",
+          phone_e164: meta.customer_phone,
+          botmaker_conversation_id: meta.conversation_id,
+          last_contact_channel: meta.channel ?? "whatsapp",
+          communication_source: "botmaker",
+          last_contact_at: new Date().toISOString(),
+        });
+      } else {
+        await supabase.from("customers").update({
+          last_contact_at: new Date().toISOString(),
+          last_contact_channel: meta.channel ?? "whatsapp",
+          communication_source: "botmaker",
+          botmaker_conversation_id: meta.conversation_id ?? undefined,
+        }).eq("id", cust.id);
+      }
+    }
+  } catch (e) {
+    console.error("[botmaker-webhook] conversation upsert failed", e);
+  }
+
   return new Response(JSON.stringify({ ok: true, id: data.id }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });

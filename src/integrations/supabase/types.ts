@@ -283,6 +283,7 @@ export type Database = {
           address: string | null
           botmaker_conversation_id: string | null
           channel: string | null
+          communication_provider: string | null
           created_at: string
           customer_email: string | null
           customer_id: string | null
@@ -290,12 +291,18 @@ export type Database = {
           customer_phone: string | null
           id: string
           is_test: boolean
+          missing_fields: string[] | null
           neighborhood: string | null
           notes: string | null
+          parsed_data: Json | null
+          parsing_warnings: string[] | null
+          payment_method: string | null
           preferred_date: string | null
           preferred_time: string | null
           raw_payload: Json
           resulting_booking_id: string | null
+          review_reason: string | null
+          reviewed_at: string | null
           service_type: string | null
           source: string
           status: string
@@ -306,6 +313,7 @@ export type Database = {
           address?: string | null
           botmaker_conversation_id?: string | null
           channel?: string | null
+          communication_provider?: string | null
           created_at?: string
           customer_email?: string | null
           customer_id?: string | null
@@ -313,12 +321,18 @@ export type Database = {
           customer_phone?: string | null
           id?: string
           is_test?: boolean
+          missing_fields?: string[] | null
           neighborhood?: string | null
           notes?: string | null
+          parsed_data?: Json | null
+          parsing_warnings?: string[] | null
+          payment_method?: string | null
           preferred_date?: string | null
           preferred_time?: string | null
           raw_payload?: Json
           resulting_booking_id?: string | null
+          review_reason?: string | null
+          reviewed_at?: string | null
           service_type?: string | null
           source?: string
           status?: string
@@ -329,6 +343,7 @@ export type Database = {
           address?: string | null
           botmaker_conversation_id?: string | null
           channel?: string | null
+          communication_provider?: string | null
           created_at?: string
           customer_email?: string | null
           customer_id?: string | null
@@ -336,12 +351,18 @@ export type Database = {
           customer_phone?: string | null
           id?: string
           is_test?: boolean
+          missing_fields?: string[] | null
           neighborhood?: string | null
           notes?: string | null
+          parsed_data?: Json | null
+          parsing_warnings?: string[] | null
+          payment_method?: string | null
           preferred_date?: string | null
           preferred_time?: string | null
           raw_payload?: Json
           resulting_booking_id?: string | null
+          review_reason?: string | null
+          reviewed_at?: string | null
           service_type?: string | null
           source?: string
           status?: string
@@ -610,9 +631,64 @@ export type Database = {
         }
         Relationships: []
       }
+      botmaker_conversations: {
+        Row: {
+          channel: string | null
+          communication_provider: string
+          conversation_id: string
+          created_at: string
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          last_direction: string | null
+          last_message_at: string | null
+          last_message_preview: string | null
+          linked_booking_id: string | null
+          linked_booking_request_id: string | null
+          linked_customer_id: string | null
+          unread_count: number
+          updated_at: string
+        }
+        Insert: {
+          channel?: string | null
+          communication_provider?: string
+          conversation_id: string
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          last_direction?: string | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          linked_booking_id?: string | null
+          linked_booking_request_id?: string | null
+          linked_customer_id?: string | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Update: {
+          channel?: string | null
+          communication_provider?: string
+          conversation_id?: string
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          last_direction?: string | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          linked_booking_id?: string | null
+          linked_booking_request_id?: string | null
+          linked_customer_id?: string | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       botmaker_events: {
         Row: {
           channel: string | null
+          communication_provider: string | null
           conversation_id: string | null
           created_at: string
           customer_name: string | null
@@ -626,6 +702,7 @@ export type Database = {
         }
         Insert: {
           channel?: string | null
+          communication_provider?: string | null
           conversation_id?: string | null
           created_at?: string
           customer_name?: string | null
@@ -639,6 +716,7 @@ export type Database = {
         }
         Update: {
           channel?: string | null
+          communication_provider?: string | null
           conversation_id?: string | null
           created_at?: string
           customer_name?: string | null
@@ -649,6 +727,42 @@ export type Database = {
           payload?: Json
           processed?: boolean
           processing_error?: string | null
+        }
+        Relationships: []
+      }
+      botmaker_messages: {
+        Row: {
+          body: string | null
+          communication_provider: string
+          conversation_id: string
+          created_at: string
+          direction: string
+          id: string
+          provider_message_id: string | null
+          raw: Json | null
+          sender: string | null
+        }
+        Insert: {
+          body?: string | null
+          communication_provider?: string
+          conversation_id: string
+          created_at?: string
+          direction: string
+          id?: string
+          provider_message_id?: string | null
+          raw?: Json | null
+          sender?: string | null
+        }
+        Update: {
+          body?: string | null
+          communication_provider?: string
+          conversation_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          provider_message_id?: string | null
+          raw?: Json | null
+          sender?: string | null
         }
         Relationships: []
       }
