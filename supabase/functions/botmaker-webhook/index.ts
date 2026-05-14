@@ -473,17 +473,24 @@ Deno.serve(async (req) => {
   });
 
   if (!tokenOk) {
+    logStep("auth_invalid", { header_present: Boolean(received), expected_configured: Boolean(BOTMAKER_WEBHOOK_SECRET) });
+    let invalidPayload: Record<string, any> = {};
+    try { invalidPayload = rawBody ? JSON.parse(rawBody) : {}; } catch { invalidPayload = { raw_body: rawBody.slice(0, 2000) }; }
     await supabase.from("botmaker_events").insert({
       event_type: "signature_invalid",
-      payload: { reason: "Invalid or missing auth-bm-token" },
+      payload: { reason: "Invalid or missing auth-bm-token", ...invalidPayload },
+      raw_payload: { reason: "Invalid or missing auth-bm-token", ...invalidPayload },
+      auth_valid: false,
       processed: true,
       processing_error: "invalid_auth_bm_token",
     });
     await setDiagnostic(supabase, "last_invalid_webhook", "token_mismatch");
+    await setDiagnostic(supabase, "last_token_mismatch", maskSecret(received));
     return new Response(JSON.stringify({ error: "invalid_auth_bm_token" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+  logStep("auth_valid", { header_present: Boolean(received) });
 
   let payload: Record<string, any>;
   try {
@@ -494,15 +501,24 @@ Deno.serve(async (req) => {
     });
   }
 
-  await setDiagnostic(supabase, "last_valid_webhook", payload?.eventType ?? "unknown");
+  await setDiagnostic(supabase, "last_valid_webhook", payload?.eventType ?? payload?.type ?? "unknown");
 
+  logStep("extraction_started");
   const meta = extractMeta(payload);
   const event_id = pickEventId(payload);
-  logStep("event_extracted", {
+  logStep("extraction_success", {
     event_id, event_type: meta.event_type, conversation_id: meta.conversation_id,
     has_phone: Boolean(meta.customer_phone), direction: meta.direction, sender_type: meta.sender_type,
     has_text: Boolean(meta.message_text),
   });
+  await Promise.all([
+    setDiagnostic(supabase, "last_event_raw_type", meta.event_type),
+    setDiagnostic(supabase, "last_event_channel", meta.channel),
+    setDiagnostic(supabase, "last_event_sender_type", meta.sender_type),
+    setDiagnostic(supabase, "last_event_text_extracted", meta.message_text ? meta.message_text.slice(0, 240) : "—"),
+    setDiagnostic(supabase, "last_conversation_id_extracted", meta.conversation_id),
+    setDiagnostic(supabase, "last_phone_extracted", meta.customer_phone),
+  ]);
 
   // Idempotency
   if (event_id) {
@@ -521,7 +537,9 @@ Deno.serve(async (req) => {
     .from("botmaker_events").insert({
       event_id, event_type: meta.event_type, channel: meta.channel,
       conversation_id: meta.conversation_id, customer_phone: meta.customer_phone,
-      customer_name: meta.customer_name, payload,
+      customer_name: meta.customer_name, sender_type: meta.sender_type,
+      message_text: meta.message_text, auth_valid: true,
+      payload, raw_payload: payload, processed: true,
     }).select("id").single();
   if (evtErr) {
     logStep("event_insert_failed", { error: evtErr.message });
@@ -529,7 +547,8 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  logStep("event_stored", { id: insertedEvent.id });
+  logStep("raw_payload_saved", { id: insertedEvent.id });
+  await setDiagnostic(supabase, "last_stored_botmaker_event_id", insertedEvent.id);
 
   // Conversation + message + customer (best-effort)
   let bookingResult: any = null;
