@@ -169,6 +169,32 @@ export function BotmakerTab() {
         </p>
       </div>
 
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm">Diagnóstico Webchat (sitio público)</h3>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={verifyWebchat}>
+              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Verificar webchat
+            </Button>
+            <Button variant="outline" size="sm" onClick={simulateBookingIntent} disabled={simulating}>
+              <FlaskConical className="w-3.5 h-3.5 mr-1" />
+              {simulating ? 'Enviando…' : 'Simular booking intent'}
+            </Button>
+          </div>
+        </div>
+        {webchatProbe ? (
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div>URL probada: <code>{webchatProbe.url}</code></div>
+            <div>Script Botmaker en HTML: <Badge variant={webchatProbe.scriptFound ? 'secondary' : 'destructive'}>{webchatProbe.scriptFound ? 'detectado' : 'no detectado'}</Badge></div>
+            {!webchatProbe.scriptFound && (
+              <p className="text-[11px]">Nota: el script se inyecta en runtime desde React, así que un "no detectado" en HTML inicial es esperado. Verificá visualmente abriendo el sitio público.</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Probá el botón para confirmar que el script de Botmaker se inyecta en el sitio público.</p>
+        )}
+      </div>
+
       <div className="bg-card border border-border rounded-xl p-4">
         <h3 className="font-semibold text-sm mb-3">Eventos recientes</h3>
         {loading ? (
