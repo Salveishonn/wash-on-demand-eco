@@ -73,6 +73,7 @@ export function BotmakerTab() {
   const [webchatProbe, setWebchatProbe] = useState<{ checked: boolean; scriptFound: boolean; url: string } | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [simulatingBooking, setSimulatingBooking] = useState(false);
+  const [hideTestRequests, setHideTestRequests] = useState(true);
 
   const load = async () => {
     setLoading(true);
