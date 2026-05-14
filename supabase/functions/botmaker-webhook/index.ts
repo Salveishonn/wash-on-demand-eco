@@ -352,7 +352,7 @@ async function tryCreateBookingRequestFromConversation(
   // Load last 15 messages of this conversation, oldest -> newest
   const { data: msgs } = await supabase
     .from("botmaker_messages")
-    .select("id, direction, sender, body, created_at")
+    .select("id, direction, sender, body, message_text, created_at")
     .eq("conversation_id", conversation_id)
     .order("created_at", { ascending: false })
     .limit(15);
