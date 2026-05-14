@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { MessageCircle } from "lucide-react";
 
-const BOTMAKER_CHANNEL_ID = "O0FW1NYUKE";
+const BOTMAKER_CHANNEL_ID = "0OFW1NYUKE";
 const BOTMAKER_SCRIPT_SRC = `https://go.botmaker.com/rest/webchat/p/${BOTMAKER_CHANNEL_ID}/init.js`;
 const WHATSAPP_FALLBACK_URL = "https://wa.me/5491176247835?text=" + encodeURIComponent("Hola Washero! Quiero hacer una consulta.");
 const LOAD_TIMEOUT_MS = 6000;

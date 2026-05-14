@@ -30,6 +30,7 @@ interface BookingRequest {
   service_type: string | null;
   botmaker_conversation_id: string | null;
   status: string;
+  is_test: boolean | null;
   created_at: string;
 }
 
@@ -72,12 +73,13 @@ export function BotmakerTab() {
   const [webchatProbe, setWebchatProbe] = useState<{ checked: boolean; scriptFound: boolean; url: string } | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [simulatingBooking, setSimulatingBooking] = useState(false);
+  const [hideTestRequests, setHideTestRequests] = useState(true);
 
   const load = async () => {
     setLoading(true);
     const [evts, reqs, bks, logs] = await Promise.all([
       supabase.from('botmaker_events').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('booking_requests').select('id,customer_name,customer_phone,address,preferred_date,preferred_time,service_type,botmaker_conversation_id,status,created_at').order('created_at', { ascending: false }).limit(15),
+      supabase.from('booking_requests').select('id,customer_name,customer_phone,address,preferred_date,preferred_time,service_type,botmaker_conversation_id,status,is_test,created_at').order('created_at', { ascending: false }).limit(30),
       supabase.from('bookings').select('id,customer_name,customer_phone,address,booking_date,booking_time,service_name,status,payment_status,botmaker_conversation_id,created_at').eq('booking_source', 'botmaker').order('created_at', { ascending: false }).limit(15),
       supabase.from('botmaker_booking_logs').select('id,conversation_id,customer_phone,result_status,booking_id,booking_request_id,error,created_at').order('created_at', { ascending: false }).limit(20),
     ]);
@@ -172,6 +174,12 @@ export function BotmakerTab() {
     } finally {
       setSimulatingBooking(false);
     }
+  };
+
+  const markRequestAsTest = async (id: string, isTest: boolean) => {
+    const { error } = await supabase.from('booking_requests').update({ is_test: isTest }).eq('id', id);
+    if (error) toast.error('No se pudo actualizar');
+    else { toast.success(isTest ? 'Marcado como test' : 'Marcado como real'); load(); }
   };
 
   useEffect(() => { load(); ping(); }, []);
@@ -284,27 +292,45 @@ export function BotmakerTab() {
 
       {/* Pedidos pendientes */}
       <div className="bg-card border border-border rounded-xl p-4">
-        <h3 className="font-semibold text-sm mb-3">Pedidos de reserva pendientes (booking_requests)</h3>
-        {requests.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">Sin pedidos pendientes.</p>
-        ) : (
-          <div className="space-y-2">
-            {requests.map(r => (
-              <div key={r.id} className="flex items-center justify-between gap-3 text-xs border-b border-border/50 last:border-0 py-2">
-                <div className="min-w-0">
-                  <div className="font-semibold truncate">{r.customer_name ?? 'Sin nombre'} · {r.customer_phone}</div>
-                  <div className="text-muted-foreground truncate">
-                    {r.preferred_date ?? '?'} {r.preferred_time ?? ''} · {r.service_type ?? '—'} · {r.address ?? '—'}
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-sm">Pedidos de reserva pendientes (booking_requests)</h3>
+          <Button variant="outline" size="sm" onClick={() => setHideTestRequests(v => !v)}>
+            {hideTestRequests ? 'Mostrar pedidos test' : 'Ocultar pedidos test'}
+          </Button>
+        </div>
+        {(() => {
+          const visible = hideTestRequests ? requests.filter(r => !r.is_test) : requests;
+          if (visible.length === 0) {
+            return <p className="text-sm text-muted-foreground py-6 text-center">Sin pedidos pendientes.</p>;
+          }
+          return (
+            <div className="space-y-2">
+              {visible.map(r => (
+                <div key={r.id} className="flex items-center justify-between gap-3 text-xs border-b border-border/50 last:border-0 py-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">
+                      {r.customer_name ?? 'Sin nombre'} · {r.customer_phone}
+                      {r.is_test && <Badge variant="outline" className="ml-2">test</Badge>}
+                    </div>
+                    <div className="text-muted-foreground truncate">
+                      {r.preferred_date ?? '?'} {r.preferred_time ?? ''} · {r.service_type ?? '—'} · {r.address ?? '—'}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <Badge variant="outline">{r.status}</Badge>
+                    <span className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleString('es-AR')}</span>
+                    <button
+                      onClick={() => markRequestAsTest(r.id, !r.is_test)}
+                      className="text-[10px] text-primary hover:underline"
+                    >
+                      {r.is_test ? 'Marcar real' : 'Marcar test'}
+                    </button>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <Badge variant="outline">{r.status}</Badge>
-                  <span className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleString('es-AR')}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Logs del endpoint de reservas */}
@@ -414,7 +440,42 @@ auth-bm-token: <BOTMAKER_WEBHOOK_SECRET>
   "payment_method": "{{payment_method}}",
   "notes": "{{notes}}"
 }`}</pre>
-        <p>Manejo de respuesta según <code>status</code>: <code>booking_created</code> → mostrar <code>message</code>; <code>needs_review</code> → mostrar <code>message</code>; <code>slot_unavailable</code> → pedir otro horario; <code>missing_data</code> → pedir <code>missing_fields</code>; <code>duplicate</code> → ofrecer derivar a humano.</p>
+        <p>
+          <strong>Fallback resumen IA:</strong> si el flow no puede pedir todos los campos, mandar al menos
+          <code> customer_phone</code>, <code>ai_booking_summary</code> y <code>raw_conversation</code>.
+          Washero crea un <code>booking_request</code> con status <code>needs_review</code>.
+        </p>
+        <p className="font-semibold text-foreground mt-3">Code Action (un solo mensaje al cliente)</p>
+        <pre className="bg-background border border-border rounded p-2 overflow-x-auto text-[10px]">{`const res = await fetch("${CREATE_BOOKING_URL}", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "auth-bm-token": "<BOTMAKER_WEBHOOK_SECRET>"
+  },
+  body: JSON.stringify({
+    conversation_id: context.conversation.id,
+    channel: "whatsapp",
+    customer_phone: context.contact.phone,
+    customer_name: vars.customer_name,
+    address: vars.address,
+    neighborhood: vars.neighborhood,
+    vehicle_type: vars.vehicle_type,
+    service_type: vars.service_type,
+    preferred_date: vars.preferred_date,
+    preferred_time: vars.preferred_time,
+    payment_method: vars.payment_method,
+    notes: vars.notes,
+    ai_booking_summary: vars.ai_booking_summary,
+    raw_conversation: vars.raw_conversation
+  })
+});
+const data = await res.json().catch(() => ({}));
+if (res.ok && data && data.message) {
+  result.text(data.message);   // un único mensaje
+} else {
+  result.text("No pudimos procesar tu reserva ahora. Te contactamos por WhatsApp en breve 🙌");
+}
+result.done();                 // siempre cerrar; nunca encadenar a fallback genérico`}</pre>
       </div>
     </div>
   );

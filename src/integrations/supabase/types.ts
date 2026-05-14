@@ -289,6 +289,7 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           id: string
+          is_test: boolean
           neighborhood: string | null
           notes: string | null
           preferred_date: string | null
@@ -311,6 +312,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           id?: string
+          is_test?: boolean
           neighborhood?: string | null
           notes?: string | null
           preferred_date?: string | null
@@ -333,6 +335,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           id?: string
+          is_test?: boolean
           neighborhood?: string | null
           notes?: string | null
           preferred_date?: string | null
