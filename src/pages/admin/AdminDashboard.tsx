@@ -1344,6 +1344,9 @@ Init Point: ${mpResponse.initPoint ? '✓ Available' : '✗ Missing'}
 
         {/* App Settings Tab */}
         {activeTab === 'app-settings' && <ErrorBoundaryCalendar><AppSettingsTab /></ErrorBoundaryCalendar>}
+
+        {/* Botmaker Tab */}
+        {activeTab === 'botmaker' && <ErrorBoundaryCalendar><BotmakerTab /></ErrorBoundaryCalendar>}
       </div>
 
       {/* Booking Detail Dialog */}
