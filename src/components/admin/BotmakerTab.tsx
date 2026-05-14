@@ -329,6 +329,41 @@ export function BotmakerTab() {
         </p>
       </div>
 
+      {/* Diagnóstico Botmaker */}
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-sm">Diagnóstico Botmaker</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => runWebhookTest('without_token')}>
+              Test sin token (esperado 401)
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => runWebhookTest('with_token')}>
+              Test con token
+            </Button>
+            <Button variant="default" size="sm" onClick={() => runWebhookTest('summary_and_confirm')}>
+              <FlaskConical className="w-3.5 h-3.5 mr-1" /> Simular resumen + confirmación
+            </Button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+          <DiagRow label="Conversaciones almacenadas" value={String(conversationCount)} />
+          <DiagRow label="Último webhook válido" value={fmtDiag(diagnostics['last_valid_webhook'])} />
+          <DiagRow label="Último webhook inválido" value={fmtDiag(diagnostics['last_invalid_webhook'])} />
+          <DiagRow label="Última conversación" value={fmtDiag(diagnostics['last_conversation_stored'])} />
+          <DiagRow label="Último resumen detectado" value={fmtDiag(diagnostics['last_summary_detected'])} />
+          <DiagRow label="Última confirmación" value={fmtDiag(diagnostics['last_confirmation_detected'])} />
+          <DiagRow label="Último booking_request creado" value={fmtDiag(diagnostics['last_booking_request_created'])} />
+        </div>
+        {conversationCount === 0 && (
+          <p className="text-xs text-amber-600">
+            No se recibieron eventos de Botmaker todavía. Verificá la URL del webhook y el header <code>auth-bm-token</code>.
+          </p>
+        )}
+      </div>
+
       {/* Reservas desde WhatsApp */}
       <div className="bg-card border border-border rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
@@ -392,20 +427,45 @@ export function BotmakerTab() {
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <Badge variant="outline">{r.status}</Badge>
                     <span className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleString('es-AR')}</span>
-                    <div className="flex gap-2">
-                      {r.status !== 'converted' && (
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {r.status !== 'converted' && r.status !== 'rejected' && (
                         <button
                           onClick={() => approveRequest(r.id)}
-                          className="text-[10px] text-green-600 hover:underline font-semibold"
+                          disabled={busyRequestId === r.id}
+                          className="text-[10px] text-green-600 hover:underline font-semibold disabled:opacity-50"
                         >
-                          Aprobar y crear reserva
+                          Aprobar
                         </button>
                       )}
                       <button
-                        onClick={() => markRequestAsTest(r.id, !r.is_test)}
+                        onClick={() => updateRequest(r.id, 'request_more_info')}
+                        disabled={busyRequestId === r.id}
                         className="text-[10px] text-primary hover:underline"
                       >
+                        Pedir más datos
+                      </button>
+                      <button
+                        onClick={() => {
+                          const reason = prompt('Motivo de rechazo:');
+                          if (reason && reason.trim()) updateRequest(r.id, 'reject', reason);
+                        }}
+                        disabled={busyRequestId === r.id}
+                        className="text-[10px] text-destructive hover:underline"
+                      >
+                        Rechazar
+                      </button>
+                      <button
+                        onClick={() => updateRequest(r.id, 'toggle_test')}
+                        disabled={busyRequestId === r.id}
+                        className="text-[10px] text-muted-foreground hover:underline"
+                      >
                         {r.is_test ? 'Marcar real' : 'Marcar test'}
+                      </button>
+                      <button
+                        onClick={() => viewRawPayload(r.id)}
+                        className="text-[10px] text-muted-foreground hover:underline inline-flex items-center gap-0.5"
+                      >
+                        <Eye className="w-2.5 h-2.5" /> Raw
                       </button>
                     </div>
                   </div>
