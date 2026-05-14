@@ -113,16 +113,16 @@ Deno.serve(async (req) => {
   const rawBody = await req.text();
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Signature verification
-  const sigOk = await verifySignature(req, rawBody);
-  if (!sigOk) {
+  // Botmaker static token verification. HMAC is intentionally not required.
+  const tokenOk = verifyBotmakerToken(req);
+  if (!tokenOk) {
     await supabase.from("botmaker_events").insert({
       event_type: "signature_invalid",
-      payload: { reason: "Invalid or missing signature" },
+      payload: { reason: "Invalid or missing auth-bm-token" },
       processed: true,
-      processing_error: "invalid_signature",
+      processing_error: "invalid_auth_bm_token",
     });
-    return new Response(JSON.stringify({ error: "invalid_signature" }), {
+    return new Response(JSON.stringify({ error: "invalid_auth_bm_token" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
