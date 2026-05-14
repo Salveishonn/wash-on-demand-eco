@@ -139,9 +139,10 @@ export function BotmakerMessagesTab() {
           {loading ? (
             <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
           ) : filtered.length === 0 ? (
-            <div className="py-6 text-center space-y-1">
+            <div className="py-6 text-center space-y-2">
               <p className="text-sm text-muted-foreground">Sin conversaciones todavía.</p>
-              <p className="text-xs text-amber-600">Verificá que el webhook de Botmaker esté apuntando a Washero y use el header <code>auth-bm-token</code>.</p>
+              <p className="text-xs text-amber-600">No Botmaker events received yet. Check webhook config.</p>
+              <p className="text-xs text-muted-foreground">Si hay eventos inválidos, revisá Botmaker / Comunicaciones para confirmar si fueron rechazados por token mismatch.</p>
             </div>
           ) : (
             <div className="overflow-y-auto -mx-1">
@@ -157,6 +158,12 @@ export function BotmakerMessagesTab() {
                   </div>
                   <div className="text-xs text-muted-foreground truncate">{c.last_message_preview ?? "—"}</div>
                   <div className="text-[10px] text-muted-foreground">{new Date(c.last_message_at).toLocaleString("es-AR")}</div>
+                  {(c.linked_booking_request_id || c.linked_booking_id) && (
+                    <div className="flex gap-1 mt-1">
+                      {c.linked_booking_request_id && <Badge variant="secondary" className="text-[10px]">pedido</Badge>}
+                      {c.linked_booking_id && <Badge variant="default" className="text-[10px]">reserva</Badge>}
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
@@ -175,6 +182,10 @@ export function BotmakerMessagesTab() {
                 <div className="min-w-0">
                   <div className="font-semibold truncate">{selected.customer_name ?? selected.customer_phone}</div>
                   <div className="text-xs text-muted-foreground truncate">{selected.customer_phone} · ID {selected.conversation_id}</div>
+                  <div className="flex gap-1 mt-1">
+                    {selected.linked_booking_request_id && <Badge variant="secondary" className="text-[10px]">booking_request vinculado</Badge>}
+                    {selected.linked_booking_id && <Badge variant="default" className="text-[10px]">booking vinculado</Badge>}
+                  </div>
                 </div>
                 <a
                   href={`https://go.botmaker.com/`}
