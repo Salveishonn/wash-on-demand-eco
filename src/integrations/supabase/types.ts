@@ -633,6 +633,7 @@ export type Database = {
       }
       botmaker_conversations: {
         Row: {
+          botmaker_conversation_id: string | null
           channel: string | null
           communication_provider: string
           conversation_id: string
@@ -641,16 +642,19 @@ export type Database = {
           customer_phone: string | null
           id: string
           last_direction: string | null
+          last_message: string | null
           last_message_at: string | null
           last_message_preview: string | null
           last_sender_type: string | null
           linked_booking_id: string | null
           linked_booking_request_id: string | null
           linked_customer_id: string | null
+          raw_payload: Json
           unread_count: number
           updated_at: string
         }
         Insert: {
+          botmaker_conversation_id?: string | null
           channel?: string | null
           communication_provider?: string
           conversation_id: string
@@ -659,16 +663,19 @@ export type Database = {
           customer_phone?: string | null
           id?: string
           last_direction?: string | null
+          last_message?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
           last_sender_type?: string | null
           linked_booking_id?: string | null
           linked_booking_request_id?: string | null
           linked_customer_id?: string | null
+          raw_payload?: Json
           unread_count?: number
           updated_at?: string
         }
         Update: {
+          botmaker_conversation_id?: string | null
           channel?: string | null
           communication_provider?: string
           conversation_id?: string
@@ -677,12 +684,14 @@ export type Database = {
           customer_phone?: string | null
           id?: string
           last_direction?: string | null
+          last_message?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
           last_sender_type?: string | null
           linked_booking_id?: string | null
           linked_booking_request_id?: string | null
           linked_customer_id?: string | null
+          raw_payload?: Json
           unread_count?: number
           updated_at?: string
         }
@@ -711,6 +720,7 @@ export type Database = {
       }
       botmaker_events: {
         Row: {
+          auth_valid: boolean | null
           channel: string | null
           communication_provider: string | null
           conversation_id: string | null
@@ -720,11 +730,15 @@ export type Database = {
           event_id: string | null
           event_type: string
           id: string
+          message_text: string | null
           payload: Json
           processed: boolean
           processing_error: string | null
+          raw_payload: Json
+          sender_type: string | null
         }
         Insert: {
+          auth_valid?: boolean | null
           channel?: string | null
           communication_provider?: string | null
           conversation_id?: string | null
@@ -734,11 +748,15 @@ export type Database = {
           event_id?: string | null
           event_type: string
           id?: string
+          message_text?: string | null
           payload?: Json
           processed?: boolean
           processing_error?: string | null
+          raw_payload?: Json
+          sender_type?: string | null
         }
         Update: {
+          auth_valid?: boolean | null
           channel?: string | null
           communication_provider?: string | null
           conversation_id?: string | null
@@ -748,51 +766,75 @@ export type Database = {
           event_id?: string | null
           event_type?: string
           id?: string
+          message_text?: string | null
           payload?: Json
           processed?: boolean
           processing_error?: string | null
+          raw_payload?: Json
+          sender_type?: string | null
         }
         Relationships: []
       }
       botmaker_messages: {
         Row: {
           body: string | null
+          botmaker_message_id: string | null
+          channel: string | null
           communication_provider: string
           conversation_id: string
           created_at: string
+          customer_name: string | null
+          customer_phone: string | null
           direction: string
           event_timestamp: string | null
           id: string
+          message_text: string | null
           message_type: string | null
           provider_message_id: string | null
           raw: Json | null
+          raw_payload: Json
           sender: string | null
+          sender_type: string | null
         }
         Insert: {
           body?: string | null
+          botmaker_message_id?: string | null
+          channel?: string | null
           communication_provider?: string
           conversation_id: string
           created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
           direction: string
           event_timestamp?: string | null
           id?: string
+          message_text?: string | null
           message_type?: string | null
           provider_message_id?: string | null
           raw?: Json | null
+          raw_payload?: Json
           sender?: string | null
+          sender_type?: string | null
         }
         Update: {
           body?: string | null
+          botmaker_message_id?: string | null
+          channel?: string | null
           communication_provider?: string
           conversation_id?: string
           created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
           direction?: string
           event_timestamp?: string | null
           id?: string
+          message_text?: string | null
           message_type?: string | null
           provider_message_id?: string | null
           raw?: Json | null
+          raw_payload?: Json
           sender?: string | null
+          sender_type?: string | null
         }
         Relationships: []
       }

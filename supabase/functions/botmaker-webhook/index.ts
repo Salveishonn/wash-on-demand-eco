@@ -61,53 +61,127 @@ async function setDiagnostic(supabase: any, key: string, value_text?: string | n
 // Payload extraction
 // ──────────────────────────────────────────────────────────────────────────
 
-function pickEventId(p: Record<string, any>): string | null {
-  for (const k of ["eventId", "event_id", "id", "messageId", "message_id"]) {
-    const v = p[k]; if (typeof v === "string" && v) return v;
+type ExtractedMeta = {
+  event_type: string;
+  conversation_id: string | null;
+  customer_phone: string | null;
+  customer_name: string | null;
+  channel: string | null;
+  direction: "in" | "out" | "event";
+  sender_type: "user" | "bot" | "agent" | "system";
+  message_text: string | null;
+  message_type: string;
+  event_timestamp: string | null;
+  botmaker_message_id: string | null;
+};
+
+function getPath(obj: any, path: string): unknown {
+  return path.split(".").reduce((acc, part) => {
+    if (acc == null) return undefined;
+    const match = part.match(/^(\w+)\[(\d+)\]$/);
+    if (match) return acc?.[match[1]]?.[Number(match[2])];
+    return acc?.[part];
+  }, obj);
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function firstString(obj: any, paths: string[]): string | null {
+  for (const path of paths) {
+    const value = asString(getPath(obj, path));
+    if (value) return value;
   }
   return null;
 }
 
-function extractMeta(p: Record<string, any>) {
-  const event_type = String(p.eventType ?? p.event_type ?? p.type ?? "unknown");
-  const conversation_id =
-    p.chatId ?? p.chat_id ?? p.conversationId ?? p.conversation_id ?? p.customerId ?? p.customer_id ?? null;
-  const customer_phone =
-    p.realWhatsAppId ?? p.from ?? p.phone ?? p.customerPhone ?? p.customer_phone ?? p.whatsappId ?? null;
-  const customer_name =
-    p.fullName ?? p.name ?? p.customerName ?? p.customer_name ?? p.contactName ?? p.contact_name ?? null;
-  const channel = p.channel ?? p.platform ?? "whatsapp";
+function firstMessage(p: Record<string, any>): Record<string, any> | null {
+  if (Array.isArray(p.messages) && p.messages.length > 0 && typeof p.messages[0] === "object") return p.messages[0];
+  if (Array.isArray(p.data?.messages) && p.data.messages.length > 0 && typeof p.data.messages[0] === "object") return p.data.messages[0];
+  if (typeof p.message === "object" && p.message) return p.message;
+  if (typeof p.event?.message === "object" && p.event.message) return p.event.message;
+  return null;
+}
 
-  // Direction
+function pickEventId(p: Record<string, any>): string | null {
+  return firstString(p, [
+    "eventId", "event_id", "id", "messageId", "message_id",
+    "messages[0]._id_", "messages[0].id", "messages[0].messageId",
+    "data.messages[0]._id_", "event.message.id",
+  ]);
+}
+
+function normalizePhoneLike(value: string | null): string | null {
+  if (!value) return null;
+  const digits = value.replace(/[^0-9]/g, "");
+  return digits.length >= 8 ? digits : value;
+}
+
+function extractMeta(p: Record<string, any>): ExtractedMeta {
+  const msg = firstMessage(p);
+  const event_type = firstString(p, ["eventType", "event_type", "type"]) ?? "unknown";
+  const conversation_id = firstString(p, [
+    "customerId", "chatId", "chat.id", "conversationId", "conversation.id",
+    "sessionId", "userId", "contactId", "conversation_id", "chat_id", "customer_id",
+  ]);
+  const customer_phone = normalizePhoneLike(firstString(p, [
+    "realWhatsAppId", "whatsappId", "customer.phone", "contact.phone", "user.phone",
+    "from", "sender", "phone", "customerPhone", "customer_phone", "contactId", "whatsappNumber",
+  ]));
+  const firstName = firstString(p, ["firstName"]);
+  const lastName = firstString(p, ["lastName"]);
+  const nameFromParts = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
+  const customer_name = firstString(p, [
+    "fullName", "customer.name", "contact.name", "user.name", "name",
+    "customerName", "customer_name", "contactName", "contact_name", "whatsappNickName",
+    "messages[0].fromName", "data.messages[0].fromName",
+  ]) ?? nameFromParts;
+  const channel = firstString(p, ["channel", "chatPlatform", "platform", "chat.channel"])
+    ?? (customer_phone ? "whatsapp" : firstString(p, ["webchatId", "webchat.id"]) ? "webchat" : null);
+
+  const message_text = firstString(p, [
+    "message", "text", "message.text", "content", "content.text", "body",
+    "data.text", "data.message", "data.message.text", "data.messages[0].text",
+    "data.messages[0].message", "messages[0].text", "messages[0].message",
+    "event.message", "event.message.text", "event.text",
+    "lastUserSentence", "lastBotSentence", "lastSentence",
+  ]);
+  const message_type = firstString(p, ["messageType", "message_type", "messages[0].type", "data.messages[0].type"]) ?? "text";
+  const event_timestamp = firstString(p, [
+    "timestamp", "ts", "created_at", "date", "messages[0].date", "data.messages[0].date",
+    "event.timestamp", "statusChangeTime",
+  ]);
+  const botmaker_message_id = firstString(p, [
+    "messageId", "message_id", "messages[0]._id_", "messages[0].id", "messages[0].messageId",
+    "data.messages[0]._id_", "event.message.id",
+  ]);
+
+  const explicitDirection = String(p.direction ?? p.way ?? msg?.direction ?? "").toLowerCase();
+  const fromValue = String(msg?.from ?? p.fromType ?? p.from_type ?? p.who ?? "").toLowerCase();
+  const senderRaw = String(p.who ?? p.senderType ?? p.sender_type ?? p.sender ?? msg?.senderType ?? "").toLowerCase();
+  const eventLower = event_type.toLowerCase();
+
   let direction: "in" | "out" | "event" = "in";
-  const explicit = String(p.direction ?? p.way ?? "").toLowerCase();
-  if (explicit === "out" || explicit === "outbound" || explicit === "from-business") direction = "out";
-  else if (explicit === "in" || explicit === "inbound" || explicit === "from-user") direction = "in";
-  else if (event_type.toLowerCase().includes("outbound") || event_type.toLowerCase().includes("bot")) direction = "out";
-  else if (event_type.toLowerCase().includes("event") || event_type.toLowerCase().includes("status")) direction = "event";
+  if (eventLower.includes("status") || eventLower.includes("event") || message_type.toLowerCase() === "event") direction = "event";
+  if (explicitDirection === "out" || explicitDirection === "outbound" || explicitDirection === "from-business") direction = "out";
+  if (explicitDirection === "in" || explicitDirection === "inbound" || explicitDirection === "from-user") direction = "in";
+  if (msg?.fromCustomer === true || fromValue === "user" || fromValue === "customer") direction = "in";
+  if (msg?.fromCustomer === false || ["bot", "agent", "operator"].some((x) => fromValue.includes(x))) direction = "out";
+  if (eventLower.includes("bot") || eventLower.includes("outbound")) direction = "out";
 
-  // Sender type
-  const who = String(p.who ?? p.senderType ?? p.sender_type ?? p.sender ?? "").toLowerCase();
-  let sender_type: "user" | "bot" | "agent" | "system" = "user";
-  if (who.includes("bot")) sender_type = "bot";
-  else if (who.includes("agent") || who.includes("operator")) sender_type = "agent";
-  else if (who.includes("system") || who.includes("event")) sender_type = "system";
-  else if (direction === "out") sender_type = "bot";
-
-  const message_text =
-    (typeof p.text === "string" && p.text) ||
-    (typeof p.message === "string" && p.message) ||
-    (typeof p.body === "string" && p.body) ||
-    (direction === "in" ? (p.lastUserSentence ?? null) : (p.lastBotSentence ?? null)) ||
-    (typeof p.lastSentence === "string" ? p.lastSentence : null) ||
-    null;
-
-  const message_type = String(p.messageType ?? p.message_type ?? "text");
-  const event_timestamp = p.timestamp ?? p.ts ?? p.created_at ?? null;
+  let sender_type: "user" | "bot" | "agent" | "system" = direction === "out" ? "bot" : direction === "event" ? "system" : "user";
+  const who = `${senderRaw} ${fromValue} ${eventLower}`;
+  if (who.includes("agent") || who.includes("operator") || Boolean(msg?.operatorId)) sender_type = "agent";
+  else if (who.includes("bot")) sender_type = "bot";
+  else if (who.includes("system") || direction === "event") sender_type = "system";
+  else if (msg?.fromCustomer === true || direction === "in") sender_type = "user";
 
   return {
     event_type, conversation_id, customer_phone, customer_name, channel,
-    direction, sender_type, message_text, message_type, event_timestamp,
+    direction, sender_type, message_text, message_type, event_timestamp, botmaker_message_id,
   };
 }
 
@@ -278,14 +352,14 @@ async function tryCreateBookingRequestFromConversation(
   // Load last 15 messages of this conversation, oldest -> newest
   const { data: msgs } = await supabase
     .from("botmaker_messages")
-    .select("id, direction, sender, body, created_at")
+    .select("id, direction, sender, body, message_text, created_at")
     .eq("conversation_id", conversation_id)
     .order("created_at", { ascending: false })
     .limit(15);
   if (!msgs || msgs.length === 0) return { skipped: "no_messages" };
 
   // Find latest bot summary message
-  const summaryMsg = msgs.find((m: any) => m.direction !== "in" && isBookingSummary(m.body ?? ""));
+  const summaryMsg = msgs.find((m: any) => m.direction !== "in" && isBookingSummary(m.body ?? m.message_text ?? ""));
   if (!summaryMsg) {
     logStep("no_summary_in_conversation", { conversation_id });
     return { skipped: "no_summary" };
@@ -301,7 +375,8 @@ async function tryCreateBookingRequestFromConversation(
   logStep("booking_confirmation_detected", { conversation_id });
 
   // Parse
-  const raw = parseSummary(summaryMsg.body ?? "");
+  const summaryText = summaryMsg.body ?? summaryMsg.message_text ?? "";
+  const raw = parseSummary(summaryText);
   const { parsed, missing, warnings } = buildParsed(raw);
 
   // Dedup: same conversation + same date/time within 10 minutes
@@ -316,7 +391,7 @@ async function tryCreateBookingRequestFromConversation(
     r.preferred_date === parsed.preferred_date && r.preferred_time === parsed.preferred_time,
   );
   if (dup) {
-    logStep("duplicate_skipped", { existing_id: dup.id });
+    logStep("duplicate_booking_request_skipped", { existing_id: dup.id });
     return { skipped: "duplicate", existing_id: dup.id };
   }
 
@@ -343,7 +418,7 @@ async function tryCreateBookingRequestFromConversation(
       parsing_warnings: warnings,
       raw_payload: {
         origin: "webhook_parser",
-        summary_message: summaryMsg.body,
+        summary_message: summaryText,
         trigger_message: triggerMessageBody,
         last_messages: msgs,
       },
@@ -357,6 +432,11 @@ async function tryCreateBookingRequestFromConversation(
   }
   logStep("booking_request_created_from_webhook", { id: req?.id, missing });
   await setDiagnostic(supabase, "last_booking_request_created", req?.id ?? null);
+  await setDiagnostic(supabase, "last_booking_request_created_from_webhook", req?.id ?? null);
+  await supabase.from("botmaker_conversations").update({
+    linked_booking_request_id: req?.id,
+    updated_at: new Date().toISOString(),
+  }).eq("conversation_id", conversation_id);
   return { created_id: req?.id, missing, warnings };
 }
 
@@ -383,9 +463,11 @@ Deno.serve(async (req) => {
 
   const rawBody = await req.text();
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  logStep("webhook_received", { bytes: rawBody.length });
 
   // Auth
   const received = req.headers.get("auth-bm-token");
+  logStep("auth_header_present", { present: Boolean(received) });
   const tokenOk = Boolean(BOTMAKER_WEBHOOK_SECRET) && Boolean(received) &&
     timingSafeEq(received!, BOTMAKER_WEBHOOK_SECRET);
   logStep("auth_check", {
@@ -393,17 +475,24 @@ Deno.serve(async (req) => {
   });
 
   if (!tokenOk) {
+    logStep("auth_invalid", { header_present: Boolean(received), expected_configured: Boolean(BOTMAKER_WEBHOOK_SECRET) });
+    let invalidPayload: Record<string, any> = {};
+    try { invalidPayload = rawBody ? JSON.parse(rawBody) : {}; } catch { invalidPayload = { raw_body: rawBody.slice(0, 2000) }; }
     await supabase.from("botmaker_events").insert({
       event_type: "signature_invalid",
-      payload: { reason: "Invalid or missing auth-bm-token" },
+      payload: { reason: "Invalid or missing auth-bm-token", ...invalidPayload },
+      raw_payload: { reason: "Invalid or missing auth-bm-token", ...invalidPayload },
+      auth_valid: false,
       processed: true,
       processing_error: "invalid_auth_bm_token",
     });
     await setDiagnostic(supabase, "last_invalid_webhook", "token_mismatch");
+    await setDiagnostic(supabase, "last_token_mismatch", maskSecret(received));
     return new Response(JSON.stringify({ error: "invalid_auth_bm_token" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+  logStep("auth_valid", { header_present: Boolean(received) });
 
   let payload: Record<string, any>;
   try {
@@ -414,15 +503,24 @@ Deno.serve(async (req) => {
     });
   }
 
-  await setDiagnostic(supabase, "last_valid_webhook", payload?.eventType ?? "unknown");
+  await setDiagnostic(supabase, "last_valid_webhook", payload?.eventType ?? payload?.type ?? "unknown");
 
+  logStep("extraction_started");
   const meta = extractMeta(payload);
   const event_id = pickEventId(payload);
-  logStep("event_extracted", {
+  logStep("extraction_success", {
     event_id, event_type: meta.event_type, conversation_id: meta.conversation_id,
     has_phone: Boolean(meta.customer_phone), direction: meta.direction, sender_type: meta.sender_type,
     has_text: Boolean(meta.message_text),
   });
+  await Promise.all([
+    setDiagnostic(supabase, "last_event_raw_type", meta.event_type),
+    setDiagnostic(supabase, "last_event_channel", meta.channel),
+    setDiagnostic(supabase, "last_event_sender_type", meta.sender_type),
+    setDiagnostic(supabase, "last_event_text_extracted", meta.message_text ? meta.message_text.slice(0, 240) : "—"),
+    setDiagnostic(supabase, "last_conversation_id_extracted", meta.conversation_id),
+    setDiagnostic(supabase, "last_phone_extracted", meta.customer_phone),
+  ]);
 
   // Idempotency
   if (event_id) {
@@ -441,7 +539,9 @@ Deno.serve(async (req) => {
     .from("botmaker_events").insert({
       event_id, event_type: meta.event_type, channel: meta.channel,
       conversation_id: meta.conversation_id, customer_phone: meta.customer_phone,
-      customer_name: meta.customer_name, payload,
+      customer_name: meta.customer_name, sender_type: meta.sender_type,
+      message_text: meta.message_text, auth_valid: true,
+      payload, raw_payload: payload, processed: true,
     }).select("id").single();
   if (evtErr) {
     logStep("event_insert_failed", { error: evtErr.message });
@@ -449,26 +549,44 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  logStep("event_stored", { id: insertedEvent.id });
+  logStep("raw_payload_saved", { id: insertedEvent.id });
+  await setDiagnostic(supabase, "last_stored_botmaker_event_id", insertedEvent.id);
 
   // Conversation + message + customer (best-effort)
   let bookingResult: any = null;
   try {
     if (meta.conversation_id) {
       const preview = typeof meta.message_text === "string" ? meta.message_text.slice(0, 140) : null;
+      let storedMessageId: string | null = null;
 
-      // Insert message
-      const { data: storedMsg } = await supabase.from("botmaker_messages").insert({
-        conversation_id: meta.conversation_id,
-        direction: meta.direction,
-        sender: meta.customer_name ?? meta.customer_phone ?? meta.sender_type,
-        body: typeof meta.message_text === "string" ? meta.message_text.slice(0, 4000) : null,
-        message_type: meta.message_type,
-        event_timestamp: meta.event_timestamp ? new Date(meta.event_timestamp).toISOString() : null,
-        raw: payload,
-        provider_message_id: event_id,
-      }).select("id").single();
-      logStep("message_stored", { id: storedMsg?.id });
+      if (typeof meta.message_text === "string" && meta.message_text.trim()) {
+        const safeTimestamp = meta.event_timestamp ? new Date(meta.event_timestamp) : null;
+        const { data: storedMsg, error: msgErr } = await supabase.from("botmaker_messages").insert({
+          conversation_id: meta.conversation_id,
+          botmaker_message_id: meta.botmaker_message_id,
+          direction: meta.direction,
+          sender: meta.customer_name ?? meta.customer_phone ?? meta.sender_type,
+          sender_type: meta.sender_type,
+          body: meta.message_text.slice(0, 4000),
+          message_text: meta.message_text.slice(0, 4000),
+          message_type: meta.message_type,
+          customer_phone: meta.customer_phone,
+          customer_name: meta.customer_name,
+          channel: meta.channel ?? "whatsapp",
+          event_timestamp: safeTimestamp && !Number.isNaN(safeTimestamp.getTime()) ? safeTimestamp.toISOString() : null,
+          raw: payload,
+          raw_payload: payload,
+          provider_message_id: event_id,
+        }).select("id").single();
+        if (msgErr) logStep("message_insert_failed", { error: msgErr.message });
+        else {
+          storedMessageId = storedMsg?.id ?? null;
+          logStep("message_inserted", { id: storedMessageId });
+          await setDiagnostic(supabase, "last_stored_botmaker_message_id", storedMessageId);
+        }
+      } else {
+        logStep("no_message_text_found", { conversation_id: meta.conversation_id, event_type: meta.event_type });
+      }
 
       // Conversation upsert
       const { data: convExisting } = await supabase
@@ -478,24 +596,30 @@ Deno.serve(async (req) => {
           customer_phone: meta.customer_phone ?? undefined,
           customer_name: meta.customer_name ?? undefined,
           last_message_at: new Date().toISOString(),
-          last_message_preview: preview,
+          last_message: preview ?? undefined,
+          last_message_preview: preview ?? undefined,
           last_direction: meta.direction,
           last_sender_type: meta.sender_type,
           channel: meta.channel ?? "whatsapp",
+          raw_payload: payload,
           updated_at: new Date().toISOString(),
         }).eq("id", convExisting.id);
       } else {
         await supabase.from("botmaker_conversations").insert({
           conversation_id: meta.conversation_id,
+          botmaker_conversation_id: meta.conversation_id,
           customer_phone: meta.customer_phone,
           customer_name: meta.customer_name,
           channel: meta.channel ?? "whatsapp",
           last_message_at: new Date().toISOString(),
+          last_message: preview,
           last_message_preview: preview,
           last_direction: meta.direction,
           last_sender_type: meta.sender_type,
+          raw_payload: payload,
         });
       }
+      logStep("conversation_upserted", { conversation_id: meta.conversation_id, stored_message_id: storedMessageId });
       await setDiagnostic(supabase, "last_conversation_stored", meta.conversation_id);
 
       // Customer upsert
@@ -530,7 +654,7 @@ Deno.serve(async (req) => {
       }
     }
   } catch (e) {
-    logStep("post_processing_error", { error: (e as Error).message });
+    logStep("error", { stage: "post_processing", message: (e as Error).message });
   }
 
   return new Response(JSON.stringify({ ok: true, id: insertedEvent.id, booking: bookingResult }), {

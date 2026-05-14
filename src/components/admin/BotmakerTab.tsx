@@ -15,9 +15,12 @@ interface BotmakerEvent {
   event_id: string | null;
   event_type: string;
   channel: string | null;
+  sender_type?: string | null;
   conversation_id: string | null;
   customer_phone: string | null;
   customer_name: string | null;
+  message_text?: string | null;
+  auth_valid?: boolean | null;
   processed: boolean;
   processing_error: string | null;
   created_at: string;
@@ -74,7 +77,6 @@ export function BotmakerTab() {
   const [healthStatus, setHealthStatus] = useState<'unknown' | 'ok' | 'error'>('unknown');
   const [signatureCheck, setSignatureCheck] = useState<string>('-');
   const [webchatProbe, setWebchatProbe] = useState<{ checked: boolean; scriptFound: boolean; url: string } | null>(null);
-  const [simulating, setSimulating] = useState(false);
   const [simulatingBooking, setSimulatingBooking] = useState(false);
   const [hideTestRequests, setHideTestRequests] = useState(true);
   const [diagnostics, setDiagnostics] = useState<Record<string, Diagnostic>>({});
@@ -85,8 +87,8 @@ export function BotmakerTab() {
   const load = async () => {
     setLoading(true);
     const [evts, reqs, bks, logs, diag, convCount] = await Promise.all([
-      supabase.from('botmaker_events').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('booking_requests').select('id,customer_name,customer_phone,address,preferred_date,preferred_time,service_type,botmaker_conversation_id,status,is_test,created_at').order('created_at', { ascending: false }).limit(30),
+      supabase.from('botmaker_events').select('id,event_id,event_type,channel,sender_type,conversation_id,customer_phone,customer_name,message_text,auth_valid,processed,processing_error,created_at').order('created_at', { ascending: false }).limit(20),
+      supabase.from('booking_requests').select('id,customer_name,customer_phone,address,preferred_date,preferred_time,service_type,botmaker_conversation_id,status,is_test,created_at').order('created_at', { ascending: false }).limit(50),
       supabase.from('bookings').select('id,customer_name,customer_phone,address,booking_date,booking_time,service_name,status,payment_status,botmaker_conversation_id,created_at').or('booking_source.eq.botmaker,communication_channel.eq.whatsapp,created_from.eq.botmaker').order('created_at', { ascending: false }).limit(15),
       supabase.from('botmaker_booking_logs').select('id,conversation_id,customer_phone,result_status,booking_id,booking_request_id,error,created_at').order('created_at', { ascending: false }).limit(20),
       supabase.from('botmaker_diagnostics').select('*'),
@@ -173,39 +175,6 @@ export function BotmakerTab() {
     }
   };
 
-  const simulateWebhookEvent = async (mode: 'authenticated' | 'unauthenticated') => {
-    setSimulating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('botmaker-simulate-event', {
-        body: { mode },
-      });
-      if (error) {
-        toast.error(`Simulación falló: ${error.message ?? 'error desconocido'}`);
-        return;
-      }
-      const status = (data as any)?.upstream_status;
-      const ok = (data as any)?.ok;
-      if (mode === 'unauthenticated') {
-        if (status === 401) {
-          toast.success(`Security test passed: webhook rejected unauthenticated request (HTTP 401).`);
-        } else {
-          toast.error(`Security test FAILED: webhook returned HTTP ${status}, expected 401.`);
-        }
-      } else {
-        if (ok && status && status < 400) {
-          toast.success(`Evento autenticado aceptado por el webhook (HTTP ${status}).`);
-        } else {
-          toast.error(`Webhook rechazó el evento autenticado (HTTP ${status}). Verificá BOTMAKER_WEBHOOK_SECRET.`);
-        }
-      }
-      load();
-    } catch (e) {
-      toast.error(`Error: ${(e as Error).message}`);
-    } finally {
-      setSimulating(false);
-    }
-  };
-
   const simulateBookingFromBotmaker = async () => {
     setSimulatingBooking(true);
     try {
@@ -279,9 +248,9 @@ export function BotmakerTab() {
           tone={healthStatus === 'ok' ? 'ok' : healthStatus === 'error' ? 'err' : 'muted'}
         />
         <StatusCard
-          label="Verificación token"
-          value={signatureCheck}
-          tone={signatureCheck === 'enabled' ? 'ok' : 'muted'}
+          label="BOTMAKER_WEBHOOK_SECRET"
+          value={signatureCheck === 'enabled' ? 'Sí' : signatureCheck === 'disabled' ? 'No' : signatureCheck}
+          tone={signatureCheck === 'enabled' ? 'ok' : 'err'}
         />
         <StatusCard
           label="Último evento"
@@ -331,17 +300,17 @@ export function BotmakerTab() {
 
       {/* Diagnóstico Botmaker */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-primary" />
-            <h3 className="font-semibold text-sm">Diagnóstico Botmaker</h3>
+            <h3 className="font-semibold text-sm">Webhook real-time diagnostics</h3>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 justify-end">
             <Button variant="outline" size="sm" onClick={() => runWebhookTest('without_token')}>
-              Test sin token (esperado 401)
+              Simular evento sin token
             </Button>
             <Button variant="outline" size="sm" onClick={() => runWebhookTest('with_token')}>
-              Test con token
+              Simular evento autenticado
             </Button>
             <Button variant="default" size="sm" onClick={() => runWebhookTest('summary_and_confirm')}>
               <FlaskConical className="w-3.5 h-3.5 mr-1" /> Simular resumen + confirmación
@@ -349,19 +318,33 @@ export function BotmakerTab() {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-          <DiagRow label="Conversaciones almacenadas" value={String(conversationCount)} />
-          <DiagRow label="Último webhook válido" value={fmtDiag(diagnostics['last_valid_webhook'])} />
-          <DiagRow label="Último webhook inválido" value={fmtDiag(diagnostics['last_invalid_webhook'])} />
-          <DiagRow label="Última conversación" value={fmtDiag(diagnostics['last_conversation_stored'])} />
-          <DiagRow label="Último resumen detectado" value={fmtDiag(diagnostics['last_summary_detected'])} />
-          <DiagRow label="Última confirmación" value={fmtDiag(diagnostics['last_confirmation_detected'])} />
-          <DiagRow label="Último booking_request creado" value={fmtDiag(diagnostics['last_booking_request_created'])} />
+          <DiagRow label="BOTMAKER_WEBHOOK_SECRET present" value={signatureCheck === 'enabled' ? 'Sí' : signatureCheck === 'disabled' ? 'No' : '—'} />
+          <DiagRow label="Last valid webhook event received at" value={fmtDiag(diagnostics['last_valid_webhook'])} />
+          <DiagRow label="Last invalid webhook event received at" value={fmtDiag(diagnostics['last_invalid_webhook'])} />
+          <DiagRow label="Last token mismatch at" value={fmtDiag(diagnostics['last_token_mismatch'])} />
+          <DiagRow label="Last event raw type" value={fmtDiag(diagnostics['last_event_raw_type'])} />
+          <DiagRow label="Last event channel" value={fmtDiag(diagnostics['last_event_channel'])} />
+          <DiagRow label="Last event sender type" value={fmtDiag(diagnostics['last_event_sender_type'])} />
+          <DiagRow label="Last event text extracted" value={fmtDiag(diagnostics['last_event_text_extracted'], 90)} />
+          <DiagRow label="Last conversation_id extracted" value={fmtDiag(diagnostics['last_conversation_id_extracted'], 80)} />
+          <DiagRow label="Last phone extracted" value={fmtDiag(diagnostics['last_phone_extracted'])} />
+          <DiagRow label="Last stored botmaker_event id" value={fmtDiag(diagnostics['last_stored_botmaker_event_id'])} />
+          <DiagRow label="Last stored botmaker_message id" value={fmtDiag(diagnostics['last_stored_botmaker_message_id'])} />
+          <DiagRow label="Last booking summary detected at" value={fmtDiag(diagnostics['last_summary_detected'])} />
+          <DiagRow label="Last confirmation detected at" value={fmtDiag(diagnostics['last_confirmation_detected'])} />
+          <DiagRow label="Last booking_request created from webhook at" value={fmtDiag(diagnostics['last_booking_request_created_from_webhook'])} />
         </div>
-        {conversationCount === 0 && (
+        {conversationCount === 0 && !diagnostics['last_valid_webhook'] && (
           <p className="text-xs text-amber-600">
-            No se recibieron eventos de Botmaker todavía. Verificá la URL del webhook y el header <code>auth-bm-token</code>.
+            No valid Botmaker webhook events received yet. Check Botmaker webhook URL, token, channels, and message type checkboxes.
           </p>
         )}
+        {diagnostics['last_token_mismatch'] && (
+          <p className="text-xs text-destructive">Webhook rejected events due to token mismatch.</p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          <strong className="text-foreground">Important:</strong> Enable Bot messages in Botmaker webhook. The booking parser needs the bot summary message plus the user confirmation. Enable user, bot, agent and event messages.
+        </p>
       </div>
 
       {/* Reservas desde WhatsApp */}
@@ -407,7 +390,7 @@ export function BotmakerTab() {
           </Button>
         </div>
         {(() => {
-          const visible = hideTestRequests ? requests.filter(r => !r.is_test) : requests;
+          const visible = hideTestRequests ? requests.filter(r => !r.is_test && !isInvalidPlaceholderRequest(r)) : requests;
           if (visible.length === 0) {
             return <p className="text-sm text-muted-foreground py-6 text-center">Sin pedidos pendientes.</p>;
           }
@@ -508,13 +491,13 @@ export function BotmakerTab() {
             <Button variant="outline" size="sm" onClick={verifyWebchat}>
               <ExternalLink className="w-3.5 h-3.5 mr-1" /> Verificar webchat
             </Button>
-            <Button variant="outline" size="sm" onClick={() => simulateWebhookEvent('unauthenticated')} disabled={simulating}>
+            <Button variant="outline" size="sm" onClick={() => runWebhookTest('without_token')}>
               <FlaskConical className="w-3.5 h-3.5 mr-1" />
-              {simulating ? 'Enviando…' : 'Simular evento sin token'}
+              Simular evento sin token
             </Button>
-            <Button variant="outline" size="sm" onClick={() => simulateWebhookEvent('authenticated')} disabled={simulating}>
+            <Button variant="outline" size="sm" onClick={() => runWebhookTest('with_token')}>
               <FlaskConical className="w-3.5 h-3.5 mr-1" />
-              {simulating ? 'Enviando…' : 'Simular evento autenticado'}
+              Simular evento autenticado
             </Button>
           </div>
         </div>
@@ -556,7 +539,10 @@ export function BotmakerTab() {
 
       {/* Botmaker flow instructions */}
       <div className="bg-muted/30 border border-border rounded-xl p-4 text-xs text-muted-foreground space-y-2">
-        <p className="font-semibold text-foreground">Flow de reserva por WhatsApp (Botmaker)</p>
+        <p className="font-semibold text-foreground">Configuración Botmaker obligatoria</p>
+        <p>Para el parser global, el webhook de Botmaker debe enviar: Mensajes del usuario, Mensajes del Bot, Mensajes de Agentes y Mensajes de eventos.</p>
+        <p className="text-amber-600">Important: Enable Bot messages in Botmaker webhook. The booking parser needs the bot summary message plus the user confirmation.</p>
+        <p className="font-semibold text-foreground pt-2">Flow de reserva por WhatsApp (Code Action opcional)</p>
         <pre className="bg-background border border-border rounded p-2 overflow-x-auto text-[10px]">{`const res = await fetch("${CREATE_BOOKING_URL}", {
   method: "POST",
   headers: {
@@ -606,10 +592,15 @@ result.done();                 // siempre cerrar; nunca encadenar a fallback gen
   );
 }
 
-function fmtDiag(d?: Diagnostic): string {
+function fmtDiag(d?: Diagnostic, max = 36): string {
   if (!d || !d.value_at) return '—';
   const when = new Date(d.value_at).toLocaleString('es-AR');
-  return d.value_text ? `${when} · ${d.value_text.slice(0, 30)}` : when;
+  return d.value_text ? `${when} · ${d.value_text.slice(0, max)}` : when;
+}
+
+function isInvalidPlaceholderRequest(r: BookingRequest): boolean {
+  const raw = `${r.customer_name ?? ''} ${r.address ?? ''} ${r.service_type ?? ''}`;
+  return /\{\{|\$\{/.test(raw);
 }
 
 function DiagRow({ label, value }: { label: string; value: string }) {

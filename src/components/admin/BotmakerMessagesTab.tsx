@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface BotmakerConversation {
   id: string;
@@ -27,6 +28,10 @@ interface BotmakerMessage {
   direction: string;
   sender: string | null;
   body: string | null;
+  message_text?: string | null;
+  sender_type?: string | null;
+  raw_payload?: any;
+  raw?: any;
   created_at: string;
 }
 
@@ -56,7 +61,7 @@ export function BotmakerMessagesTab() {
   const fetchMessages = async (conversationId: string) => {
     const { data, error } = await supabase
       .from("botmaker_messages")
-      .select("*")
+      .select("id,conversation_id,direction,sender,sender_type,body,message_text,raw,raw_payload,created_at")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true })
       .limit(200);
@@ -134,9 +139,10 @@ export function BotmakerMessagesTab() {
           {loading ? (
             <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
           ) : filtered.length === 0 ? (
-            <div className="py-6 text-center space-y-1">
+            <div className="py-6 text-center space-y-2">
               <p className="text-sm text-muted-foreground">Sin conversaciones todavía.</p>
-              <p className="text-xs text-amber-600">Verificá que el webhook de Botmaker esté apuntando a Washero y use el header <code>auth-bm-token</code>.</p>
+              <p className="text-xs text-amber-600">No Botmaker events received yet. Check webhook config.</p>
+              <p className="text-xs text-muted-foreground">Si hay eventos inválidos, revisá Botmaker / Comunicaciones para confirmar si fueron rechazados por token mismatch.</p>
             </div>
           ) : (
             <div className="overflow-y-auto -mx-1">
@@ -152,6 +158,12 @@ export function BotmakerMessagesTab() {
                   </div>
                   <div className="text-xs text-muted-foreground truncate">{c.last_message_preview ?? "—"}</div>
                   <div className="text-[10px] text-muted-foreground">{new Date(c.last_message_at).toLocaleString("es-AR")}</div>
+                  {(c.linked_booking_request_id || c.linked_booking_id) && (
+                    <div className="flex gap-1 mt-1">
+                      {c.linked_booking_request_id && <Badge variant="secondary" className="text-[10px]">pedido</Badge>}
+                      {c.linked_booking_id && <Badge variant="default" className="text-[10px]">reserva</Badge>}
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
@@ -170,6 +182,10 @@ export function BotmakerMessagesTab() {
                 <div className="min-w-0">
                   <div className="font-semibold truncate">{selected.customer_name ?? selected.customer_phone}</div>
                   <div className="text-xs text-muted-foreground truncate">{selected.customer_phone} · ID {selected.conversation_id}</div>
+                  <div className="flex gap-1 mt-1">
+                    {selected.linked_booking_request_id && <Badge variant="secondary" className="text-[10px]">booking_request vinculado</Badge>}
+                    {selected.linked_booking_id && <Badge variant="default" className="text-[10px]">booking vinculado</Badge>}
+                  </div>
                 </div>
                 <a
                   href={`https://go.botmaker.com/`}
@@ -191,11 +207,22 @@ export function BotmakerMessagesTab() {
                       m.direction === "out" ? "bg-primary/10 text-foreground" :
                       m.direction === "event" ? "bg-muted text-muted-foreground text-[11px] italic" :
                       "bg-muted text-foreground";
+                    const text = m.body ?? m.message_text ?? "—";
+                    const raw = m.raw_payload ?? m.raw;
                     return (
                       <div key={m.id} className={`flex ${align}`}>
                         <div className={`rounded-lg px-3 py-2 max-w-[80%] text-sm ${tone}`}>
-                          <div className="whitespace-pre-wrap break-words">{m.body ?? "—"}</div>
+                          <div className="text-[10px] text-muted-foreground mb-1">{m.sender_type ?? m.sender ?? m.direction}</div>
+                          <div className="whitespace-pre-wrap break-words">{text}</div>
                           <div className="text-[10px] text-muted-foreground mt-1">{new Date(m.created_at).toLocaleString("es-AR")}</div>
+                          {raw && (
+                            <Collapsible>
+                              <CollapsibleTrigger className="text-[10px] text-primary underline mt-1">raw payload</CollapsibleTrigger>
+                              <CollapsibleContent>
+                                <pre className="mt-1 max-h-44 overflow-auto rounded bg-background/80 p-2 text-[10px] text-muted-foreground">{JSON.stringify(raw, null, 2)}</pre>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          )}
                         </div>
                       </div>
                     );
