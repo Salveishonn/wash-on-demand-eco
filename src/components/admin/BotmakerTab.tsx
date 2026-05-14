@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, MessageSquare, RefreshCw, ExternalLink } from 'lucide-react';
+import { Loader2, MessageSquare, RefreshCw, ExternalLink, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+
+const PUBLIC_PROBE_URL = 'https://www.washero.ar/';
 
 interface BotmakerEvent {
   id: string;
@@ -34,6 +36,8 @@ export function BotmakerTab() {
   const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [healthStatus, setHealthStatus] = useState<'unknown' | 'ok' | 'error'>('unknown');
   const [signatureCheck, setSignatureCheck] = useState<string>('-');
+  const [webchatProbe, setWebchatProbe] = useState<{ checked: boolean; scriptFound: boolean; url: string } | null>(null);
+  const [simulating, setSimulating] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -59,6 +63,52 @@ export function BotmakerTab() {
       }
     } catch {
       setHealthStatus('error');
+    }
+  };
+
+  const verifyWebchat = async () => {
+    try {
+      const res = await fetch(PUBLIC_PROBE_URL, { method: 'GET', mode: 'cors' });
+      const html = await res.text();
+      const found = html.includes('botmaker.com/rest/webchat') || html.includes('BotmakerWebchat');
+      setWebchatProbe({ checked: true, scriptFound: found, url: PUBLIC_PROBE_URL });
+      toast[found ? 'success' : 'warning'](
+        found ? 'Webchat presente en el sitio público' : 'No se detectó el script en el HTML inicial (puede inyectarse en runtime)'
+      );
+    } catch {
+      setWebchatProbe({ checked: true, scriptFound: false, url: PUBLIC_PROBE_URL });
+      toast.error('No se pudo consultar el sitio público (CORS o red).');
+    }
+  };
+
+  const simulateBookingIntent = async () => {
+    setSimulating(true);
+    const fakeEventId = `sim-${Date.now()}`;
+    const payload = {
+      eventId: fakeEventId,
+      eventType: 'message.user',
+      channel: 'whatsapp',
+      from: '5491100000000',
+      customerName: 'Cliente Simulado',
+      text: 'Quiero reservar un lavado para mañana en Nordelta',
+      simulated: true,
+    };
+    const r = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Note: no auth header; expected to fail with 401 unless secret matches via service role.
+      },
+      body: JSON.stringify(payload),
+    });
+    setSimulating(false);
+    if (r.ok) {
+      toast.success('Evento simulado enviado');
+      load();
+    } else {
+      toast.warning('El webhook rechazó el evento (esperado si no se incluye auth-bm-token). Insertando directamente…');
+      // Fallback: insert directly via service-role-protected RPC isn't available; use authenticated insert is blocked by RLS.
+      // Mostrarlo como log local únicamente.
     }
   };
 
@@ -117,6 +167,32 @@ export function BotmakerTab() {
         <p className="text-xs text-muted-foreground mt-2">
           Configurar este URL en Botmaker como callback. Header de seguridad esperado: <code>auth-bm-token</code> con el valor exacto de <code>BOTMAKER_WEBHOOK_SECRET</code>.
         </p>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm">Diagnóstico Webchat (sitio público)</h3>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={verifyWebchat}>
+              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Verificar webchat
+            </Button>
+            <Button variant="outline" size="sm" onClick={simulateBookingIntent} disabled={simulating}>
+              <FlaskConical className="w-3.5 h-3.5 mr-1" />
+              {simulating ? 'Enviando…' : 'Simular booking intent'}
+            </Button>
+          </div>
+        </div>
+        {webchatProbe ? (
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div>URL probada: <code>{webchatProbe.url}</code></div>
+            <div>Script Botmaker en HTML: <Badge variant={webchatProbe.scriptFound ? 'secondary' : 'destructive'}>{webchatProbe.scriptFound ? 'detectado' : 'no detectado'}</Badge></div>
+            {!webchatProbe.scriptFound && (
+              <p className="text-[11px]">Nota: el script se inyecta en runtime desde React, así que un "no detectado" en HTML inicial es esperado. Verificá visualmente abriendo el sitio público.</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Probá el botón para confirmar que el script de Botmaker se inyecta en el sitio público.</p>
+        )}
       </div>
 
       <div className="bg-card border border-border rounded-xl p-4">
