@@ -30,6 +30,7 @@ interface BookingRequest {
   service_type: string | null;
   botmaker_conversation_id: string | null;
   status: string;
+  is_test: boolean | null;
   created_at: string;
 }
 
