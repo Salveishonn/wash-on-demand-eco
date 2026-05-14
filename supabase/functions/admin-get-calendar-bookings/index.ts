@@ -29,42 +29,67 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
 
     if (!authHeader?.startsWith("Bearer ")) {
+      console.error("[admin-get-calendar-bookings] Missing Authorization header");
       return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Service-role client; validate user via token explicitly.
+    // Service-role client; validate user via JWT claims (works even if session was rotated).
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const token = authHeader.replace("Bearer ", "");
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser(token);
+    let userId: string | null = null;
 
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Try getClaims first (verifies JWT signature, no session lookup needed)
+    try {
+      const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+      if (!claimsError && claimsData?.claims?.sub) {
+        userId = claimsData.claims.sub as string;
+        console.log("[admin-get-calendar-bookings] User identified via claims:", userId);
+      } else if (claimsError) {
+        console.warn("[admin-get-calendar-bookings] getClaims failed, falling back to getUser:", claimsError.message);
+      }
+    } catch (e) {
+      console.warn("[admin-get-calendar-bookings] getClaims threw, falling back:", (e as Error).message);
+    }
+
+    // Fallback: getUser(token)
+    if (!userId) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+      if (userError || !user) {
+        console.error("[admin-get-calendar-bookings] Invalid JWT:", userError?.message);
+        return new Response(JSON.stringify({ error: "Unauthorized", details: userError?.message }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = user.id;
+      console.log("[admin-get-calendar-bookings] User identified via getUser:", userId);
     }
 
     // Admin role check
-    const { data: roleData } = await supabase
+    const { data: roleData, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("role", "admin")
-      .single();
+      .maybeSingle();
+
+    if (roleError) {
+      console.error("[admin-get-calendar-bookings] Role lookup error:", roleError.message);
+    }
 
     if (!roleData) {
+      console.warn("[admin-get-calendar-bookings] Admin role NOT found for user:", userId);
       return new Response(JSON.stringify({ error: "Admin access required" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    console.log("[admin-get-calendar-bookings] Admin role confirmed for user:", userId);
 
     // Parse filters from request body
     const filters: CalendarFilters = await req.json();
