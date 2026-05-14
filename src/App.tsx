@@ -52,6 +52,7 @@ const App = () => (
         <BrowserRouter>
           <ScrollToTop />
           <MetaPixelPageView />
+          <BotmakerWebchat />
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Index />} />
