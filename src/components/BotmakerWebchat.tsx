@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 
-const BOTMAKER_SCRIPT_SRC = "https://go.botmaker.com/rest/webchat/p/0OFW1NYUKE/init.js";
+const BOTMAKER_SCRIPT_SRC = "https://go.botmaker.com/rest/webchat/p/O0FW1NYUKE/init.js";
 
 const EXCLUDED_PREFIXES = [
   "/admin",
