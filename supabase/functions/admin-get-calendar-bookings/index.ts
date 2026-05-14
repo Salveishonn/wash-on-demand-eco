@@ -25,31 +25,24 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authHeader = req.headers.get("Authorization");
 
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Supabase client USING USER SESSION (this is the key fix)
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: authHeader,
-        },
-      },
-    });
+    // Service-role client; validate user via token explicitly.
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const token = authHeader.replace("Bearer ", "");
 
-    // Get logged-in user
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
