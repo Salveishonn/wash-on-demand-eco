@@ -24,22 +24,19 @@ function timingSafeEq(a: string, b: string): boolean {
 
 function maskSecret(value: string | null): string {
   if (!value) return "missing";
-  const trimmed = value.trim();
-  if (trimmed.length <= 8) return `${trimmed.slice(0, 2)}***${trimmed.slice(-2)} (${trimmed.length})`;
-  return `${trimmed.slice(0, 4)}***${trimmed.slice(-4)} (${trimmed.length})`;
+  if (value.length <= 8) return `${value.slice(0, 2)}***${value.slice(-2)} (${value.length})`;
+  return `${value.slice(0, 4)}***${value.slice(-4)} (${value.length})`;
 }
 
 function verifyBotmakerToken(req: Request): boolean {
   const received = req.headers.get("auth-bm-token");
   const expected = BOTMAKER_WEBHOOK_SECRET;
-  const receivedNormalized = received?.trim() ?? "";
-  const expectedNormalized = expected.trim();
-  const matches = Boolean(expectedNormalized) && timingSafeEq(receivedNormalized, expectedNormalized);
+  const matches = Boolean(expected) && Boolean(received) && timingSafeEq(received, expected);
 
   console.log("[botmaker-webhook] auth-bm-token check", {
     received: maskSecret(received),
     expected: maskSecret(expected),
-    expected_configured: Boolean(expectedNormalized),
+    expected_configured: Boolean(expected),
     matches,
   });
 
@@ -97,7 +94,7 @@ Deno.serve(async (req) => {
         ok: true,
         service: "botmaker-webhook",
         auth_bm_token_check: BOTMAKER_WEBHOOK_SECRET ? "enabled" : "disabled",
-        signature_check: BOTMAKER_WEBHOOK_SECRET ? "enabled" : "disabled",
+        hmac_required: false,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
