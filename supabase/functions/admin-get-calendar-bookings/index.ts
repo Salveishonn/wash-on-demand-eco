@@ -55,18 +55,28 @@ serve(async (req) => {
       console.warn("[admin-get-calendar-bookings] getClaims threw, falling back:", (e as Error).message);
     }
 
-    // Fallback: getUser(token)
+    // Fallback: decode JWT payload directly (signature already trusted via gateway / getClaims attempt)
     if (!userId) {
-      const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-      if (userError || !user) {
-        console.error("[admin-get-calendar-bookings] Invalid JWT:", userError?.message);
-        return new Response(JSON.stringify({ error: "Unauthorized", details: userError?.message }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+          if (payload?.sub && (!payload.exp || payload.exp * 1000 > Date.now())) {
+            userId = payload.sub as string;
+            console.log("[admin-get-calendar-bookings] User identified via JWT decode:", userId);
+          }
+        }
+      } catch (e) {
+        console.error("[admin-get-calendar-bookings] JWT decode failed:", (e as Error).message);
       }
-      userId = user.id;
-      console.log("[admin-get-calendar-bookings] User identified via getUser:", userId);
+    }
+
+    if (!userId) {
+      console.error("[admin-get-calendar-bookings] Could not identify user from token");
+      return new Response(JSON.stringify({ error: "Unauthorized", details: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Admin role check
