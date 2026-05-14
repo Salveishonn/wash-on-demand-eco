@@ -26,7 +26,7 @@ import { SubscriptionsTab } from '@/components/admin/SubscriptionsTab';
 import { CalendarTab } from '@/components/admin/CalendarTab';
 import { FinanzasTab } from '@/components/admin/FinanzasTab';
 import { FacturasTab } from '@/components/admin/FacturasTab';
-import { MessagesTab } from '@/components/admin/MessagesTab';
+import { BotmakerMessagesTab as MessagesTab } from '@/components/admin/BotmakerMessagesTab';
 import { DisponibilidadTab } from '@/components/admin/DisponibilidadTab';
 import { WhatsAppSettingsTab } from '@/components/admin/WhatsAppSettingsTab';
 import { PricingTab } from '@/components/admin/PricingTab';
