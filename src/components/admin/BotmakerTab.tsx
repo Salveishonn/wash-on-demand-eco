@@ -148,14 +148,24 @@ export function BotmakerTab() {
   const simulateBookingFromBotmaker = async () => {
     setSimulatingBooking(true);
     try {
-      const { data: tokenData, error: tokenErr } = await supabase.functions.invoke('botmaker-create-booking-simulate');
-      if (tokenErr) {
-        // Fallback: call directly without secret will be 401. We need a server simulator.
-        // Use the convert helper below; for now just inform admin.
-        toast.error('La simulación requiere el endpoint admin de simulación. Usá Botmaker para probar el flujo real.');
+      const { data, error } = await supabase.functions.invoke('botmaker-create-booking-simulate', {
+        body: {},
+      });
+      if (error) {
+        toast.error(`Simulación falló: ${error.message ?? 'error desconocido'}`);
       } else {
-        toast.success(`Simulación: ${tokenData?.status ?? 'ok'}`);
-        load();
+        const result = (data as any)?.result ?? {};
+        const status = result.status ?? (data as any)?.status ?? 'ok';
+        const detail =
+          result.booking_id ? `booking ${String(result.booking_id).slice(0, 8)}` :
+          result.request_id ? `pedido ${String(result.request_id).slice(0, 8)}` :
+          result.message ?? '';
+        const label = `Simulación: ${status}${detail ? ` · ${detail}` : ''}`;
+        if (status === 'booking_created') toast.success(label);
+        else if (status === 'needs_review') toast.warning(label);
+        else if (status === 'error') toast.error(label);
+        else toast.message(label);
+        await load();
       }
     } catch (e: any) {
       toast.error(`Simulación falló: ${e?.message ?? 'unknown'}`);
