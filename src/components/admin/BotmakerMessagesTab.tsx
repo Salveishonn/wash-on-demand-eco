@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface BotmakerConversation {
   id: string;
@@ -27,6 +28,10 @@ interface BotmakerMessage {
   direction: string;
   sender: string | null;
   body: string | null;
+  message_text?: string | null;
+  sender_type?: string | null;
+  raw_payload?: any;
+  raw?: any;
   created_at: string;
 }
 
@@ -56,7 +61,7 @@ export function BotmakerMessagesTab() {
   const fetchMessages = async (conversationId: string) => {
     const { data, error } = await supabase
       .from("botmaker_messages")
-      .select("*")
+      .select("id,conversation_id,direction,sender,sender_type,body,message_text,raw,raw_payload,created_at")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true })
       .limit(200);
