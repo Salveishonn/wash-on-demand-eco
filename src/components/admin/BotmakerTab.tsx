@@ -372,9 +372,13 @@ export function BotmakerTab() {
             <Button variant="outline" size="sm" onClick={verifyWebchat}>
               <ExternalLink className="w-3.5 h-3.5 mr-1" /> Verificar webchat
             </Button>
-            <Button variant="outline" size="sm" onClick={simulateWebhookEvent} disabled={simulating}>
+            <Button variant="outline" size="sm" onClick={() => simulateWebhookEvent('unauthenticated')} disabled={simulating}>
               <FlaskConical className="w-3.5 h-3.5 mr-1" />
-              {simulating ? 'Enviando…' : 'Simular evento'}
+              {simulating ? 'Enviando…' : 'Simular evento sin token'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => simulateWebhookEvent('authenticated')} disabled={simulating}>
+              <FlaskConical className="w-3.5 h-3.5 mr-1" />
+              {simulating ? 'Enviando…' : 'Simular evento autenticado'}
             </Button>
           </div>
         </div>
