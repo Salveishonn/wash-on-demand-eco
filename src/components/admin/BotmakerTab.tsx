@@ -79,7 +79,7 @@ export function BotmakerTab() {
     setLoading(true);
     const [evts, reqs, bks, logs] = await Promise.all([
       supabase.from('botmaker_events').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('booking_requests').select('id,customer_name,customer_phone,address,preferred_date,preferred_time,service_type,botmaker_conversation_id,status,created_at').order('created_at', { ascending: false }).limit(15),
+      supabase.from('booking_requests').select('id,customer_name,customer_phone,address,preferred_date,preferred_time,service_type,botmaker_conversation_id,status,is_test,created_at').order('created_at', { ascending: false }).limit(30),
       supabase.from('bookings').select('id,customer_name,customer_phone,address,booking_date,booking_time,service_name,status,payment_status,botmaker_conversation_id,created_at').eq('booking_source', 'botmaker').order('created_at', { ascending: false }).limit(15),
       supabase.from('botmaker_booking_logs').select('id,conversation_id,customer_phone,result_status,booking_id,booking_request_id,error,created_at').order('created_at', { ascending: false }).limit(20),
     ]);
