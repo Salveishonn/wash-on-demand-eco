@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, MessageSquare, RefreshCw, ExternalLink } from 'lucide-react';
+import { Loader2, MessageSquare, RefreshCw, ExternalLink, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+
+const PUBLIC_PROBE_URL = 'https://www.washero.ar/';
 
 interface BotmakerEvent {
   id: string;
