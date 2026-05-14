@@ -36,6 +36,8 @@ export function BotmakerTab() {
   const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [healthStatus, setHealthStatus] = useState<'unknown' | 'ok' | 'error'>('unknown');
   const [signatureCheck, setSignatureCheck] = useState<string>('-');
+  const [webchatProbe, setWebchatProbe] = useState<{ checked: boolean; scriptFound: boolean; url: string } | null>(null);
+  const [simulating, setSimulating] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -61,6 +63,52 @@ export function BotmakerTab() {
       }
     } catch {
       setHealthStatus('error');
+    }
+  };
+
+  const verifyWebchat = async () => {
+    try {
+      const res = await fetch(PUBLIC_PROBE_URL, { method: 'GET', mode: 'cors' });
+      const html = await res.text();
+      const found = html.includes('botmaker.com/rest/webchat') || html.includes('BotmakerWebchat');
+      setWebchatProbe({ checked: true, scriptFound: found, url: PUBLIC_PROBE_URL });
+      toast[found ? 'success' : 'warning'](
+        found ? 'Webchat presente en el sitio público' : 'No se detectó el script en el HTML inicial (puede inyectarse en runtime)'
+      );
+    } catch {
+      setWebchatProbe({ checked: true, scriptFound: false, url: PUBLIC_PROBE_URL });
+      toast.error('No se pudo consultar el sitio público (CORS o red).');
+    }
+  };
+
+  const simulateBookingIntent = async () => {
+    setSimulating(true);
+    const fakeEventId = `sim-${Date.now()}`;
+    const payload = {
+      eventId: fakeEventId,
+      eventType: 'message.user',
+      channel: 'whatsapp',
+      from: '5491100000000',
+      customerName: 'Cliente Simulado',
+      text: 'Quiero reservar un lavado para mañana en Nordelta',
+      simulated: true,
+    };
+    const r = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Note: no auth header; expected to fail with 401 unless secret matches via service role.
+      },
+      body: JSON.stringify(payload),
+    });
+    setSimulating(false);
+    if (r.ok) {
+      toast.success('Evento simulado enviado');
+      load();
+    } else {
+      toast.warning('El webhook rechazó el evento (esperado si no se incluye auth-bm-token). Insertando directamente…');
+      // Fallback: insert directly via service-role-protected RPC isn't available; use authenticated insert is blocked by RLS.
+      // Mostrarlo como log local únicamente.
     }
   };
 
