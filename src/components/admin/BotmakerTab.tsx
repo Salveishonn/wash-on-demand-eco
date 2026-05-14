@@ -121,29 +121,36 @@ export function BotmakerTab() {
     }
   };
 
-  const simulateWebhookEvent = async () => {
+  const simulateWebhookEvent = async (mode: 'authenticated' | 'unauthenticated') => {
     setSimulating(true);
-    const fakeEventId = `sim-${Date.now()}`;
-    const payload = {
-      eventId: fakeEventId,
-      eventType: 'message.user',
-      channel: 'whatsapp',
-      from: '5491100000000',
-      customerName: 'Cliente Simulado',
-      text: 'Quiero reservar un lavado para mañana en Nordelta',
-      simulated: true,
-    };
-    const r = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    setSimulating(false);
-    if (r.ok) {
-      toast.success('Evento simulado enviado');
+    try {
+      const { data, error } = await supabase.functions.invoke('botmaker-simulate-event', {
+        body: { mode },
+      });
+      if (error) {
+        toast.error(`Simulación falló: ${error.message ?? 'error desconocido'}`);
+        return;
+      }
+      const status = (data as any)?.upstream_status;
+      const ok = (data as any)?.ok;
+      if (mode === 'unauthenticated') {
+        if (status === 401) {
+          toast.success(`Security test passed: webhook rejected unauthenticated request (HTTP 401).`);
+        } else {
+          toast.error(`Security test FAILED: webhook returned HTTP ${status}, expected 401.`);
+        }
+      } else {
+        if (ok && status && status < 400) {
+          toast.success(`Evento autenticado aceptado por el webhook (HTTP ${status}).`);
+        } else {
+          toast.error(`Webhook rechazó el evento autenticado (HTTP ${status}). Verificá BOTMAKER_WEBHOOK_SECRET.`);
+        }
+      }
       load();
-    } else {
-      toast.warning('El webhook rechazó el evento (esperado si no se incluye auth-bm-token).');
+    } catch (e) {
+      toast.error(`Error: ${(e as Error).message}`);
+    } finally {
+      setSimulating(false);
     }
   };
 
@@ -365,9 +372,13 @@ export function BotmakerTab() {
             <Button variant="outline" size="sm" onClick={verifyWebchat}>
               <ExternalLink className="w-3.5 h-3.5 mr-1" /> Verificar webchat
             </Button>
-            <Button variant="outline" size="sm" onClick={simulateWebhookEvent} disabled={simulating}>
+            <Button variant="outline" size="sm" onClick={() => simulateWebhookEvent('unauthenticated')} disabled={simulating}>
               <FlaskConical className="w-3.5 h-3.5 mr-1" />
-              {simulating ? 'Enviando…' : 'Simular evento'}
+              {simulating ? 'Enviando…' : 'Simular evento sin token'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => simulateWebhookEvent('authenticated')} disabled={simulating}>
+              <FlaskConical className="w-3.5 h-3.5 mr-1" />
+              {simulating ? 'Enviando…' : 'Simular evento autenticado'}
             </Button>
           </div>
         </div>
