@@ -42,7 +42,6 @@ export const BotmakerWebchat = () => {
     }
 
     // Public route: inject if not already present
-    if (injectedRef.current) return;
     const alreadyInDom = document.querySelector(
       `script[src="${BOTMAKER_SCRIPT_SRC}"]`
     );
