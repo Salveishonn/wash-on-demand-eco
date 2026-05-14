@@ -61,53 +61,127 @@ async function setDiagnostic(supabase: any, key: string, value_text?: string | n
 // Payload extraction
 // ──────────────────────────────────────────────────────────────────────────
 
-function pickEventId(p: Record<string, any>): string | null {
-  for (const k of ["eventId", "event_id", "id", "messageId", "message_id"]) {
-    const v = p[k]; if (typeof v === "string" && v) return v;
+type ExtractedMeta = {
+  event_type: string;
+  conversation_id: string | null;
+  customer_phone: string | null;
+  customer_name: string | null;
+  channel: string | null;
+  direction: "in" | "out" | "event";
+  sender_type: "user" | "bot" | "agent" | "system";
+  message_text: string | null;
+  message_type: string;
+  event_timestamp: string | null;
+  botmaker_message_id: string | null;
+};
+
+function getPath(obj: any, path: string): unknown {
+  return path.split(".").reduce((acc, part) => {
+    if (acc == null) return undefined;
+    const match = part.match(/^(\w+)\[(\d+)\]$/);
+    if (match) return acc?.[match[1]]?.[Number(match[2])];
+    return acc?.[part];
+  }, obj);
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function firstString(obj: any, paths: string[]): string | null {
+  for (const path of paths) {
+    const value = asString(getPath(obj, path));
+    if (value) return value;
   }
   return null;
 }
 
-function extractMeta(p: Record<string, any>) {
-  const event_type = String(p.eventType ?? p.event_type ?? p.type ?? "unknown");
-  const conversation_id =
-    p.chatId ?? p.chat_id ?? p.conversationId ?? p.conversation_id ?? p.customerId ?? p.customer_id ?? null;
-  const customer_phone =
-    p.realWhatsAppId ?? p.from ?? p.phone ?? p.customerPhone ?? p.customer_phone ?? p.whatsappId ?? null;
-  const customer_name =
-    p.fullName ?? p.name ?? p.customerName ?? p.customer_name ?? p.contactName ?? p.contact_name ?? null;
-  const channel = p.channel ?? p.platform ?? "whatsapp";
+function firstMessage(p: Record<string, any>): Record<string, any> | null {
+  if (Array.isArray(p.messages) && p.messages.length > 0 && typeof p.messages[0] === "object") return p.messages[0];
+  if (Array.isArray(p.data?.messages) && p.data.messages.length > 0 && typeof p.data.messages[0] === "object") return p.data.messages[0];
+  if (typeof p.message === "object" && p.message) return p.message;
+  if (typeof p.event?.message === "object" && p.event.message) return p.event.message;
+  return null;
+}
 
-  // Direction
+function pickEventId(p: Record<string, any>): string | null {
+  return firstString(p, [
+    "eventId", "event_id", "id", "messageId", "message_id",
+    "messages[0]._id_", "messages[0].id", "messages[0].messageId",
+    "data.messages[0]._id_", "event.message.id",
+  ]);
+}
+
+function normalizePhoneLike(value: string | null): string | null {
+  if (!value) return null;
+  const digits = value.replace(/[^0-9]/g, "");
+  return digits.length >= 8 ? digits : value;
+}
+
+function extractMeta(p: Record<string, any>): ExtractedMeta {
+  const msg = firstMessage(p);
+  const event_type = firstString(p, ["eventType", "event_type", "type"]) ?? "unknown";
+  const conversation_id = firstString(p, [
+    "customerId", "chatId", "chat.id", "conversationId", "conversation.id",
+    "sessionId", "userId", "contactId", "conversation_id", "chat_id", "customer_id",
+  ]);
+  const customer_phone = normalizePhoneLike(firstString(p, [
+    "realWhatsAppId", "whatsappId", "customer.phone", "contact.phone", "user.phone",
+    "from", "sender", "phone", "customerPhone", "customer_phone", "contactId", "whatsappNumber",
+  ]));
+  const firstName = firstString(p, ["firstName"]);
+  const lastName = firstString(p, ["lastName"]);
+  const nameFromParts = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
+  const customer_name = firstString(p, [
+    "fullName", "customer.name", "contact.name", "user.name", "name",
+    "customerName", "customer_name", "contactName", "contact_name", "whatsappNickName",
+    "messages[0].fromName", "data.messages[0].fromName",
+  ]) ?? nameFromParts;
+  const channel = firstString(p, ["channel", "chatPlatform", "platform", "chat.channel"])
+    ?? (customer_phone ? "whatsapp" : firstString(p, ["webchatId", "webchat.id"]) ? "webchat" : null);
+
+  const message_text = firstString(p, [
+    "message", "text", "message.text", "content", "content.text", "body",
+    "data.text", "data.message", "data.message.text", "data.messages[0].text",
+    "data.messages[0].message", "messages[0].text", "messages[0].message",
+    "event.message", "event.message.text", "event.text",
+    "lastUserSentence", "lastBotSentence", "lastSentence",
+  ]);
+  const message_type = firstString(p, ["messageType", "message_type", "messages[0].type", "data.messages[0].type"]) ?? "text";
+  const event_timestamp = firstString(p, [
+    "timestamp", "ts", "created_at", "date", "messages[0].date", "data.messages[0].date",
+    "event.timestamp", "statusChangeTime",
+  ]);
+  const botmaker_message_id = firstString(p, [
+    "messageId", "message_id", "messages[0]._id_", "messages[0].id", "messages[0].messageId",
+    "data.messages[0]._id_", "event.message.id",
+  ]);
+
+  const explicitDirection = String(p.direction ?? p.way ?? msg?.direction ?? "").toLowerCase();
+  const fromValue = String(msg?.from ?? p.fromType ?? p.from_type ?? p.who ?? "").toLowerCase();
+  const senderRaw = String(p.who ?? p.senderType ?? p.sender_type ?? p.sender ?? msg?.senderType ?? "").toLowerCase();
+  const eventLower = event_type.toLowerCase();
+
   let direction: "in" | "out" | "event" = "in";
-  const explicit = String(p.direction ?? p.way ?? "").toLowerCase();
-  if (explicit === "out" || explicit === "outbound" || explicit === "from-business") direction = "out";
-  else if (explicit === "in" || explicit === "inbound" || explicit === "from-user") direction = "in";
-  else if (event_type.toLowerCase().includes("outbound") || event_type.toLowerCase().includes("bot")) direction = "out";
-  else if (event_type.toLowerCase().includes("event") || event_type.toLowerCase().includes("status")) direction = "event";
+  if (eventLower.includes("status") || eventLower.includes("event") || message_type.toLowerCase() === "event") direction = "event";
+  if (explicitDirection === "out" || explicitDirection === "outbound" || explicitDirection === "from-business") direction = "out";
+  if (explicitDirection === "in" || explicitDirection === "inbound" || explicitDirection === "from-user") direction = "in";
+  if (msg?.fromCustomer === true || fromValue === "user" || fromValue === "customer") direction = "in";
+  if (msg?.fromCustomer === false || ["bot", "agent", "operator"].some((x) => fromValue.includes(x))) direction = "out";
+  if (eventLower.includes("bot") || eventLower.includes("outbound")) direction = "out";
 
-  // Sender type
-  const who = String(p.who ?? p.senderType ?? p.sender_type ?? p.sender ?? "").toLowerCase();
-  let sender_type: "user" | "bot" | "agent" | "system" = "user";
-  if (who.includes("bot")) sender_type = "bot";
-  else if (who.includes("agent") || who.includes("operator")) sender_type = "agent";
-  else if (who.includes("system") || who.includes("event")) sender_type = "system";
-  else if (direction === "out") sender_type = "bot";
-
-  const message_text =
-    (typeof p.text === "string" && p.text) ||
-    (typeof p.message === "string" && p.message) ||
-    (typeof p.body === "string" && p.body) ||
-    (direction === "in" ? (p.lastUserSentence ?? null) : (p.lastBotSentence ?? null)) ||
-    (typeof p.lastSentence === "string" ? p.lastSentence : null) ||
-    null;
-
-  const message_type = String(p.messageType ?? p.message_type ?? "text");
-  const event_timestamp = p.timestamp ?? p.ts ?? p.created_at ?? null;
+  let sender_type: "user" | "bot" | "agent" | "system" = direction === "out" ? "bot" : direction === "event" ? "system" : "user";
+  const who = `${senderRaw} ${fromValue} ${eventLower}`;
+  if (who.includes("agent") || who.includes("operator") || Boolean(msg?.operatorId)) sender_type = "agent";
+  else if (who.includes("bot")) sender_type = "bot";
+  else if (who.includes("system") || direction === "event") sender_type = "system";
+  else if (msg?.fromCustomer === true || direction === "in") sender_type = "user";
 
   return {
     event_type, conversation_id, customer_phone, customer_name, channel,
-    direction, sender_type, message_text, message_type, event_timestamp,
+    direction, sender_type, message_text, message_type, event_timestamp, botmaker_message_id,
   };
 }
 
