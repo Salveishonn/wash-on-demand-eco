@@ -278,6 +278,72 @@ export type Database = {
           },
         ]
       }
+      booking_requests: {
+        Row: {
+          address: string | null
+          botmaker_conversation_id: string | null
+          created_at: string
+          customer_email: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          neighborhood: string | null
+          notes: string | null
+          preferred_date: string | null
+          preferred_time: string | null
+          raw_payload: Json
+          resulting_booking_id: string | null
+          service_type: string | null
+          source: string
+          status: string
+          updated_at: string
+          vehicle_type: string | null
+        }
+        Insert: {
+          address?: string | null
+          botmaker_conversation_id?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          neighborhood?: string | null
+          notes?: string | null
+          preferred_date?: string | null
+          preferred_time?: string | null
+          raw_payload?: Json
+          resulting_booking_id?: string | null
+          service_type?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          vehicle_type?: string | null
+        }
+        Update: {
+          address?: string | null
+          botmaker_conversation_id?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          neighborhood?: string | null
+          notes?: string | null
+          preferred_date?: string | null
+          preferred_time?: string | null
+          raw_payload?: Json
+          resulting_booking_id?: string | null
+          service_type?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          vehicle_type?: string | null
+        }
+        Relationships: []
+      }
       bookings: {
         Row: {
           addons: Json | null
@@ -490,6 +556,48 @@ export type Database = {
           },
         ]
       }
+      botmaker_events: {
+        Row: {
+          channel: string | null
+          conversation_id: string | null
+          created_at: string
+          customer_name: string | null
+          customer_phone: string | null
+          event_id: string | null
+          event_type: string
+          id: string
+          payload: Json
+          processed: boolean
+          processing_error: string | null
+        }
+        Insert: {
+          channel?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          event_id?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          processed?: boolean
+          processing_error?: string | null
+        }
+        Update: {
+          channel?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          event_id?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed?: boolean
+          processing_error?: string | null
+        }
+        Relationships: []
+      }
       cars: {
         Row: {
           brand: string | null
@@ -574,6 +682,45 @@ export type Database = {
         }
         Relationships: []
       }
+      communication_logs: {
+        Row: {
+          booking_id: string | null
+          created_at: string
+          customer_phone: string | null
+          error: string | null
+          event_type: string
+          id: string
+          payload: Json
+          provider: string
+          provider_response: Json | null
+          status: string
+        }
+        Insert: {
+          booking_id?: string | null
+          created_at?: string
+          customer_phone?: string | null
+          error?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          provider: string
+          provider_response?: Json | null
+          status?: string
+        }
+        Update: {
+          booking_id?: string | null
+          created_at?: string
+          customer_phone?: string | null
+          error?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          provider?: string
+          provider_response?: Json | null
+          status?: string
+        }
+        Relationships: []
+      }
       contacts: {
         Row: {
           created_at: string | null
@@ -624,30 +771,42 @@ export type Database = {
       }
       customers: {
         Row: {
+          botmaker_contact_id: string | null
+          botmaker_conversation_id: string | null
+          communication_source: string | null
           created_at: string | null
           email: string | null
           full_name: string
           id: string
+          last_contact_channel: string | null
           phone_e164: string
           whatsapp_last_message_at: string | null
           whatsapp_opt_in: boolean | null
           whatsapp_opt_in_at: string | null
         }
         Insert: {
+          botmaker_contact_id?: string | null
+          botmaker_conversation_id?: string | null
+          communication_source?: string | null
           created_at?: string | null
           email?: string | null
           full_name: string
           id?: string
+          last_contact_channel?: string | null
           phone_e164: string
           whatsapp_last_message_at?: string | null
           whatsapp_opt_in?: boolean | null
           whatsapp_opt_in_at?: string | null
         }
         Update: {
+          botmaker_contact_id?: string | null
+          botmaker_conversation_id?: string | null
+          communication_source?: string | null
           created_at?: string | null
           email?: string | null
           full_name?: string
           id?: string
+          last_contact_channel?: string | null
           phone_e164?: string
           whatsapp_last_message_at?: string | null
           whatsapp_opt_in?: boolean | null
