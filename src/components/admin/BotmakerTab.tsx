@@ -340,12 +340,22 @@ export function BotmakerTab() {
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <Badge variant="outline">{r.status}</Badge>
                     <span className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleString('es-AR')}</span>
-                    <button
-                      onClick={() => markRequestAsTest(r.id, !r.is_test)}
-                      className="text-[10px] text-primary hover:underline"
-                    >
-                      {r.is_test ? 'Marcar real' : 'Marcar test'}
-                    </button>
+                    <div className="flex gap-2">
+                      {r.status !== 'converted' && (
+                        <button
+                          onClick={() => approveRequest(r.id)}
+                          className="text-[10px] text-green-600 hover:underline font-semibold"
+                        >
+                          Aprobar y crear reserva
+                        </button>
+                      )}
+                      <button
+                        onClick={() => markRequestAsTest(r.id, !r.is_test)}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        {r.is_test ? 'Marcar real' : 'Marcar test'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
