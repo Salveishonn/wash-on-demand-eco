@@ -440,7 +440,42 @@ auth-bm-token: <BOTMAKER_WEBHOOK_SECRET>
   "payment_method": "{{payment_method}}",
   "notes": "{{notes}}"
 }`}</pre>
-        <p>Manejo de respuesta según <code>status</code>: <code>booking_created</code> → mostrar <code>message</code>; <code>needs_review</code> → mostrar <code>message</code>; <code>slot_unavailable</code> → pedir otro horario; <code>missing_data</code> → pedir <code>missing_fields</code>; <code>duplicate</code> → ofrecer derivar a humano.</p>
+        <p>
+          <strong>Fallback resumen IA:</strong> si el flow no puede pedir todos los campos, mandar al menos
+          <code> customer_phone</code>, <code>ai_booking_summary</code> y <code>raw_conversation</code>.
+          Washero crea un <code>booking_request</code> con status <code>needs_review</code>.
+        </p>
+        <p className="font-semibold text-foreground mt-3">Code Action (un solo mensaje al cliente)</p>
+        <pre className="bg-background border border-border rounded p-2 overflow-x-auto text-[10px]">{`const res = await fetch("${CREATE_BOOKING_URL}", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "auth-bm-token": "<BOTMAKER_WEBHOOK_SECRET>"
+  },
+  body: JSON.stringify({
+    conversation_id: context.conversation.id,
+    channel: "whatsapp",
+    customer_phone: context.contact.phone,
+    customer_name: vars.customer_name,
+    address: vars.address,
+    neighborhood: vars.neighborhood,
+    vehicle_type: vars.vehicle_type,
+    service_type: vars.service_type,
+    preferred_date: vars.preferred_date,
+    preferred_time: vars.preferred_time,
+    payment_method: vars.payment_method,
+    notes: vars.notes,
+    ai_booking_summary: vars.ai_booking_summary,
+    raw_conversation: vars.raw_conversation
+  })
+});
+const data = await res.json().catch(() => ({}));
+if (res.ok && data && data.message) {
+  result.text(data.message);   // un único mensaje
+} else {
+  result.text("No pudimos procesar tu reserva ahora. Te contactamos por WhatsApp en breve 🙌");
+}
+result.done();                 // siempre cerrar; nunca encadenar a fallback genérico`}</pre>
       </div>
     </div>
   );
