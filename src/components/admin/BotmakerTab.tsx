@@ -557,42 +557,6 @@ export function BotmakerTab() {
       {/* Botmaker flow instructions */}
       <div className="bg-muted/30 border border-border rounded-xl p-4 text-xs text-muted-foreground space-y-2">
         <p className="font-semibold text-foreground">Flow de reserva por WhatsApp (Botmaker)</p>
-        <p>Crear estas variables en Botmaker y pedirlas en este orden:</p>
-        <ol className="list-decimal pl-5 space-y-0.5">
-          <li><code>customer_name</code> — "¿Cuál es tu nombre?"</li>
-          <li><code>address</code> — "¿Cuál es la dirección donde querés el lavado?"</li>
-          <li><code>neighborhood</code> — "¿En qué barrio o zona estás?"</li>
-          <li><code>vehicle_type</code> — Auto / SUV / Pick-up / Otro</li>
-          <li><code>service_type</code> — Lavado Básico / Lavado Completo / Otro</li>
-          <li><code>preferred_date</code> — formato YYYY-MM-DD o "mañana"</li>
-          <li><code>preferred_time</code> — formato HH:mm</li>
-          <li><code>payment_method</code> — MercadoPago / Transferencia / Pagar después</li>
-        </ol>
-        <p className="mt-2">Luego llamar (acción HTTP POST):</p>
-        <pre className="bg-background border border-border rounded p-2 overflow-x-auto text-[10px]">{`POST ${CREATE_BOOKING_URL}
-Content-Type: application/json
-auth-bm-token: <BOTMAKER_WEBHOOK_SECRET>
-
-{
-  "conversation_id": "{{conversation.id}}",
-  "channel": "whatsapp",
-  "customer_name": "{{customer_name}}",
-  "customer_phone": "{{contact.phone}}",
-  "address": "{{address}}",
-  "neighborhood": "{{neighborhood}}",
-  "vehicle_type": "{{vehicle_type}}",
-  "service_type": "{{service_type}}",
-  "preferred_date": "{{preferred_date}}",
-  "preferred_time": "{{preferred_time}}",
-  "payment_method": "{{payment_method}}",
-  "notes": "{{notes}}"
-}`}</pre>
-        <p>
-          <strong>Fallback resumen IA:</strong> si el flow no puede pedir todos los campos, mandar al menos
-          <code> customer_phone</code>, <code>ai_booking_summary</code> y <code>raw_conversation</code>.
-          Washero crea un <code>booking_request</code> con status <code>needs_review</code>.
-        </p>
-        <p className="font-semibold text-foreground mt-3">Code Action (un solo mensaje al cliente)</p>
         <pre className="bg-background border border-border rounded p-2 overflow-x-auto text-[10px]">{`const res = await fetch("${CREATE_BOOKING_URL}", {
   method: "POST",
   headers: {
