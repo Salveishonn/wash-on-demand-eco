@@ -207,11 +207,22 @@ export function BotmakerMessagesTab() {
                       m.direction === "out" ? "bg-primary/10 text-foreground" :
                       m.direction === "event" ? "bg-muted text-muted-foreground text-[11px] italic" :
                       "bg-muted text-foreground";
+                    const text = m.body ?? m.message_text ?? "—";
+                    const raw = m.raw_payload ?? m.raw;
                     return (
                       <div key={m.id} className={`flex ${align}`}>
                         <div className={`rounded-lg px-3 py-2 max-w-[80%] text-sm ${tone}`}>
-                          <div className="whitespace-pre-wrap break-words">{m.body ?? "—"}</div>
+                          <div className="text-[10px] text-muted-foreground mb-1">{m.sender_type ?? m.sender ?? m.direction}</div>
+                          <div className="whitespace-pre-wrap break-words">{text}</div>
                           <div className="text-[10px] text-muted-foreground mt-1">{new Date(m.created_at).toLocaleString("es-AR")}</div>
+                          {raw && (
+                            <Collapsible>
+                              <CollapsibleTrigger className="text-[10px] text-primary underline mt-1">raw payload</CollapsibleTrigger>
+                              <CollapsibleContent>
+                                <pre className="mt-1 max-h-44 overflow-auto rounded bg-background/80 p-2 text-[10px] text-muted-foreground">{JSON.stringify(raw, null, 2)}</pre>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          )}
                         </div>
                       </div>
                     );
