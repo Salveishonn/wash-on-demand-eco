@@ -50,13 +50,22 @@ Deno.serve(async (req) => {
 
   // ── Mode: simple test ping
   if (mode === "with_token" || mode === "without_token") {
+    const conversation_id = `admin-test-conv-${Date.now()}`;
     const payload = {
       eventId: `admin-test-${Date.now()}`,
-      eventType: "message.user",
+      eventType: "message",
+      type: "message",
       channel: "whatsapp",
+      chatPlatform: "whatsapp",
+      customerId: conversation_id,
+      chatId: conversation_id,
+      sessionId: `${conversation_id}_session`,
+      contactId: "5491100000000",
       from: "5491100000000",
       customerName: "Admin Test",
+      firstName: "Admin",
       text: "Ping desde Admin",
+      messages: [{ _id_: `admin-msg-${Date.now()}`, from: "user", fromCustomer: true, fromName: "Admin Test", message: "Ping desde Admin", date: new Date().toISOString() }],
       simulated: true,
     };
     let upstreamStatus = 0;
@@ -74,8 +83,7 @@ Deno.serve(async (req) => {
   }
 
   // ── Mode: summary + confirmation simulator (creates is_test booking_request)
-  // Strategy: directly insert a synthetic conversation + 2 messages, then call the
-  // webhook with the user "sí" event so the parser path runs end-to-end.
+  // Sends both events through the webhook so extraction, storage and parser are tested end-to-end.
   const conversation_id = `sim-conv-${Date.now()}`;
   const phone = "5491100000000";
   const name = "Salvador (simulación)";
@@ -92,52 +100,70 @@ Deno.serve(async (req) => {
     "¿Confirmás que está todo bien?",
   ].join("\n");
 
-  // Insert bot summary message directly
-  await supabase.from("botmaker_conversations").upsert({
-    conversation_id, customer_phone: phone, customer_name: name,
-    channel: "whatsapp", last_message_at: new Date().toISOString(),
-    last_message_preview: summary.slice(0, 140), last_direction: "out", last_sender_type: "bot",
-  }, { onConflict: "conversation_id" });
+  const summaryPayload = {
+    eventId: `sim-summary-${Date.now()}`,
+    eventType: "message",
+    type: "message",
+    channel: "whatsapp",
+    chatPlatform: "whatsapp",
+    customerId: conversation_id,
+    chatId: conversation_id,
+    sessionId: `${conversation_id}_session`,
+    contactId: phone,
+    firstName: "Salvador",
+    whatsappNickName: name,
+    messages: [{ _id_: `sim-summary-msg-${Date.now()}`, from: "bot", fromCustomer: false, fromName: "Washero", message: summary, date: new Date().toISOString() }],
+    simulated: true,
+  };
 
-  await supabase.from("botmaker_messages").insert({
-    conversation_id, direction: "out", sender: "bot", body: summary, message_type: "text",
-    raw: { simulated: true, type: "summary" },
-  });
-
-  // Now call webhook with the user confirmation
   const confirmPayload = {
     eventId: `sim-confirm-${Date.now()}`,
-    eventType: "message.user",
+    eventType: "message",
+    type: "message",
     channel: "whatsapp",
+    chatPlatform: "whatsapp",
+    customerId: conversation_id,
     chatId: conversation_id,
-    from: phone,
-    customerName: name,
-    text: "sí",
+    sessionId: `${conversation_id}_session`,
+    contactId: phone,
+    firstName: "Salvador",
+    whatsappNickName: name,
+    messages: [{ _id_: `sim-confirm-msg-${Date.now()}`, from: "user", fromCustomer: true, fromName: name, message: "Sí", date: new Date().toISOString() }],
+    text: "Sí",
     direction: "in",
+    simulated: true,
   };
+
+  let summaryStatus = 0;
+  let summaryBody: any = null;
   let upstreamStatus = 0;
   let upstreamBody: any = null;
   try {
-    const r = await fetch(url, { method: "POST", headers: baseHeaders, body: JSON.stringify(confirmPayload) });
-    upstreamStatus = r.status;
-    const text = await r.text();
-    try { upstreamBody = JSON.parse(text); } catch { upstreamBody = { raw: text }; }
+    const sres = await fetch(url, { method: "POST", headers: baseHeaders, body: JSON.stringify(summaryPayload) });
+    summaryStatus = sres.status;
+    const stext = await sres.text();
+    try { summaryBody = JSON.parse(stext); } catch { summaryBody = { raw: stext }; }
+
+    const cres = await fetch(url, { method: "POST", headers: baseHeaders, body: JSON.stringify(confirmPayload) });
+    upstreamStatus = cres.status;
+    const ctext = await cres.text();
+    try { upstreamBody = JSON.parse(ctext); } catch { upstreamBody = { raw: ctext }; }
   } catch (e) {
     return json({ ok: false, mode, error: `upstream_fetch_failed: ${(e as Error).message}` }, 502);
   }
 
-  // Mark created request as test, if any
   const created_id = upstreamBody?.booking?.created_id ?? null;
   if (created_id) {
     await supabase.from("booking_requests").update({ is_test: true }).eq("id", created_id);
   }
 
   return json({
-    ok: upstreamStatus < 400,
+    ok: summaryStatus < 400 && upstreamStatus < 400,
     mode,
+    summary_status: summaryStatus,
     upstream_status: upstreamStatus,
     conversation_id,
     booking_request_id: created_id,
+    summary_result: summaryBody,
     result: upstreamBody,
-  });
-});
+  });});
