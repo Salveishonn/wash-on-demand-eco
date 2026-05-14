@@ -36,6 +36,7 @@ import { EarlyAccessTab } from '@/components/admin/EarlyAccessTab';
 import { ContactsTab } from '@/components/admin/ContactsTab';
 import { AdminNav, AdminTabType } from '@/components/admin/AdminNav';
 import { AppSettingsTab } from '@/components/admin/AppSettingsTab';
+import { BotmakerTab } from '@/components/admin/BotmakerTab';
 import { PhoneAction, AddressAction } from '@/components/admin/ContactActions';
 import { BookingPricingDebug } from '@/components/admin/BookingPricingDebug';
 import { Button } from '@/components/ui/button';
