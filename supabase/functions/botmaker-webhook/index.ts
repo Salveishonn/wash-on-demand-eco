@@ -359,7 +359,7 @@ async function tryCreateBookingRequestFromConversation(
   if (!msgs || msgs.length === 0) return { skipped: "no_messages" };
 
   // Find latest bot summary message
-  const summaryMsg = msgs.find((m: any) => m.direction !== "in" && isBookingSummary(m.body ?? ""));
+  const summaryMsg = msgs.find((m: any) => m.direction !== "in" && isBookingSummary(m.body ?? m.message_text ?? ""));
   if (!summaryMsg) {
     logStep("no_summary_in_conversation", { conversation_id });
     return { skipped: "no_summary" };
@@ -375,7 +375,8 @@ async function tryCreateBookingRequestFromConversation(
   logStep("booking_confirmation_detected", { conversation_id });
 
   // Parse
-  const raw = parseSummary(summaryMsg.body ?? "");
+  const summaryText = summaryMsg.body ?? summaryMsg.message_text ?? "";
+  const raw = parseSummary(summaryText);
   const { parsed, missing, warnings } = buildParsed(raw);
 
   // Dedup: same conversation + same date/time within 10 minutes
@@ -417,7 +418,7 @@ async function tryCreateBookingRequestFromConversation(
       parsing_warnings: warnings,
       raw_payload: {
         origin: "webhook_parser",
-        summary_message: summaryMsg.body,
+        summary_message: summaryText,
         trigger_message: triggerMessageBody,
         last_messages: msgs,
       },
@@ -431,6 +432,11 @@ async function tryCreateBookingRequestFromConversation(
   }
   logStep("booking_request_created_from_webhook", { id: req?.id, missing });
   await setDiagnostic(supabase, "last_booking_request_created", req?.id ?? null);
+  await setDiagnostic(supabase, "last_booking_request_created_from_webhook", req?.id ?? null);
+  await supabase.from("botmaker_conversations").update({
+    linked_booking_request_id: req?.id,
+    updated_at: new Date().toISOString(),
+  }).eq("conversation_id", conversation_id);
   return { created_id: req?.id, missing, warnings };
 }
 
