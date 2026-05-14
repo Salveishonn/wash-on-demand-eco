@@ -134,7 +134,10 @@ export function BotmakerMessagesTab() {
           {loading ? (
             <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">Sin conversaciones todavía.</p>
+            <div className="py-6 text-center space-y-1">
+              <p className="text-sm text-muted-foreground">Sin conversaciones todavía.</p>
+              <p className="text-xs text-amber-600">Verificá que el webhook de Botmaker esté apuntando a Washero y use el header <code>auth-bm-token</code>.</p>
+            </div>
           ) : (
             <div className="overflow-y-auto -mx-1">
               {filtered.map((c) => (

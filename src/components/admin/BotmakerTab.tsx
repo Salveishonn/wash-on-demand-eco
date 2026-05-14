@@ -588,6 +588,35 @@ if (res.ok && data && data.message) {
 }
 result.done();                 // siempre cerrar; nunca encadenar a fallback genérico`}</pre>
       </div>
+
+      <Dialog open={!!rawDialog} onOpenChange={(o) => !o && setRawDialog(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Raw payload del pedido</DialogTitle></DialogHeader>
+          {rawDialog && (
+            <div className="space-y-3 text-xs">
+              <div><strong>Parsed:</strong><pre className="bg-muted p-2 rounded overflow-x-auto">{JSON.stringify(rawDialog.parsed_data, null, 2)}</pre></div>
+              <div><strong>Missing fields:</strong> {(rawDialog.missing_fields ?? []).join(', ') || '—'}</div>
+              <div><strong>Warnings:</strong> {(rawDialog.parsing_warnings ?? []).join(', ') || '—'}</div>
+              <div><strong>Raw:</strong><pre className="bg-muted p-2 rounded overflow-x-auto max-h-96">{JSON.stringify(rawDialog.raw_payload, null, 2)}</pre></div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function fmtDiag(d?: Diagnostic): string {
+  if (!d || !d.value_at) return '—';
+  const when = new Date(d.value_at).toLocaleString('es-AR');
+  return d.value_text ? `${when} · ${d.value_text.slice(0, 30)}` : when;
+}
+
+function DiagRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-2 border-b border-border/40 py-1">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono truncate text-right">{value}</span>
     </div>
   );
 }
