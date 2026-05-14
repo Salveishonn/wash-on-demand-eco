@@ -176,6 +176,12 @@ export function BotmakerTab() {
     }
   };
 
+  const markRequestAsTest = async (id: string, isTest: boolean) => {
+    const { error } = await supabase.from('booking_requests').update({ is_test: isTest }).eq('id', id);
+    if (error) toast.error('No se pudo actualizar');
+    else { toast.success(isTest ? 'Marcado como test' : 'Marcado como real'); load(); }
+  };
+
   useEffect(() => { load(); ping(); }, []);
 
   const lastEvent = events[0];
