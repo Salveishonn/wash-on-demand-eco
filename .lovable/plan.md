@@ -1,43 +1,39 @@
-## Objetivo
-Exponer temporalmente el `SUPABASE_SERVICE_ROLE_KEY` para que lo puedas copiar y pegar en Render, sin comprometer seguridad.
+# Fix: Botmaker Webchat not visible on Washero
 
-## Pasos
+## Root cause
 
-1. **Crear edge function `admin-reveal-service-key`**
-   - Valida que el request tenga JWT de un usuario autenticado.
-   - Verifica que ese usuario tenga rol `admin` en `user_roles`.
-   - Si pasa, devuelve un JSON con:
-     - `SUPABASE_URL`
-     - `SUPABASE_SERVICE_ROLE_KEY`
-     - `WHATSAPP_TRANSCODER_SECRET` (para que también lo copies a Render como `TRANSCODER_SHARED_SECRET`)
-   - Si no es admin → 403.
-   - Logs mínimos (no loguea el valor de la key).
+The Botmaker init script at `https://go.botmaker.com/rest/webchat/p/O0FW1NYUKE/init.js` is just a redirect (HTTP 302). It points to the real widget code hosted on Google Cloud Storage:
 
-2. **Agregar botón temporal "Revelar keys de Render" en `MessagesTab.tsx`** (o donde tengas el panel admin de WhatsApp).
-   - Solo visible para admin.
-   - Al click, invoca la function, muestra los valores en un dialog con botones "Copiar".
-   - Incluye instrucción visual: "Pegar en Render → Save → esperar redeploy".
+```
+https://storage.googleapis.com/botmaker/webchat2/99963/O0FW1NYUKE/index.756YD.js
+```
 
-3. **Vos copiás los valores a Render** con estos nombres exactos:
-   ```
-   SUPABASE_URL              = https://pkndizbozytnpgqxymms.supabase.co
-   SUPABASE_SERVICE_ROLE_KEY = <valor revelado>
-   SUPABASE_BUCKET           = whatsapp-media
-   TRANSCODER_SHARED_SECRET  = <valor revelado>
-   ```
+Our current Content-Security-Policy in `index.html` allows `https://go.botmaker.com` but **not** `https://storage.googleapis.com`. The browser silently blocks the redirected script, so no widget ever renders. The init request succeeds, which is why earlier checks looked fine — but the actual chat code never executes.
 
-4. **Confirmás conmigo cuando Render redeployó**, y corro `admin-repair-whatsapp-audio` sobre los audios pendientes para validar end-to-end.
+Botmaker's webchat also typically loads styles, fonts, images, and opens a websocket connection back to its API, so a few more origins need to be allowed.
 
-5. **Cleanup obligatorio**: una vez funcionando, **elimino la edge function `admin-reveal-service-key` y el botón**. Esto no se queda en producción.
+## Change
 
-## Seguridad
-- La function requiere JWT válido + rol admin (mismo patrón que `_shared/adminAuth.ts`).
-- Los valores nunca se loguean.
-- La función se borra después del setup.
-- Si querés extra paranoia, después rotamos el service_role key con `supabase--rotate_api_keys` (te aviso).
+Single file: `index.html` — update the CSP `<meta>` tag to add Botmaker's runtime origins.
 
-## Archivos afectados
-- `supabase/functions/admin-reveal-service-key/index.ts` (nuevo, temporal)
-- `src/components/admin/MessagesTab.tsx` (botón temporal)
+Add to:
+- `script-src` → `https://storage.googleapis.com`
+- `style-src` → `https://storage.googleapis.com`
+- `img-src` → already permissive (`https:`), no change needed
+- `font-src` → `https://storage.googleapis.com`
+- `connect-src` → `https://storage.googleapis.com` `https://*.botmaker.com` `wss://*.botmaker.com`
+- `frame-src` → keep `https://go.botmaker.com` (already there)
 
-¿Le doy?
+No code changes to `BotmakerWebchat.tsx` — the component and ID are already correct.
+
+## Verification steps after implementation
+
+1. Hard reload `/` in the preview (CSP meta is cached aggressively).
+2. Confirm in DevTools Network: `index.756YD.js` from `storage.googleapis.com` returns 200 (not blocked).
+3. Confirm no `Refused to load the script` / `Refused to connect` CSP violations in the console.
+4. Confirm the Botmaker bubble appears bottom-right on `/`, `/servicios`, `/reservar`, etc.
+5. Confirm it does **not** appear on `/admin/*` or `/ops/*`.
+
+## Note on the screenshot
+
+The WhatsApp panel you shared (WABA `4351528555162209`, phone id `1034528373087220`) is the Botmaker → WhatsApp Cloud API channel, which is separate from the webchat widget. The webchat is a different channel inside the same Botmaker workspace, identified by `O0FW1NYUKE`. Once the CSP is fixed, the on-site bubble will load — independent of the WhatsApp line.
