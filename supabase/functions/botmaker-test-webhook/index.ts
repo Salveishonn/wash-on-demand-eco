@@ -166,4 +166,5 @@ Deno.serve(async (req) => {
     booking_request_id: created_id,
     summary_result: summaryBody,
     result: upstreamBody,
-  });});
+  });
+});
